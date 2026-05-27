@@ -129,6 +129,8 @@ if (!function_exists('_e')) {
     <link rel="webmention" href="https://webmention.io/<?= _e($webmentionDomain) ?>/webmention">
     <link rel="pingback" href="https://webmention.io/xmlrpc">
     <?php endif; ?>
+    <!-- Bridgy Fed verification -->
+    <link rel="me" href="https://jimmitchell.org.web.brid.gy">
     <!-- Micropub -->
     <?php if (($settings['micropub_token'] ?? '') !== ''): ?>
     <link rel="micropub" href="<?= _e($siteUrl . '/micropub.php') ?>">
