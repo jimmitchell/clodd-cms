@@ -51,7 +51,7 @@
     --color-header-bg:  #1a1a1a;
     --color-chrome-border: var(--color-border);
     --max-content:      700px;
-    --max-wide:         760px;
+    --max-wide:         800px;
 }
 
 /* ── Dark mode tokens ──────────────────────────────────────────────────────── */
@@ -120,9 +120,17 @@ audio { width: 100%; }
 /* ── Site header ──────────────────────────────────────────────────────────── */
 .site-header {
     border-bottom: 1px solid var(--color-chrome-border);
-    padding: 1.5rem;
+    padding: 1rem 1.5rem;
     background: var(--color-header-bg);
     position: relative;
+}
+
+@media (min-width: 640px) {
+    .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 10000;
+    }
 }
 
 .site-header__inner {
@@ -136,7 +144,7 @@ audio { width: 100%; }
 }
 
 .site-header__title {
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #f3f4f6;
     text-decoration: none;
@@ -918,7 +926,7 @@ audio { width: 100%; }
 }
 
 .post-nav__link {
-    font-size: 1rem;
+    font-size: .9rem;
     font-weight: 600;
     color: var(--color-text);
     text-decoration: none;
@@ -949,7 +957,7 @@ audio { width: 100%; }
 /* ── Site footer ──────────────────────────────────────────────────────────── */
 .site-footer {
     border-top: 1px solid var(--color-chrome-border);
-    padding: 1.5rem;
+    padding: 1rem 1.5rem;
     font-size: .85rem;
     color: var(--color-muted);
     background: var(--color-chrome-bg);
