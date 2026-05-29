@@ -704,6 +704,7 @@ audio { width: 100%; }
 }
 
 .post-card {
+    position: relative;
     border: 1px solid var(--color-border);
     padding: 1.5rem;
     display: flex;
@@ -729,6 +730,24 @@ audio { width: 100%; }
 }
 
 .post-card__title a:hover { color: var(--color-link); }
+.post-card:hover .post-card__title a { color: var(--color-link); }
+
+/* Stretch the card's primary anchor over the whole card so the entire card is
+   one click target. Article cards use the title link; notes use the date link. */
+.post-card__title a::after,
+.post-card--note .post-card__date a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+/* Inline links inside a note body must sit above the stretched overlay so they
+   remain individually clickable; everything else falls through to the permalink. */
+.post-card__body a {
+    position: relative;
+    z-index: 1;
+}
 
 .post-card__date {
     display: block;
@@ -740,13 +759,6 @@ audio { width: 100%; }
     color: var(--color-muted);
     font-size: .9rem;
     flex: 1;
-}
-
-.post-card__more {
-    font-size: .875rem;
-    font-weight: 500;
-    margin-top: auto;
-    padding-top: .75rem;
 }
 
 /* ── Note (titleless aside) — list cards ──────────────────────────────────── */

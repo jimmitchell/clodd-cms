@@ -268,6 +268,12 @@ server {
         add_header X-Content-Type-Options "nosniff" always;
     }
 
+    # Bridgy Fed (https://fed.brid.gy) Bluesky bridge handle resolution.
+    # Exact-match location wins over the dotfile deny below.
+    location = /.well-known/atproto-did {
+        return 302 https://fed.brid.gy/.well-known/atproto-did?protocol=web&id=example.com;
+    }
+
     # Deny hidden files
     location ~ /\. {
         deny all;

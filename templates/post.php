@@ -137,15 +137,15 @@ $navLabel = function (CMS\Post $p) use ($settings): string {
 <?php if ($prevPost || $nextPost): ?>
 <nav class="post-nav" aria-label="Post navigation">
     <div class="post-nav__prev">
-        <?php if ($prevPost): ?>
-        <span class="post-nav__label">Older</span>
-        <a class="post-nav__link" rel="prev" href="/<?= CMS\Post::datePath($prevPost->published_at, $prevPost->slug, $settings['timezone'] ?? '') ?>/"><?= htmlspecialchars($navLabel($prevPost), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></a>
+        <?php if ($nextPost): ?>
+        <span class="post-nav__label">Newer</span>
+        <a class="post-nav__link" rel="prev" href="/<?= CMS\Post::datePath($nextPost->published_at, $nextPost->slug, $settings['timezone'] ?? '') ?>/"><?= htmlspecialchars($navLabel($nextPost), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></a>
         <?php endif; ?>
     </div>
     <div class="post-nav__next">
-        <?php if ($nextPost): ?>
-        <span class="post-nav__label">Newer</span>
-        <a class="post-nav__link" rel="next" href="/<?= CMS\Post::datePath($nextPost->published_at, $nextPost->slug, $settings['timezone'] ?? '') ?>/"><?= htmlspecialchars($navLabel($nextPost), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></a>
+        <?php if ($prevPost): ?>
+        <span class="post-nav__label">Older</span>
+        <a class="post-nav__link" rel="next" href="/<?= CMS\Post::datePath($prevPost->published_at, $prevPost->slug, $settings['timezone'] ?? '') ?>/"><?= htmlspecialchars($navLabel($prevPost), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></a>
         <?php endif; ?>
     </div>
 </nav>

@@ -70,7 +70,6 @@ ob_start();
             </time>
             <?php endif; ?>
             <div class="post-card__body prose e-content"><?= $postHtml[$post->id] ?? '' ?></div>
-            <a href="<?= htmlspecialchars($postUrl) ?>" class="post-card__more">Read more →</a>
         </article>
         <?php else: ?>
         <article class="post-card h-entry">
@@ -86,7 +85,6 @@ ob_start();
             <?php if ($cardExcerpt !== null): ?>
             <p class="post-card__excerpt p-summary"><?= htmlspecialchars(strip_tags($cardExcerpt), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
             <?php endif; ?>
-            <a href="<?= htmlspecialchars($postUrl) ?>" class="post-card__more">Read more →</a>
         </article>
         <?php endif; ?>
         <?php endforeach; ?>

@@ -75,7 +75,6 @@ ob_start();
                             ? '<time class="post-card__date"><a href="' + escHtml(item.url) + '">' + escHtml(item.date) + '</a></time>'
                             : '')
                         + '<p class="post-card__body">' + escHtml(item.body_text || '') + '</p>'
-                        + '<a href="' + escHtml(item.url) + '" class="post-card__more">Read more →</a>'
                         + '</article>';
                 }
                 return '<article class="post-card">'
@@ -83,7 +82,6 @@ ob_start();
                     + escHtml(item.title) + '</a></h2>'
                     + (item.date ? '<time class="post-card__date">' + escHtml(item.date) + '</time>' : '')
                     + (item.excerpt ? '<p class="post-card__excerpt">' + escHtml(item.excerpt) + '</p>' : '')
-                    + '<a href="' + escHtml(item.url) + '" class="post-card__more">Read more \u2192</a>'
                     + '</article>';
             }).join('');
         })
