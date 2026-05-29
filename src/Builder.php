@@ -695,7 +695,13 @@ class Builder
                 continue;
             }
             $oldDir = $postsDir . '/' . $entry;
-            if (is_dir($oldDir) && file_exists($oldDir . '/index.html')) {
+            if (!is_dir($oldDir)) {
+                continue;
+            }
+            // Clean up either leftover regardless of whether index.html still
+            // exists — an earlier build may have removed index.html but left an
+            // orphaned og.png, which would otherwise strand the flat dir forever.
+            if (file_exists($oldDir . '/index.html') || file_exists($oldDir . '/og.png')) {
                 $this->removeFile($oldDir . '/index.html');
                 $this->removeFile($oldDir . '/og.png');
                 $migrated = true;
