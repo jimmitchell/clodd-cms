@@ -131,7 +131,9 @@ $navLabel = function (CMS\Post $p) use ($settings): string {
     if (!$p->isAside() && $p->title !== '') {
         return $p->title;
     }
-    return 'Note · ' . CMS\Helpers::formatDate($p->published_at, 'F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '');
+    $date = CMS\Helpers::formatDate($p->published_at, 'F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '');
+    $time = CMS\Helpers::formatDate($p->published_at, 'g:i A', '', $settings['timezone'] ?? '');
+    return $date . ' @ ' . $time;
 };
 ?>
 <?php if ($prevPost || $nextPost): ?>
