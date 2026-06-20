@@ -133,7 +133,7 @@ $navLabel = function (CMS\Post $p) use ($settings): string {
     }
     $date = CMS\Helpers::formatDate($p->published_at, 'F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '');
     $time = CMS\Helpers::formatDate($p->published_at, 'g:i A', '', $settings['timezone'] ?? '');
-    return $date . ' @ ' . $time;
+    return $date . ', ' . $time;
 };
 ?>
 <?php if ($prevPost || $nextPost): ?>
