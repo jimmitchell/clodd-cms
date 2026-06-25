@@ -237,8 +237,6 @@ audio { width: 100%; }
 .nav-toggle:hover { color: #ffffff; }
 .theme-toggle svg { width: 1rem; height: 1rem; }
 
-.theme-toggle {display: none;}
-
 /* ── Mobile nav toggle (hamburger) ───────────────────────────────────────── */
 .nav-toggle {
     display: none;
