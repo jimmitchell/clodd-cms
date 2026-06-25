@@ -51,7 +51,7 @@
     --color-header-bg:  #1a1a1a;
     --color-chrome-border: var(--color-border);
     --max-content:      750px;
-    --max-wide:         750px;
+    --max-wide:         875px;
 }
 
 /* ── Dark mode tokens ──────────────────────────────────────────────────────── */
@@ -959,14 +959,14 @@ audio { width: 100%; }
 /* ── Site footer ──────────────────────────────────────────────────────────── */
 .site-footer {
     border-top: 1px solid var(--color-chrome-border);
-    padding: 1rem 1.5rem;
+    padding: 1.5rem;
     font-size: .85rem;
     color: var(--color-muted);
     background: var(--color-chrome-bg);
 }
 
 .site-footer__inner {
-    max-width: calc(var(--max-content) - 3rem);
+    max-width: var(--max-wide);
     margin: 0 auto;
     display: flex;
     align-items: center;
