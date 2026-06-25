@@ -1458,7 +1458,7 @@ audio { width: 100%; }
 .wm-avatar {
     width: 32px;
     height: 32px;
-    border-radius: 50%;
+    border-radius: 6px;
     object-fit: cover;
     background: var(--color-code-bg);
     display: block;
