@@ -50,8 +50,8 @@
     --color-link:       #0176d3;
     --color-header-bg:  #1a1a1a;
     --color-chrome-border: var(--color-border);
-    --max-content:      800px;
-    --max-wide:         800px;
+    --max-content:      750px;
+    --max-wide:         750px;
 }
 
 /* ── Dark mode tokens ──────────────────────────────────────────────────────── */
@@ -237,6 +237,8 @@ audio { width: 100%; }
 .nav-toggle:hover { color: #ffffff; }
 .theme-toggle svg { width: 1rem; height: 1rem; }
 
+.theme-toggle {display: none;}
+
 /* ── Mobile nav toggle (hamburger) ───────────────────────────────────────── */
 .nav-toggle {
     display: none;
@@ -390,7 +392,7 @@ audio { width: 100%; }
     display: inline-flex;
     align-items: center;
     padding: .15rem .55rem;
-    border-radius: 15px;
+    border-radius: 6px;
     font-size: .75rem;
     font-weight: 500;
     line-height: 1.4;
@@ -874,7 +876,7 @@ audio { width: 100%; }
     text-decoration: none;
     font-weight: 500;
     border: 1px solid var(--color-border);
-    border-radius: 15px;
+    border-radius: 6px;
     padding: .15rem .55rem;
     line-height: 1.4;
     transition: color .15s, border-color .15s;
@@ -891,7 +893,7 @@ audio { width: 100%; }
     gap: .25em;
     background: none;
     border: 1px solid var(--color-border);
-    border-radius: 15px;
+    border-radius: 6px;
     padding: .15rem .55rem;
     font-size: inherit;
     line-height: 1.4;
@@ -1447,7 +1449,7 @@ audio { width: 100%; }
 .wm-avatar-link {
     display: block;
     line-height: 0;
-    border-radius: 50%;
+    border-radius: 6px;
     transition: opacity .15s;
 }
 
