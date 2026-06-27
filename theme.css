@@ -50,8 +50,8 @@
     --color-link:       #0176d3;
     --color-header-bg:  #1a1a1a;
     --color-chrome-border: var(--color-border);
-    --max-content:      750px;
-    --max-wide:         875px;
+    --max-content:      600px;
+    --max-wide:         700px;
 }
 
 /* ── Dark mode tokens ──────────────────────────────────────────────────────── */
@@ -154,9 +154,9 @@ audio { width: 100%; }
 
 .site-nav {
     display: flex;
-    gap: 1.25rem;
+    gap: 1.1rem;
     flex-wrap: wrap;
-    margin-right: 0.5rem;
+    margin-right: 0.25rem;
 }
 
 .site-nav a {
