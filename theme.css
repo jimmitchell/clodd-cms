@@ -50,8 +50,8 @@
     --color-link:       #0176d3;
     --color-header-bg:  #1a1a1a;
     --color-chrome-border: var(--color-border);
-    --max-content:      600px;
-    --max-wide:         700px;
+    --max-content:      640px;
+    --max-wide:         720px;
 }
 
 /* ── Dark mode tokens ──────────────────────────────────────────────────────── */
