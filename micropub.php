@@ -185,6 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         mp_json([
             'media-endpoint' => $siteUrl . '/micropub.php',
             'syndicate-to'   => [],
+            'q'              => ['config', 'source', 'syndicate-to', 'category'],
         ]);
     }
 
@@ -221,6 +222,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'type'       => ['h-entry'],
             'properties' => $all,
         ]);
+    }
+
+    if ($q === 'category') {
+        $rows  = $db->select(
+            'SELECT name FROM categories UNION SELECT name FROM tags ORDER BY name COLLATE NOCASE'
+        );
+        $names = array_values(array_filter(
+            array_map(fn($r) => (string) $r['name'], $rows),
+            fn($n) => $n !== ''
+        ));
+        mp_json(['categories' => $names]);
     }
 
     mp_json([]);
