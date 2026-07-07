@@ -119,8 +119,8 @@ audio { width: 100%; }
 
 /* ── Site header ──────────────────────────────────────────────────────────── */
 .site-header {
-    border-bottom: 1px solid var(--color-chrome-border);
-    padding: 1rem 1.5rem;
+    /* border-bottom: 1px solid var(--color-chrome-border); */
+    padding: 1.5rem;
     background: var(--color-header-bg);
     position: relative;
 }
@@ -958,7 +958,7 @@ audio { width: 100%; }
 
 /* ── Site footer ──────────────────────────────────────────────────────────── */
 .site-footer {
-    border-top: 1px solid var(--color-chrome-border);
+    /* border-top: 1px solid var(--color-chrome-border); */
     padding: 1.5rem;
     font-size: .85rem;
     color: var(--color-muted);
