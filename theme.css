@@ -510,7 +510,7 @@ audio { width: 100%; }
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     font-size: .825em;
     background: var(--color-code-bg);
-    border-radius: 3px;
+    border-radius: 4px;
     padding: .1em .3em;
 }
 
@@ -721,7 +721,7 @@ audio { width: 100%; }
     flex-direction: column;
     gap: .35rem;
     transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-    border-radius: 12px;
+    border-radius: 6px;
 }
 
 .post-card:hover {
@@ -1502,7 +1502,7 @@ audio { width: 100%; }
     padding: 1rem 1.1rem;
     margin-bottom: .65rem;
     transition: border-color .15s;
-    border-radius: 12px;
+    border-radius: 6px;
 }
 
 .wm-reply:hover { border-color: #d1d5db; }
