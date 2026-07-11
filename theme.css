@@ -65,7 +65,7 @@
         --color-bg:         #181818;
         --color-chrome-bg:  var(--color-bg);
         --color-code-bg:    #2a2a2a;
-        --color-link:          #8f58ec;
+        --color-link:          #45c8f7;
         --color-header-bg:     var(--color-chrome-bg);
         --color-chrome-border: rgba(255,255,255,0.08);
     }
