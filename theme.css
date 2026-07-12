@@ -338,6 +338,7 @@ audio { width: 100%; }
     max-width: var(--max-content);
     margin: 2rem auto;
     padding: 0 1.5rem;
+    width: 100%;
 }
 
 .site-main--wide {
