@@ -97,6 +97,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    padding: .5rem;
 }
 
 /* .site-main { flex: 1; width: 100%; } */
