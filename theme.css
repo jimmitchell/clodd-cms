@@ -99,7 +99,7 @@ body {
     flex-direction: column;
 }
 
-.site-main { flex: 1; width: 100%; }
+/* .site-main { flex: 1; width: 100%; } */
 
 a {
     color: var(--color-link);
