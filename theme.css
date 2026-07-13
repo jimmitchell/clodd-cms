@@ -1129,6 +1129,7 @@ audio { width: 100%; }
 
 @media (max-width: 600px) {
     html { font-size: 16px; }
+    body { padding: 0; }
     .post-card__title { font-size: 1.4rem; }
     .site-header__inner { gap: .5rem; }
     .site-main { margin: 2rem auto 1.75rem; }
