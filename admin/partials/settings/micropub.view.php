@@ -2,10 +2,6 @@
 // View partial for Settings → Micropub. Variables come from micropub.handler.php.
 use CMS\Helpers;
 ?>
-<?php if ($micropubFlash !== ''): ?>
-    <p class="alert alert--<?= Helpers::e($micropubFlashType) ?>"><?= Helpers::e($micropubFlash) ?></p>
-<?php endif; ?>
-
 <?php foreach ($errors as $e): ?>
     <p class="alert alert--error"><?= Helpers::e($e) ?></p>
 <?php endforeach; ?>
