@@ -336,7 +336,7 @@ audio { width: 100%; }
 /* ── Main content area ────────────────────────────────────────────────────── */
 .site-main {
     max-width: var(--max-content);
-    margin: 2rem auto;
+    margin: 1.5rem auto;
     padding: 0 1.5rem;
     width: 100%;
 }
