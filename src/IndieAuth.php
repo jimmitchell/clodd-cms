@@ -47,7 +47,9 @@ class IndieAuth
             'scope'                 => $scope,
             'code_challenge'        => $codeChallenge,
             'code_challenge_method' => $codeChallengeMethod,
-            'expires_at'            => date('Y-m-d H:i:s', time() + self::CODE_TTL_SECONDS),
+            // gmdate, not date: expiry is compared against SQLite's UTC
+            // datetime('now'), so a non-UTC PHP timezone must not skew it.
+            'expires_at'            => gmdate('Y-m-d H:i:s', time() + self::CODE_TTL_SECONDS),
         ]);
         return $code;
     }
@@ -85,7 +87,7 @@ class IndieAuth
 
         $claimed = $this->db->update(
             'indieauth_codes',
-            ['used_at' => date('Y-m-d H:i:s')],
+            ['used_at' => gmdate('Y-m-d H:i:s')],
             'id = :id AND used_at IS NULL',
             ['id' => $row['id']]
         );
@@ -135,7 +137,7 @@ class IndieAuth
         if (!$row) {
             return null;
         }
-        $this->db->update('indieauth_tokens', ['last_used_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $row['id']]);
+        $this->db->update('indieauth_tokens', ['last_used_at' => gmdate('Y-m-d H:i:s')], 'id = :id', ['id' => $row['id']]);
         return $row;
     }
 
@@ -143,7 +145,7 @@ class IndieAuth
     {
         return $this->db->update(
             'indieauth_tokens',
-            ['revoked_at' => date('Y-m-d H:i:s')],
+            ['revoked_at' => gmdate('Y-m-d H:i:s')],
             'token_hash = :h AND revoked_at IS NULL',
             ['h' => hash('sha256', $token)]
         ) > 0;
@@ -153,7 +155,7 @@ class IndieAuth
     {
         return $this->db->update(
             'indieauth_tokens',
-            ['revoked_at' => date('Y-m-d H:i:s')],
+            ['revoked_at' => gmdate('Y-m-d H:i:s')],
             'id = :id AND revoked_at IS NULL',
             ['id' => $id]
         ) > 0;
