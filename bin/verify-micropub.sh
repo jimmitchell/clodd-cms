@@ -95,9 +95,59 @@ check "update content → 204" 204 "$(status -H "$AUTHZ" -H 'Content-Type: appli
 NEWURL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"action\":\"update\",\"url\":\"$URL\",\"replace\":{\"mp-slug\":[\"$SLUG-renamed\"]}}" "$MP")
 check "update slug → 201 + new Location" y "$([ -n "$NEWURL" ] && echo y || echo n)" "$NEWURL"
 [ -n "$NEWURL" ] && URL="$NEWURL"
-DATA="{\"action\":\"update\",\"url\":\"$URL\",\"replace\":{\"published\":[\"2020-01-01T00:00:00Z\"]}}"
-check "update published (frozen) → 400" 400 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$DATA" "$MP")"
 check "form-encoded update → 400" 400 "$(status -H "$AUTHZ" --data "action=update&url=$URL" "$MP")"
+
+echo "== Update published"
+DATA="{\"action\":\"update\",\"url\":\"$URL\",\"replace\":{\"published\":[\"not a date\"]}}"
+check "invalid published → 400" 400 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$DATA" "$MP")"
+DATA="{\"action\":\"update\",\"url\":\"$URL\",\"add\":{\"published\":[\"2024-01-01T00:00:00Z\"]}}"
+check "add published → 400" 400 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$DATA" "$MP")"
+DATA="{\"action\":\"update\",\"url\":\"$URL\",\"delete\":[\"published\"]}"
+check "delete published → 400" 400 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$DATA" "$MP")"
+OLD_URL="$URL"
+BDURL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"action\":\"update\",\"url\":\"$URL\",\"replace\":{\"published\":[\"2024-02-03T10:00:00Z\"]}}" "$MP")
+check "backdate published → 201 + new Location" y "$([ -n "$BDURL" ] && echo y || echo n)" "$BDURL"
+echo "$BDURL" | grep -q '/2024/02/03/' && check "new URL reflects date" y y || check "new URL reflects date" y n "$BDURL"
+[ -n "$BDURL" ] && URL="$BDURL"
+check "old URL removed"    404 "$(status "$OLD_URL")"
+check "backdated page live" 200 "$(status "$URL")"
+# Future date on a published post unpublishes it (scheduler republishes later).
+DATA="{\"action\":\"update\",\"url\":\"$DUP_URL\",\"replace\":{\"published\":[\"2030-01-01T00:00:00Z\"]}}"
+check "future published → 204 (now scheduled)" 204 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$DATA" "$MP")"
+check "future-dated page removed" 404 "$(status "$DUP_URL")"
+
+echo "== Context posts (reply/like/repost/bookmark)"
+REPLY_TARGET="https://example.com/some-post"
+RURL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{
+  \"type\": [\"h-entry\"],
+  \"properties\": {
+    \"content\": [\"Replying from verify script\"],
+    \"in-reply-to\": [\"$REPLY_TARGET\"],
+    \"mp-syndicate-to\": []
+  }
+}" "$MP")
+check "titleless reply create → Location" y "$([ -n "$RURL" ] && echo y || echo n)" "$RURL"
+echo "$RURL" | grep -qE '/[0-9]+/$' && check "reply is an aside (id slug)" y y || check "reply is an aside (id slug)" y n "$RURL"
+status "$RURL" > /dev/null
+grep -q 'u-in-reply-to' "$TMP/body" && check "page renders u-in-reply-to" y y || check "page renders u-in-reply-to" y n
+grep -q "$REPLY_TARGET" "$TMP/body" && check "page links reply target" y y || check "page links reply target" y n
+status -H "$AUTHZ" "$MP?q=source&url=$RURL" > /dev/null
+grep -q '"in-reply-to"' "$TMP/body" && check "q=source returns in-reply-to" y y || check "q=source returns in-reply-to" y n
+DATA="{\"action\":\"update\",\"url\":\"$RURL\",\"add\":{\"like-of\":[\"https://example.com/liked\"]}}"
+check "add like-of → 204" 204 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$DATA" "$MP")"
+status -H "$AUTHZ" "$MP?q=source&url=$RURL" > /dev/null
+grep -q '"like-of"' "$TMP/body" && check "q=source returns like-of" y y || check "q=source returns like-of" y n
+DATA="{\"action\":\"update\",\"url\":\"$RURL\",\"delete\":[\"in-reply-to\"]}"
+check "delete in-reply-to → 204" 204 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$DATA" "$MP")"
+status -H "$AUTHZ" "$MP?q=source&url=$RURL" > /dev/null
+grep -q '"in-reply-to"' "$TMP/body" && check "in-reply-to removed from source" n y || check "in-reply-to removed from source" n n
+# Bare bookmark: no content, no photo — context alone is enough.
+BURL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"bookmark-of\":[\"https://example.com/bookmarked\"],\"mp-syndicate-to\":[]}}" "$MP")
+check "bare bookmark create → Location" y "$([ -n "$BURL" ] && echo y || echo n)"
+status "$BURL" > /dev/null
+grep -q 'u-bookmark-of' "$TMP/body" && check "page renders u-bookmark-of" y y || check "page renders u-bookmark-of" y n
+BAD_DATA="{\"type\":[\"h-entry\"],\"properties\":{\"in-reply-to\":[\"not-a-url\"]}}"
+check "invalid context URL → 400" 400 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$BAD_DATA" "$MP")"
 
 echo "== Photo property"
 PHOTO_URL_1="https://example.com/a.jpg"

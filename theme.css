@@ -360,6 +360,21 @@ audio { width: 100%; }
     margin-bottom: .1rem;
 }
 
+/* Micropub context line (reply/like/repost/bookmark target) — above the body */
+.post__contexts {
+    margin-bottom: 1rem;
+}
+
+.post__contexts .post__context {
+    margin: 0 0 .25rem;
+    font-size: .875rem;
+    color: var(--color-muted);
+}
+
+.post__contexts .post__context a {
+    word-break: break-all;
+}
+
 /* Micropub photo property (u-photo) — shown above the post body */
 .post__photos {
     display: grid;
@@ -801,6 +816,23 @@ audio { width: 100%; }
 
 .post-card__body > :first-child { margin-top: 0; }
 .post-card__body > :last-child  { margin-bottom: 0; }
+
+/* Micropub context line on list cards */
+.post-card__contexts {
+    margin: .35rem 0 0;
+}
+
+.post-card__contexts .post__context {
+    margin: 0 0 .2rem;
+    font-size: .8rem;
+    color: var(--color-muted);
+}
+
+.post-card__contexts .post__context a {
+    position: relative;
+    z-index: 1;
+    word-break: break-all;
+}
 
 /* Micropub photos on list cards: notes show every photo, standard posts a
    single thumbnail figure. */

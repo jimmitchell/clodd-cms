@@ -36,6 +36,7 @@ class Post
 
     /** @var array<array<string,mixed>>  [['id'=>int,'url'=>string,'alt'=>string,'sort_order'=>int,'media_id'=>?int], ...] */
     public array $photos = [];
+    public array $contexts = [];
 
     private Database $db;
 
@@ -341,6 +342,113 @@ class Post
             $alt   = htmlspecialchars((string) ($photo['alt'] ?? ''), ENT_QUOTES, 'UTF-8');
             $src   = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
             $html .= '<figure><img class="u-photo" src="' . $src . '" alt="' . $alt . '"></figure>' . "\n";
+        }
+        return $html;
+    }
+
+    /** Micropub context kinds in display order (strongest interaction first). */
+    public const CONTEXT_KINDS = ['repost-of', 'like-of', 'in-reply-to', 'bookmark-of'];
+
+    /**
+     * Replace all context rows for this post (Micropub in-reply-to / like-of /
+     * repost-of / bookmark-of). Each entry: ['kind' => string, 'url' => string].
+     *
+     * @param array<array<string,string>> $contexts
+     */
+    public function saveContexts(array $contexts): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+
+        $this->db->delete('post_contexts', 'post_id = :post_id', ['post_id' => $this->id]);
+        foreach ($contexts as $context) {
+            $kind = (string) ($context['kind'] ?? '');
+            $url  = trim((string) ($context['url'] ?? ''));
+            if ($url === '' || !in_array($kind, self::CONTEXT_KINDS, true)) {
+                continue;
+            }
+            $this->db->insert('post_contexts', [
+                'post_id' => $this->id,
+                'kind'    => $kind,
+                'url'     => $url,
+            ]);
+        }
+
+        $this->contexts = array_map(
+            fn(array $row) => ['kind' => (string) $row['kind'], 'url' => (string) $row['url']],
+            $this->db->select(
+                "SELECT kind, url FROM post_contexts WHERE post_id = :post_id ORDER BY id",
+                ['post_id' => $this->id]
+            )
+        );
+    }
+
+    /**
+     * Contexts for a set of post ids, keyed by post id — for the feed generators,
+     * which select raw rows instead of Post objects.
+     *
+     * @param int[] $ids
+     * @return array<int, array<array<string,string>>>
+     */
+    public static function contextsForPostIds(Database $db, array $ids): array
+    {
+        if (empty($ids)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $map = [];
+        $rows = $db->select(
+            "SELECT post_id, kind, url
+               FROM post_contexts
+              WHERE post_id IN ($placeholders)
+              ORDER BY post_id, id",
+            $ids
+        );
+        foreach ($rows as $row) {
+            $map[(int) $row['post_id']][] = [
+                'kind' => (string) $row['kind'],
+                'url'  => (string) $row['url'],
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Render context lines ("↩ In reply to <a>…</a>") with mf2 u-* classes.
+     * Shared by the feed generators and templates.
+     *
+     * @param array<array<string,string>> $contexts
+     */
+    public static function contextsHtml(array $contexts): string
+    {
+        static $labels = [
+            'repost-of'   => ['♺', 'Reposted', 'u-repost-of'],
+            'like-of'     => ['♥', 'Liked', 'u-like-of'],
+            'in-reply-to' => ['↩', 'In reply to', 'u-in-reply-to'],
+            'bookmark-of' => ['🔖', 'Bookmarked', 'u-bookmark-of'],
+        ];
+
+        // Display order: repost > like > reply > bookmark.
+        usort($contexts, fn($a, $b) =>
+            array_search($a['kind'] ?? '', self::CONTEXT_KINDS, true)
+            <=> array_search($b['kind'] ?? '', self::CONTEXT_KINDS, true));
+
+        $html = '';
+        foreach ($contexts as $context) {
+            $kind = (string) ($context['kind'] ?? '');
+            $url  = (string) ($context['url'] ?? '');
+            if ($url === '' || !isset($labels[$kind])) {
+                continue;
+            }
+            [$symbol, $verb, $class] = $labels[$kind];
+            $text = preg_replace('#^https?://#', '', $url);
+            if (mb_strlen($text) > 60) {
+                $text = mb_substr($text, 0, 57) . '…';
+            }
+            $html .= '<p class="post__context"><span aria-hidden="true">' . $symbol . '</span> ' . $verb
+                . ' <a class="' . $class . '" href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8')
+                . '" rel="nofollow">' . htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . '</a></p>' . "\n";
         }
         return $html;
     }
@@ -711,6 +819,27 @@ class Post
                     'alt'        => (string) ($row['alt'] ?? ''),
                     'sort_order' => (int) $row['sort_order'],
                     'media_id'   => $row['media_id'] !== null ? (int) $row['media_id'] : null,
+                ];
+            }
+        }
+
+        // Contexts ride along too (reply/like/repost/bookmark targets).
+        foreach ($posts as $post) {
+            $post->contexts = [];
+        }
+        $contextRows = $db->select(
+            "SELECT post_id, kind, url
+               FROM post_contexts
+              WHERE post_id IN ($placeholders)
+              ORDER BY post_id, id",
+            $ids
+        );
+        foreach ($contextRows as $row) {
+            $pid = (int) $row['post_id'];
+            if (isset($byId[$pid])) {
+                $byId[$pid]->contexts[] = [
+                    'kind' => (string) $row['kind'],
+                    'url'  => (string) $row['url'],
                 ];
             }
         }

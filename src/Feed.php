@@ -40,7 +40,9 @@ class Feed
             ['limit' => $count]
         );
 
-        $photosById = Post::photosForPostIds($this->db, array_map(fn($p) => (int) $p['id'], $posts));
+        $postIds      = array_map(fn($p) => (int) $p['id'], $posts);
+        $photosById   = Post::photosForPostIds($this->db, $postIds);
+        $contextsById = Post::contextsForPostIds($this->db, $postIds);
 
         $feedUpdated = !empty($posts)
             ? $this->atom($posts[0]['updated_at'] ?? $posts[0]['published_at'])
@@ -65,7 +67,8 @@ class Feed
         foreach ($posts as $post) {
             $tz      = $this->settings['timezone'] ?? '';
             $postUrl = $siteUrl . '/' . Post::datePath($post['published_at'], $post['slug'], $tz) . '/';
-            $html    = Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
+            $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [])
+                     . Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
                      . $this->converter->convert($post['content'])->getContent();
 
             $tinylyticsCode = $this->settings['tinylytics_code'] ?? '';
@@ -134,7 +137,8 @@ class Feed
 
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
-            $html    = Post::photosHtml($post->photos, $siteUrl)
+            $html    = Post::contextsHtml($post->contexts)
+                     . Post::photosHtml($post->photos, $siteUrl)
                      . $this->converter->convert($post->content)->getContent();
 
             $xml .= '  <entry>' . "\n";

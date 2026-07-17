@@ -127,6 +127,54 @@ function mp_parse_photo_values(array $vals, string $siteUrl): array
     return $rows;
 }
 
+/**
+ * Extract validated target URLs for one context property (in-reply-to /
+ * like-of / repost-of / bookmark-of). Values may be URL strings, mf2
+ * {url}/{value} objects, or embedded h-cite objects with properties.url.
+ * Non-absolute-http(s) URLs → 400.
+ *
+ * @return string[]
+ */
+function mp_context_urls_from_values(string $kind, array $vals): array
+{
+    $urls = [];
+    foreach ($vals as $val) {
+        if (is_array($val)) {
+            $url = $val['url'] ?? $val['value'] ?? ($val['properties']['url'][0] ?? '');
+            $url = is_string($url) ? trim($url) : '';
+        } else {
+            $url = trim((string) $val);
+        }
+        if ($url === '') {
+            continue;
+        }
+        if (!preg_match('#^https?://#i', $url) || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            mp_error('invalid_request', "{$kind} values must be absolute http(s) URLs");
+        }
+        $urls[] = $url;
+    }
+    return $urls;
+}
+
+/**
+ * Parse all context properties into rows for Post::saveContexts().
+ *
+ * @return array<array{kind: string, url: string}>
+ */
+function mp_parse_context_values(array $properties): array
+{
+    $rows = [];
+    foreach (\CMS\Post::CONTEXT_KINDS as $kind) {
+        if (!isset($properties[$kind]) || !is_array($properties[$kind])) {
+            continue;
+        }
+        foreach (mp_context_urls_from_values($kind, $properties[$kind]) as $url) {
+            $rows[] = ['kind' => $kind, 'url' => $url];
+        }
+    }
+    return $rows;
+}
+
 // ── Source representation (used by GET ?q=source) ───────────────────────────
 
 /**
@@ -169,6 +217,16 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
             }
             return ((string) $p['alt'] === '') ? $url : ['value' => $url, 'alt' => (string) $p['alt']];
         }, $post->photos);
+    }
+
+    foreach (\CMS\Post::CONTEXT_KINDS as $kind) {
+        $urls = array_values(array_map(
+            fn($c) => (string) $c['url'],
+            array_filter($post->contexts, fn($c) => ($c['kind'] ?? '') === $kind)
+        ));
+        if ($urls !== []) {
+            $props[$kind] = $urls;
+        }
     }
 
     $catNames = array_map(fn($c) => (string) $c['name'], $post->categories);
@@ -471,21 +529,25 @@ if ($action === 'update') {
         ? rtrim($config['paths']['output'], '/\\') . '/posts/' . \CMS\Post::datePath($post->published_at, $post->slug, $db->getSetting('timezone', ''))
         : null;
 
+    // Old-position neighbors, snapshotted before mutation: if the post moves in
+    // the timeline (published date or slug change) their prev/next links must be
+    // rebuilt too, alongside the new-position neighbors.
+    $oldPrev = $wasPublished ? \CMS\Post::findPrev($db, $post) : null;
+    $oldNext = $wasPublished ? \CMS\Post::findNext($db, $post) : null;
+
     // ── Apply replace ops ────────────────────────────────────────────────────
     //
-    // Supported properties: name, content, mp-slug, category, post-status.
-    // `published` is intentionally frozen on update.
+    // Supported properties: name, content, mp-slug, category, post-status,
+    // published, photo, and the context properties. `published` may only be
+    // replaced — add/delete would orphan the date-based URL.
 
     $rejectFrozen = function (array $ops, string $opName): void {
-        foreach (array_keys($ops) as $prop) {
-            if ($prop === 'published') {
-                mp_error('invalid_request', "cannot {$opName} published on existing post");
-            }
+        if (array_key_exists('published', $ops)) {
+            mp_error('invalid_request', "cannot {$opName} published on existing post");
         }
     };
-    $rejectFrozen($updateOps['replace'], 'replace');
-    $rejectFrozen($updateOps['add'],     'add');
-    $rejectFrozen($updateOps['delete'],  'delete');
+    $rejectFrozen($updateOps['add'],    'add');
+    $rejectFrozen($updateOps['delete'], 'delete');
 
     $touchedTerms = false;
     $newCategoryIds = array_map('intval', array_column($post->categories, 'id'));
@@ -494,6 +556,9 @@ if ($action === 'update') {
     $updSiteUrl    = rtrim($db->getSetting('site_url', ''), '/');
     $touchedPhotos = false;
     $newPhotos     = $post->photos;
+
+    $touchedContexts = false;
+    $newContexts     = $post->contexts;
 
     // Normalize photo urls from update ops the same way stored rows are kept
     // (site-relative for own-origin urls) so delete-by-value matches.
@@ -570,6 +635,29 @@ if ($action === 'update') {
                 $touchedPhotos = true;
                 break;
 
+            case 'in-reply-to':
+            case 'like-of':
+            case 'repost-of':
+            case 'bookmark-of':
+                $newContexts = array_values(array_filter($newContexts, fn($c) => $c['kind'] !== $prop));
+                foreach (mp_context_urls_from_values($prop, $vals) as $ctxUrl) {
+                    $newContexts[] = ['kind' => $prop, 'url' => $ctxUrl];
+                }
+                $touchedContexts = true;
+                break;
+
+            case 'published':
+                $newTs = is_string($vals[0] ?? null) ? strtotime($vals[0]) : false;
+                if ($newTs === false) {
+                    mp_error('invalid_request', 'published must be a valid datetime');
+                }
+                $post->published_at = date('Y-m-d H:i:s', $newTs);
+                if ($post->status === 'published' && $newTs > time()) {
+                    // Moved into the future: unpublish until the scheduler promotes it.
+                    $post->status = 'scheduled';
+                }
+                break;
+
             case 'post-status':
                 $newStatus = (string) ($vals[0] ?? '');
                 if ($newStatus === 'draft') {
@@ -604,6 +692,11 @@ if ($action === 'update') {
         } elseif ($prop === 'photo') {
             $newPhotos     = array_merge($newPhotos, mp_parse_photo_values($vals, $updSiteUrl));
             $touchedPhotos = true;
+        } elseif (in_array($prop, \CMS\Post::CONTEXT_KINDS, true)) {
+            foreach (mp_context_urls_from_values($prop, $vals) as $ctxUrl) {
+                $newContexts[] = ['kind' => $prop, 'url' => $ctxUrl];
+            }
+            $touchedContexts = true;
         }
     }
 
@@ -636,6 +729,19 @@ if ($action === 'update') {
             $touchedTerms = true;
         } elseif ($prop === 'summary') {
             $post->excerpt = null;
+        } elseif (in_array($prop, \CMS\Post::CONTEXT_KINDS, true)) {
+            // delete: [in-reply-to] (empty $vals) → clear that kind
+            // delete: {like-of: [urls]}           → remove matching urls
+            if (empty($vals)) {
+                $newContexts = array_values(array_filter($newContexts, fn($c) => $c['kind'] !== $prop));
+            } else {
+                $remove      = mp_context_urls_from_values($prop, $vals);
+                $newContexts = array_values(array_filter(
+                    $newContexts,
+                    fn($c) => $c['kind'] !== $prop || !in_array($c['url'], $remove, true)
+                ));
+            }
+            $touchedContexts = true;
         }
     }
 
@@ -648,12 +754,20 @@ if ($action === 'update') {
     if ($touchedPhotos) {
         $post->savePhotos($newPhotos);
     }
+    if ($touchedContexts) {
+        $post->saveContexts($newContexts);
+    }
 
-    // Remove stale output file if the slug changed (old date-path no longer matches).
-    if ($oldDir !== null && $post->slug !== $snapSlug) {
-        $oldFile = $oldDir . '/index.html';
-        if (is_file($oldFile)) @unlink($oldFile);
-        if (is_dir($oldDir))   @rmdir($oldDir);
+    // Remove stale output when the date-path changed (slug or published date).
+    if ($oldDir !== null) {
+        $newDir = $post->published_at !== null
+            ? rtrim($config['paths']['output'], '/\\') . '/posts/' . \CMS\Post::datePath($post->published_at, $post->slug, $db->getSetting('timezone', ''))
+            : null;
+        if ($newDir !== $oldDir) {
+            $oldFile = $oldDir . '/index.html';
+            if (is_file($oldFile)) @unlink($oldFile);
+            if (is_dir($oldDir))   @rmdir($oldDir);
+        }
     }
 
     if ($post->status === 'published' || $wasPublished) {
@@ -661,10 +775,17 @@ if ($action === 'update') {
         $neighborsAffected = !$wasPublished
             || $post->status !== 'published'
             || $post->title  !== $snapTitle
-            || $post->slug   !== $snapSlug;
+            || $post->slug   !== $snapSlug
+            || $post->published_at !== $snapPublishedAt;
         if ($neighborsAffected) {
-            if ($p = \CMS\Post::findPrev($db, $post)) $builder->buildPost($p);
-            if ($n = \CMS\Post::findNext($db, $post)) $builder->buildPost($n);
+            // Rebuild both the old-position and new-position neighbors, once each.
+            $built = [];
+            foreach ([$oldPrev, $oldNext, \CMS\Post::findPrev($db, $post), \CMS\Post::findNext($db, $post)] as $neighbor) {
+                if ($neighbor && $neighbor->id !== $post->id && !isset($built[$neighbor->id])) {
+                    $builder->buildPost($neighbor);
+                    $built[$neighbor->id] = true;
+                }
+            }
         }
         $builder->rebuildSharedResources();
     }
@@ -748,13 +869,21 @@ if (!empty($photoFiles)) {
     }
 }
 
-if ($content === '' && $photoRows === []) {
-    mp_error('invalid_request', 'content or photo is required');
+// ── Contexts: reply/like/repost/bookmark targets ────────────────────────────
+
+$contextRows = mp_parse_context_values($properties);
+
+if ($content === '' && $photoRows === [] && $contextRows === []) {
+    mp_error('invalid_request', 'content, photo, or a context property (in-reply-to, like-of, repost-of, bookmark-of) is required');
 }
+
+// Titleless interaction posts become asides: no derived title, no h1, and the
+// autoincrement id as slug (finalized after save, matching admin/post-edit.php).
+$isAside = $title === '' && $contextRows !== [];
 
 // ── Title fallback ──────────────────────────────────────────────────────────
 
-if ($title === '') {
+if ($title === '' && !$isAside) {
     $plain = trim((string) preg_replace('/\s+/', ' ', strip_tags($content)));
     if ($plain !== '') {
         $title = mb_substr($plain, 0, 80);
@@ -763,17 +892,25 @@ if ($title === '') {
         }
     }
 }
-if ($title === '') {
+if ($title === '' && !$isAside) {
     $title = 'Untitled';
 }
 
 // ── Slug + uniqueness ───────────────────────────────────────────────────────
 
-$slug = \CMS\Helpers::slugify($slugInput !== '' ? $slugInput : $title);
-$base = $slug;
-$n    = 2;
-while (\CMS\Post::findBySlug($db, $slug) !== null) {
-    $slug = $base . '-' . $n++;
+if ($isAside) {
+    $slug = ''; // finalized to the autoincrement id after save
+} else {
+    $slug = \CMS\Helpers::slugify($slugInput !== '' ? $slugInput : $title);
+    // A purely numeric slug would collide with the aside numbering space.
+    if (ctype_digit($slug)) {
+        $slug .= '-post';
+    }
+    $base = $slug;
+    $n    = 2;
+    while (\CMS\Post::findBySlug($db, $slug) !== null) {
+        $slug = $base . '-' . $n++;
+    }
 }
 
 // ── Status + published_at ───────────────────────────────────────────────────
@@ -817,6 +954,7 @@ foreach ($categories as $cat) {
 // ── Save ────────────────────────────────────────────────────────────────────
 
 $post               = new \CMS\Post($db);
+$post->post_kind    = $isAside ? 'aside' : 'standard';
 $post->title        = $title;
 $post->slug         = $slug;
 $post->content      = $content;
@@ -836,9 +974,18 @@ if (!$post->save()) {
     mp_error('server_error', 'Failed to save post', 500);
 }
 
+// Asides slug = autoincrement id. Re-save once the id is known.
+if ($post->isAside() && $post->slug !== (string) $post->id) {
+    $post->slug = (string) $post->id;
+    $post->save();
+}
+
 $post->saveTerms($categoryIds, $tagIds);
 if ($photoRows !== []) {
     $post->savePhotos($photoRows);
+}
+if ($contextRows !== []) {
+    $post->saveContexts($contextRows);
 }
 
 // ── Build static output + neighbors + shared resources ──────────────────────
@@ -851,8 +998,11 @@ if ($status === 'published') {
 }
 
 // ── Syndicate to Mastodon / Bluesky on first publish ────────────────────────
+//
+// Content-less interaction posts (a bare like/repost/bookmark) have nothing to
+// say on other networks — skip syndication for those.
 
-if ($status === 'published') {
+if ($status === 'published' && trim($post->content) !== '') {
     $cfgTz              = $db->getSetting('timezone', '');
     $mastodonInstance   = $db->getSetting('mastodon_instance');
     $mastodonToken      = $db->getSetting('mastodon_token');

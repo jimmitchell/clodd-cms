@@ -40,7 +40,9 @@ class JsonFeed
             ['limit' => $count]
         );
 
-        $photosById = Post::photosForPostIds($this->db, array_map(fn($p) => (int) $p['id'], $posts));
+        $postIds      = array_map(fn($p) => (int) $p['id'], $posts);
+        $photosById   = Post::photosForPostIds($this->db, $postIds);
+        $contextsById = Post::contextsForPostIds($this->db, $postIds);
 
         $feed = [
             'version'       => 'https://jsonfeed.org/version/1.1',
@@ -57,7 +59,8 @@ class JsonFeed
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post['published_at'], $post['slug'], $this->settings['timezone'] ?? '') . '/';
             $photos  = $photosById[(int) $post['id']] ?? [];
-            $html    = Post::photosHtml($photos, $siteUrl)
+            $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [])
+                     . Post::photosHtml($photos, $siteUrl)
                      . $this->converter->convert($post['content'])->getContent();
             $isAside = ($post['post_kind'] ?? 'standard') === 'aside';
 
@@ -122,7 +125,8 @@ class JsonFeed
         $items = [];
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
-            $html    = Post::photosHtml($post->photos, $siteUrl)
+            $html    = Post::contextsHtml($post->contexts)
+                     . Post::photosHtml($post->photos, $siteUrl)
                      . $this->converter->convert($post->content)->getContent();
 
             $item = [

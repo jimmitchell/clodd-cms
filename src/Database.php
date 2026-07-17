@@ -17,7 +17,7 @@ class Database
     private static array $settingsCache = [];
 
     // Increment this whenever the schema changes.
-    private const SCHEMA_VERSION = 22;
+    private const SCHEMA_VERSION = 23;
 
     public function __construct(string $dbPath)
     {
@@ -505,6 +505,22 @@ class Database
             )
         SQL);
         $this->run("CREATE INDEX IF NOT EXISTS idx_indieauth_tokens_revoked ON indieauth_tokens(revoked_at)");
+    }
+
+    private function applySchemaV23(): void
+    {
+        // post_contexts: Micropub interaction targets (in-reply-to / like-of /
+        // repost-of / bookmark-of), one row per target URL.
+        $this->run(<<<SQL
+            CREATE TABLE IF NOT EXISTS post_contexts (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+                kind       TEXT    NOT NULL,
+                url        TEXT    NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        SQL);
+        $this->run("CREATE INDEX IF NOT EXISTS idx_post_contexts_post_id ON post_contexts(post_id)");
     }
 
     /** Insert or update a single settings row. */

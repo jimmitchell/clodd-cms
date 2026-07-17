@@ -83,6 +83,9 @@ ob_start();
         <?php endif; ?>
     </header>
 
+    <?php if (!empty($post->contexts)): ?>
+    <div class="post__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
+    <?php endif; ?>
     <?php if (!empty($post->photos)): ?>
     <div class="post__photos">
         <?php foreach ($post->photos as $photo): ?>

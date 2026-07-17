@@ -69,6 +69,19 @@ ob_start();
                 <a class="u-url" href="<?= htmlspecialchars($postUrl) ?>"><?= Helpers::formatDate($post->published_at, 'l, F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '') ?></a>
             </time>
             <?php endif; ?>
+            <?php if (!empty($post->contexts)): ?>
+            <div class="post-card__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
+            <?php endif; ?>
+            <?php if (!empty($post->photos)): ?>
+            <div class="post-card__photos">
+                <?php foreach ($post->photos as $photo): ?>
+                <figure class="post-card__photo">
+                    <img class="u-photo" src="<?= htmlspecialchars($photo['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
+                         alt="<?= htmlspecialchars($photo['alt'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" loading="lazy">
+                </figure>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
             <div class="post-card__body prose e-content"><?= $postHtml[$post->id] ?? '' ?></div>
         </article>
         <?php else: ?>
@@ -80,6 +93,15 @@ ob_start();
             <time class="post-card__date dt-published" datetime="<?= date('Y-m-d\TH:i:s\Z', strtotime($post->published_at)) ?>">
                 <?= Helpers::formatDate($post->published_at, 'l, F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '') ?>
             </time>
+            <?php endif; ?>
+            <?php if (!empty($post->contexts)): ?>
+            <div class="post-card__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
+            <?php endif; ?>
+            <?php if (!empty($post->photos)): $cardPhoto = $post->photos[0]; ?>
+            <figure class="post-card__photo post-card__photo--thumb">
+                <img class="u-photo" src="<?= htmlspecialchars($cardPhoto['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
+                     alt="<?= htmlspecialchars($cardPhoto['alt'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" loading="lazy">
+            </figure>
             <?php endif; ?>
             <?php $cardExcerpt = $post->effectiveExcerpt(); ?>
             <?php if ($cardExcerpt !== null): ?>
