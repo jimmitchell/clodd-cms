@@ -36,7 +36,7 @@ class MicropubAuth
 
     /**
      * Extract the bearer token from the Authorization header or the form body.
-     * Errors 400 when both are supplied (RFC 6750 §2: one method per request).
+     * Errors 400 when both are supplied with different values.
      */
     public static function extractBearerToken(): string
     {
@@ -55,8 +55,11 @@ class MicropubAuth
             ? $_POST['access_token']
             : '';
 
-        if ($headerToken !== '' && $bodyToken !== '') {
-            self::error('invalid_request', 'access token supplied in both Authorization header and body');
+        // RFC 6750 §2 forbids clients sending both, but micropub.rocks sends
+        // its header token alongside the body token — only reject when the
+        // two disagree, since duplicates carry no ambiguity.
+        if ($headerToken !== '' && $bodyToken !== '' && !hash_equals($headerToken, $bodyToken)) {
+            self::error('invalid_request', 'different access tokens supplied in Authorization header and body');
         }
 
         return $headerToken !== '' ? $headerToken : $bodyToken;
