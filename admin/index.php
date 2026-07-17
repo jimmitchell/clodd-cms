@@ -4,9 +4,17 @@ declare(strict_types=1);
 
 require __DIR__ . '/bootstrap.php';
 
-// Already authenticated → go to dashboard.
+// Optional post-login destination. Only the IndieAuth consent screen may be a
+// target — everything else lands on the dashboard (open-redirect guard).
+$returnTo = (string) ($_GET['return_to'] ?? $_POST['return_to'] ?? '');
+if (!str_starts_with($returnTo, '/indieauth.php')) {
+    $returnTo = '';
+}
+$loginDest = $returnTo !== '' ? $returnTo : '/admin/analytics.php';
+
+// Already authenticated → go to dashboard (or back to the consent screen).
 if ($auth->isAuthenticated()) {
-    header('Location: /admin/analytics.php');
+    header('Location: ' . $loginDest);
     exit;
 }
 
@@ -40,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($auth->verifyTotp($code) || $auth->verifyBackupCode($code)) {
             $auth->recordTotpAttempt($ip, true);
             $auth->completeTotpLogin();
-            header('Location: /admin/analytics.php');
+            header('Location: ' . $loginDest);
             exit;
         } else {
             $auth->recordTotpAttempt($ip, false);
@@ -65,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($auth->isTotpPending()) {
                 // 2FA required — fall through to render TOTP form.
             } else {
-                header('Location: /admin/analytics.php');
+                header('Location: ' . $loginDest);
                 exit;
             }
         } else {
@@ -124,6 +132,9 @@ $hasPasskeys  = $auth->hasPasskeys();
 
         <form method="post" action="/admin/" autocomplete="off">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf) ?>">
+            <?php if ($returnTo !== ''): ?>
+            <input type="hidden" name="return_to" value="<?= htmlspecialchars($returnTo) ?>">
+            <?php endif; ?>
 
             <label for="totp_code">Authentication code</label>
             <input
@@ -148,6 +159,9 @@ $hasPasskeys  = $auth->hasPasskeys();
 
         <form method="post" action="/admin/" autocomplete="off">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf) ?>">
+            <?php if ($returnTo !== ''): ?>
+            <input type="hidden" name="return_to" value="<?= htmlspecialchars($returnTo) ?>">
+            <?php endif; ?>
 
             <label for="username">Username</label>
             <input
@@ -238,7 +252,7 @@ $hasPasskeys  = $auth->hasPasskeys();
 
             var result = await assertResp.json();
             if (result.ok) {
-                window.location = '/admin/analytics.php';
+                window.location = <?= json_encode($loginDest, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
             } else {
                 showError(result.error || 'Passkey authentication failed.');
             }

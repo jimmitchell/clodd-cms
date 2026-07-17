@@ -360,6 +360,22 @@ audio { width: 100%; }
     margin-bottom: .1rem;
 }
 
+/* Micropub photo property (u-photo) — shown above the post body */
+.post__photos {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.post__photo { margin: 0; }
+
+.post__photo img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+}
+
 .post__author,
 .post__date,
 .post__reading-time {
@@ -785,6 +801,30 @@ audio { width: 100%; }
 
 .post-card__body > :first-child { margin-top: 0; }
 .post-card__body > :last-child  { margin-bottom: 0; }
+
+/* Micropub photos on list cards: notes show every photo, standard posts a
+   single thumbnail figure. */
+.post-card__photos {
+    display: grid;
+    gap: .75rem;
+    margin: .5rem 0;
+}
+
+.post-card__photo { margin: .5rem 0 0; }
+
+.post-card__photos .post-card__photo { margin: 0; }
+
+.post-card__photo img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+}
+
+.post-card__photo--thumb img {
+    max-height: 240px;
+    object-fit: cover;
+}
 
 .post-card--note .post-card__date a {
     color: inherit;

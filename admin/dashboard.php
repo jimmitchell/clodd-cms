@@ -41,7 +41,8 @@ $postStats = $db->selectOne(
         SUM(CASE WHEN status = 'draft'      THEN 1 ELSE 0 END) AS draft,
         SUM(CASE WHEN status = 'scheduled'  THEN 1 ELSE 0 END) AS scheduled,
         COUNT(*) AS total
-     FROM posts"
+     FROM posts
+    WHERE deleted_at IS NULL"
 );
 
 $pageCount  = (int) ($db->selectOne("SELECT COUNT(*) AS cnt FROM pages")['cnt'] ?? 0);
@@ -52,6 +53,7 @@ $dueSoon = $db->select(
     "SELECT id, title, published_at
        FROM posts
       WHERE status = 'scheduled'
+        AND deleted_at IS NULL
         AND published_at <= datetime('now', '+24 hours')
       ORDER BY published_at ASC"
 );
@@ -61,6 +63,7 @@ $drafts = $db->select(
     "SELECT id, title, updated_at
        FROM posts
       WHERE status = 'draft'
+        AND deleted_at IS NULL
       ORDER BY updated_at DESC"
 );
 
@@ -69,6 +72,7 @@ $scheduled = $db->select(
     "SELECT id, title, published_at
        FROM posts
       WHERE status = 'scheduled'
+        AND deleted_at IS NULL
       ORDER BY published_at ASC"
 );
 

@@ -85,13 +85,16 @@ server {
         add_header Cache-Control          "no-store" always;
     }
 
-    # ── Micropub endpoint — iA Writer and other Micropub clients ──────────────
-    location = /micropub.php {
+    # ── Micropub + IndieAuth endpoints ─────────────────────────────────────────
+    # micropub.php  — Micropub endpoint (iA Writer, Quill, obsidian-micropub…)
+    # media.php     — Micropub media endpoint (file uploads)
+    # indieauth.php / token.php / indieauth-metadata.php — IndieAuth server
+    location ~ ^/(micropub|media|token|indieauth|indieauth-metadata)\.php$ {
         limit_except GET POST { deny all; }
 
         include        fastcgi_params;
         fastcgi_pass   unix:/run/php/php8.3-fpm.sock;
-        fastcgi_param  SCRIPT_FILENAME    $document_root/micropub.php;
+        fastcgi_param  SCRIPT_FILENAME    $document_root$fastcgi_script_name;
         fastcgi_param  HTTP_AUTHORIZATION $http_authorization;
         fastcgi_param  HTTPS              on;
 

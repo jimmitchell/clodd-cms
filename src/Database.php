@@ -17,7 +17,7 @@ class Database
     private static array $settingsCache = [];
 
     // Increment this whenever the schema changes.
-    private const SCHEMA_VERSION = 19;
+    private const SCHEMA_VERSION = 22;
 
     public function __construct(string $dbPath)
     {
@@ -441,6 +441,70 @@ class Database
         // posts is fetched once) and supports safe re-runs after partial failures.
         $this->run("ALTER TABLE media ADD COLUMN source_url TEXT");
         $this->run("CREATE INDEX IF NOT EXISTS idx_media_source_url ON media(source_url)");
+    }
+
+    private function applySchemaV20(): void
+    {
+        // deleted_at: soft-delete marker for Micropub delete/undelete. NULL = live.
+        // Micropub delete sets it; undelete clears it; admin can purge permanently.
+        $this->run("ALTER TABLE posts ADD COLUMN deleted_at DATETIME");
+        $this->run("CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at)");
+    }
+
+    private function applySchemaV21(): void
+    {
+        // post_photos: first-class Micropub photo property (u-photo), one row per
+        // photo with optional alt text. media_id links uploads to the media table;
+        // NULL for external URLs stored as-is.
+        $this->run(<<<SQL
+            CREATE TABLE IF NOT EXISTS post_photos (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+                url        TEXT    NOT NULL,
+                alt        TEXT    NOT NULL DEFAULT '',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                media_id   INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        SQL);
+        $this->run("CREATE INDEX IF NOT EXISTS idx_post_photos_post_id ON post_photos(post_id)");
+    }
+
+    private function applySchemaV22(): void
+    {
+        // IndieAuth server storage. Only sha256 hashes of codes/tokens are stored;
+        // the plaintext is shown to the client once and never persisted.
+        $this->run(<<<SQL
+            CREATE TABLE IF NOT EXISTS indieauth_codes (
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                code_hash             TEXT    NOT NULL UNIQUE,
+                client_id             TEXT    NOT NULL,
+                client_name           TEXT    NOT NULL DEFAULT '',
+                redirect_uri          TEXT    NOT NULL,
+                me                    TEXT    NOT NULL,
+                scope                 TEXT    NOT NULL DEFAULT '',
+                code_challenge        TEXT    NOT NULL DEFAULT '',
+                code_challenge_method TEXT    NOT NULL DEFAULT '',
+                created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at            DATETIME NOT NULL,
+                used_at               DATETIME
+            )
+        SQL);
+        $this->run(<<<SQL
+            CREATE TABLE IF NOT EXISTS indieauth_tokens (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash   TEXT    NOT NULL UNIQUE,
+                client_id    TEXT    NOT NULL,
+                client_name  TEXT    NOT NULL DEFAULT '',
+                me           TEXT    NOT NULL,
+                scope        TEXT    NOT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_used_at DATETIME,
+                expires_at   DATETIME,
+                revoked_at   DATETIME
+            )
+        SQL);
+        $this->run("CREATE INDEX IF NOT EXISTS idx_indieauth_tokens_revoked ON indieauth_tokens(revoked_at)");
     }
 
     /** Insert or update a single settings row. */

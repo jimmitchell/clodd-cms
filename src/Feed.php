@@ -34,10 +34,13 @@ class Feed
             "SELECT id, title, slug, content, excerpt, published_at, updated_at, post_kind
                FROM posts
               WHERE status = 'published'
+                AND deleted_at IS NULL
               ORDER BY published_at DESC
               LIMIT :limit",
             ['limit' => $count]
         );
+
+        $photosById = Post::photosForPostIds($this->db, array_map(fn($p) => (int) $p['id'], $posts));
 
         $feedUpdated = !empty($posts)
             ? $this->atom($posts[0]['updated_at'] ?? $posts[0]['published_at'])
@@ -62,7 +65,8 @@ class Feed
         foreach ($posts as $post) {
             $tz      = $this->settings['timezone'] ?? '';
             $postUrl = $siteUrl . '/' . Post::datePath($post['published_at'], $post['slug'], $tz) . '/';
-            $html    = $this->converter->convert($post['content'])->getContent();
+            $html    = Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
+                     . $this->converter->convert($post['content'])->getContent();
 
             $tinylyticsCode = $this->settings['tinylytics_code'] ?? '';
             if ($tinylyticsCode !== '') {
@@ -130,7 +134,8 @@ class Feed
 
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
-            $html    = $this->converter->convert($post->content)->getContent();
+            $html    = Post::photosHtml($post->photos, $siteUrl)
+                     . $this->converter->convert($post->content)->getContent();
 
             $xml .= '  <entry>' . "\n";
             $xml .= $post->isAside()

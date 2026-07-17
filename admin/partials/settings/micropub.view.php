@@ -32,7 +32,67 @@ use CMS\Helpers;
 </div>
 
 <div class="panel">
-    <h2>Access token</h2>
+    <h2>Authorized apps (IndieAuth)</h2>
+    <p class="form-hint" style="margin-bottom:1rem">
+        Micropub clients can sign in with your site URL — you approve each app on a consent
+        screen and it receives its own token with only the permissions you grant.
+    </p>
+    <?php if (empty($indieauthTokens)): ?>
+    <p class="form-hint">No apps have been authorized yet.</p>
+    <?php else: ?>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>App</th>
+                <th>Scopes</th>
+                <th>Authorized</th>
+                <th>Last used</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($indieauthTokens as $t): ?>
+            <tr>
+                <td>
+                    <?= Helpers::e($t['client_name'] !== '' ? $t['client_name'] : $t['client_id']) ?>
+                    <?php if ($t['client_name'] !== ''): ?>
+                    <br><span class="meta" style="font-size:.8rem;color:var(--color-muted)"><?= Helpers::e($t['client_id']) ?></span>
+                    <?php endif; ?>
+                </td>
+                <td><code><?= Helpers::e($t['scope']) ?></code></td>
+                <td class="meta"><?= Helpers::e(Helpers::formatDate($t['created_at'], 'M j, Y')) ?></td>
+                <td class="meta"><?= $t['last_used_at'] !== null ? Helpers::e(Helpers::formatDate($t['last_used_at'], 'M j, Y g:i a')) : '—' ?></td>
+                <td>
+                    <form method="post" action="/admin/settings.php?tab=micropub"
+                          onsubmit="return confirm('Revoke this app\'s access? It will need to sign in again.')">
+                        <input type="hidden" name="csrf_token" value="<?= Helpers::e($csrf) ?>">
+                        <input type="hidden" name="action"     value="revoke_token">
+                        <input type="hidden" name="token_id"   value="<?= (int) $t['id'] ?>">
+                        <button type="submit" class="btn btn--sm btn--danger">Revoke</button>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php endif; ?>
+</div>
+
+<div class="panel">
+    <h2>Endpoints</h2>
+    <p class="form-hint" style="margin-bottom:1rem">
+        For reference — clients discover these automatically from the
+        <code>&lt;link&gt;</code> tags on your site.
+    </p>
+    <?php foreach ($indieauthEndpoints as $label => $url): ?>
+    <label style="margin-top:.5rem"><?= Helpers::e($label) ?></label>
+    <input type="text" value="<?= Helpers::e($url) ?>" readonly
+           style="max-width:520px;font-family:monospace;opacity:.8" onclick="this.select()">
+    <?php endforeach; ?>
+</div>
+
+<div class="panel">
+    <h2>Access token (manual fallback)</h2>
 
     <?php if ($justIssued !== ''): ?>
         <label for="new-token">Your new token</label>
@@ -49,8 +109,9 @@ use CMS\Helpers;
         </p>
     <?php else: ?>
         <p class="form-hint" style="margin-bottom:1rem">
-            No Micropub token is set. Generate one to enable publishing from iA Writer
-            or other Micropub clients.
+            No manual token is set. Clients that support IndieAuth can sign in without one;
+            generate a token only for clients that ask for an <em>App Token</em> directly
+            (it grants every permission).
         </p>
     <?php endif; ?>
 

@@ -83,6 +83,16 @@ ob_start();
         <?php endif; ?>
     </header>
 
+    <?php if (!empty($post->photos)): ?>
+    <div class="post__photos">
+        <?php foreach ($post->photos as $photo): ?>
+        <figure class="post__photo">
+            <img class="u-photo" src="<?= htmlspecialchars($photo['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
+                 alt="<?= htmlspecialchars($photo['alt'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" loading="lazy">
+        </figure>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
     <div class="post__content prose e-content">
         <?= $html ?>
     </div>

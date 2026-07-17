@@ -131,10 +131,11 @@ if (!function_exists('_e')) {
     <?php endif; ?>
     <!-- Bridgy Fed verification -->
     <link rel="me" href="https://jimmitchell.org.web.brid.gy">
-    <!-- Micropub -->
-    <?php if (($settings['micropub_token'] ?? '') !== ''): ?>
+    <!-- Micropub + IndieAuth discovery -->
     <link rel="micropub" href="<?= _e($siteUrl . '/micropub.php') ?>">
-    <?php endif; ?>
+    <link rel="indieauth-metadata" href="<?= _e($siteUrl . '/indieauth-metadata.php') ?>">
+    <link rel="authorization_endpoint" href="<?= _e($siteUrl . '/indieauth.php') ?>">
+    <link rel="token_endpoint" href="<?= _e($siteUrl . '/token.php') ?>">
     <!-- Anti-FOUC: apply saved/system theme before CSS renders to avoid flash -->
     <script>(function(){var t=localStorage.getItem('theme');var sys=window.matchMedia('(prefers-color-scheme:dark)').matches;if(t==='dark'||(t!=='light'&&sys)){document.documentElement.setAttribute('data-theme','dark');}else{document.documentElement.setAttribute('data-theme','light');}})();</script>
     <?php if (!empty($criticalCss)): ?>

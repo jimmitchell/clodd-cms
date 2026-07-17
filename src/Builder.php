@@ -65,7 +65,7 @@ class Builder
         $dir  = $this->outputDir . '/posts/' . Post::datePath($post->published_at ?? date('Y-m-d H:i:s'), $post->slug, $this->settings['timezone'] ?? '');
         $path = $dir . '/index.html';
 
-        if ($post->status !== 'published') {
+        if ($post->status !== 'published' || $post->deleted_at !== null) {
             $this->removeFile($path);
             // Rebuild any archives this post was in so it no longer appears there.
             foreach ($post->categories as $cat) {

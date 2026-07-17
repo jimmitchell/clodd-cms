@@ -34,10 +34,13 @@ class JsonFeed
             "SELECT id, title, slug, content, excerpt, published_at, updated_at, post_kind
                FROM posts
               WHERE status = 'published'
+                AND deleted_at IS NULL
               ORDER BY published_at DESC
               LIMIT :limit",
             ['limit' => $count]
         );
+
+        $photosById = Post::photosForPostIds($this->db, array_map(fn($p) => (int) $p['id'], $posts));
 
         $feed = [
             'version'       => 'https://jsonfeed.org/version/1.1',
@@ -53,7 +56,9 @@ class JsonFeed
         $items = [];
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post['published_at'], $post['slug'], $this->settings['timezone'] ?? '') . '/';
-            $html    = $this->converter->convert($post['content'])->getContent();
+            $photos  = $photosById[(int) $post['id']] ?? [];
+            $html    = Post::photosHtml($photos, $siteUrl)
+                     . $this->converter->convert($post['content'])->getContent();
             $isAside = ($post['post_kind'] ?? 'standard') === 'aside';
 
             $item = [
@@ -65,6 +70,10 @@ class JsonFeed
             ];
             if (!$isAside) {
                 $item['title'] = $post['title'];
+            }
+            if ($photos !== []) {
+                $imageUrl = (string) $photos[0]['url'];
+                $item['image'] = str_starts_with($imageUrl, '/') ? $siteUrl . $imageUrl : $imageUrl;
             }
 
             if (!empty($post['excerpt'])) {
@@ -113,7 +122,8 @@ class JsonFeed
         $items = [];
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
-            $html    = $this->converter->convert($post->content)->getContent();
+            $html    = Post::photosHtml($post->photos, $siteUrl)
+                     . $this->converter->convert($post->content)->getContent();
 
             $item = [
                 'id'             => $postUrl,
@@ -124,6 +134,10 @@ class JsonFeed
             ];
             if (!$post->isAside()) {
                 $item['title'] = $post->title;
+            }
+            if ($post->photos !== []) {
+                $imageUrl = (string) $post->photos[0]['url'];
+                $item['image'] = str_starts_with($imageUrl, '/') ? $siteUrl . $imageUrl : $imageUrl;
             }
 
             if (!empty($post->excerpt)) {

@@ -3,20 +3,27 @@
 declare(strict_types=1);
 
 /**
- * Micropub endpoint — accepts new posts from Micropub clients (iA Writer,
- * Quill, MarsEdit, Drafts, etc.).
+ * Micropub endpoint — accepts posts from Micropub clients (iA Writer, Quill,
+ * obsidian-micropub, etc.).
  *
- * Auth: Bearer token, generated in Settings → Micropub.
+ * Auth: Bearer token — either the legacy shared token (Settings → Micropub,
+ * full scopes) or an IndieAuth token issued by /token.php (scoped:
+ * create / update / delete / media).
  *
- * Supported request types:
- *   GET  /micropub.php?q=config           configuration discovery
- *   POST /micropub.php  (form-encoded)    h=entry, name=…, content=…, category[]=…
- *   POST /micropub.php  (JSON)            {type:["h-entry"], properties:{…}}
- *   POST /micropub.php  (multipart)       same as form-encoded plus photo[] uploads
+ * Supported requests:
+ *   GET  ?q=config|source|syndicate-to|category   discovery queries
+ *   POST (form-encoded)   h=entry create; action=delete|undelete
+ *   POST (JSON)           {type:["h-entry"], properties:{…}} create;
+ *                         {action: update|delete|undelete, url, …}
+ *   POST (multipart)      create with photo[] uploads; bare `file` uploads
+ *                         (legacy media-endpoint behavior — new clients use
+ *                         /media.php from q=config)
  *
- * Response:
- *   201 Created + Location: <new post URL> on success
- *   400 / 401 / 429 / 500 + JSON {error, error_description} on failure
+ * Responses:
+ *   201 Created + Location  (create; update when the URL changed)
+ *   202 Accepted + Location (scheduled create)
+ *   204 No Content          (update, delete, undelete)
+ *   400 / 401 / 403 / 404 / 422 / 429 / 500 + JSON {error, error_description}
  */
 
 // Read raw body before any session-starting code consumes it.
@@ -32,76 +39,16 @@ $activityLog = new \CMS\ActivityLog($db);
 
 \CMS\Post::promoteScheduled($db);
 
-// ── Response helpers ────────────────────────────────────────────────────────
+// ── Response helpers (delegate to the shared endpoint auth class) ───────────
 
 function mp_json(mixed $data, int $status = 200): never
 {
-    http_response_code($status);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
+    \CMS\MicropubAuth::json($data, $status);
 }
 
 function mp_error(string $code, string $description = '', int $status = 400): never
 {
-    $payload = ['error' => $code];
-    if ($description !== '') {
-        $payload['error_description'] = $description;
-    }
-    mp_json($payload, $status);
-}
-
-// ── Auth ────────────────────────────────────────────────────────────────────
-
-function mp_extract_bearer_token(): string
-{
-    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    if ($header === '' && function_exists('apache_request_headers')) {
-        $headers = apache_request_headers();
-        $header  = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-    }
-
-    if ($header !== '' && preg_match('/^Bearer\s+(.+)$/i', trim($header), $m)) {
-        return trim($m[1]);
-    }
-
-    // Spec also allows access_token in the form body (form-encoded only).
-    if (!empty($_POST['access_token']) && is_string($_POST['access_token'])) {
-        return $_POST['access_token'];
-    }
-
-    return '';
-}
-
-function mp_authenticate(\CMS\Database $db, array $config): void
-{
-    $ip  = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-    $max = (int) ($config['security']['max_login_attempts'] ?? 5);
-    $win = (int) ($config['security']['lockout_minutes'] ?? 15);
-
-    $row = $db->selectOne(
-        "SELECT COUNT(*) AS cnt
-           FROM login_attempts
-          WHERE ip      = :ip
-            AND success = 0
-            AND attempted_at >= datetime('now', :w)",
-        ['ip' => $ip, 'w' => "-{$win} minutes"]
-    );
-
-    if (($row['cnt'] ?? 0) >= $max) {
-        mp_error('rate_limited', 'Too many failed attempts. Try again later.', 429);
-    }
-
-    $stored = $db->getSetting('micropub_token', '');
-    $token  = mp_extract_bearer_token();
-
-    $ok = $stored !== '' && $token !== '' && hash_equals($stored, $token);
-
-    if (!$ok) {
-        $db->insert('login_attempts', ['ip' => $ip, 'success' => 0]);
-        header('WWW-Authenticate: Bearer realm="Micropub"');
-        mp_error('unauthorized', 'Invalid or missing access token', 401);
-    }
+    \CMS\MicropubAuth::error($code, $description, $status);
 }
 
 // ── Post resolution by URL ──────────────────────────────────────────────────
@@ -123,6 +70,61 @@ function mp_resolve_post_by_url(\CMS\Database $db, string $url): ?\CMS\Post
     if (empty($segments)) return null;
     $slug = end($segments);
     return \CMS\Post::findBySlug($db, (string) $slug);
+}
+
+// ── Syndication targets ─────────────────────────────────────────────────────
+
+/**
+ * The syndicate-to targets advertised in q=config / q=syndicate-to: Mastodon
+ * and Bluesky, each present only when its credentials are configured.
+ */
+function mp_syndication_targets(\CMS\Database $db): array
+{
+    $targets = [];
+
+    $instance = $db->getSetting('mastodon_instance');
+    if ($instance !== '' && $db->getSetting('mastodon_token') !== '') {
+        $host = parse_url($instance, PHP_URL_HOST) ?: trim($instance);
+        $targets[] = ['uid' => 'mastodon', 'name' => 'Mastodon (' . $host . ')'];
+    }
+
+    $handle = $db->getSetting('bluesky_handle');
+    if ($handle !== '' && $db->getSetting('bluesky_app_password') !== '') {
+        $targets[] = ['uid' => 'bluesky', 'name' => 'Bluesky (@' . ltrim($handle, '@') . ')'];
+    }
+
+    return $targets;
+}
+
+// ── Photo property parsing ──────────────────────────────────────────────────
+
+/**
+ * Parse Micropub `photo` property values — plain URL strings or mf2
+ * {value, alt} objects — into photo rows for Post::savePhotos(). URLs under
+ * the site's own origin are stored site-relative, matching uploads.
+ *
+ * @return array<array{url: string, alt: string, media_id: null}>
+ */
+function mp_parse_photo_values(array $vals, string $siteUrl): array
+{
+    $rows = [];
+    foreach ($vals as $val) {
+        if (is_array($val)) {
+            $url = is_string($val['value'] ?? null) ? trim($val['value']) : '';
+            $alt = is_string($val['alt'] ?? null) ? $val['alt'] : '';
+        } else {
+            $url = trim((string) $val);
+            $alt = '';
+        }
+        if ($url === '') {
+            continue;
+        }
+        if ($siteUrl !== '' && str_starts_with($url, $siteUrl . '/')) {
+            $url = substr($url, strlen($siteUrl));
+        }
+        $rows[] = ['url' => $url, 'alt' => $alt, 'media_id' => null];
+    }
+    return $rows;
 }
 
 // ── Source representation (used by GET ?q=source) ───────────────────────────
@@ -159,6 +161,16 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
         }
     }
 
+    if ($post->photos !== []) {
+        $props['photo'] = array_map(function ($p) use ($siteUrl) {
+            $url = (string) $p['url'];
+            if ($siteUrl !== '' && str_starts_with($url, '/')) {
+                $url = $siteUrl . $url;
+            }
+            return ((string) $p['alt'] === '') ? $url : ['value' => $url, 'alt' => (string) $p['alt']];
+        }, $post->photos);
+    }
+
     $catNames = array_map(fn($c) => (string) $c['name'], $post->categories);
     $tagNames = array_map(fn($t) => (string) $t['name'], $post->tags);
     $allTerms = array_values(array_filter(array_merge($catNames, $tagNames), fn($n) => $n !== ''));
@@ -175,22 +187,22 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
 
 // ── GET: configuration queries ──────────────────────────────────────────────
 
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    mp_authenticate($db, $config);
+if ($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'HEAD') {
+    \CMS\MicropubAuth::authenticate($db, $config);
 
     $q       = $_GET['q'] ?? '';
     $siteUrl = rtrim($db->getSetting('site_url', ''), '/');
 
     if ($q === 'config') {
         mp_json([
-            'media-endpoint' => $siteUrl . '/micropub.php',
-            'syndicate-to'   => [],
+            'media-endpoint' => $siteUrl . '/media.php',
+            'syndicate-to'   => mp_syndication_targets($db),
             'q'              => ['config', 'source', 'syndicate-to', 'category'],
         ]);
     }
 
     if ($q === 'syndicate-to') {
-        mp_json(['syndicate-to' => []]);
+        mp_json(['syndicate-to' => mp_syndication_targets($db)]);
     }
 
     if ($q === 'source') {
@@ -199,7 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             mp_error('invalid_request', 'url is required');
         }
         $post = mp_resolve_post_by_url($db, $targetUrl);
-        if (!$post) {
+        if (!$post || $post->deleted_at !== null) {
             mp_error('invalid_request', 'post not found for url', 404);
         }
 
@@ -235,19 +247,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         mp_json(['categories' => $names]);
     }
 
-    mp_json([]);
+    mp_error('invalid_request', $q === '' ? 'q parameter is required' : "unsupported query: {$q}");
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Allow: GET, POST');
+    header('Allow: GET, POST, HEAD');
     mp_error('invalid_request', 'Method not allowed', 405);
 }
 
-// ── POST: dispatch on action (create | update | delete) ────────────────────
+// ── POST: dispatch on action (create | update | delete | undelete) ─────────
 
-mp_authenticate($db, $config);
+$mpAuthz = \CMS\MicropubAuth::authenticate($db, $config);
 
-$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+$contentType = strtolower(trim(explode(';', $_SERVER['CONTENT_TYPE'] ?? '')[0]));
 $properties  = [];
 $photoFiles  = [];
 $jsonBody    = null;
@@ -255,7 +267,7 @@ $action      = '';
 $updateOps   = ['replace' => [], 'add' => [], 'delete' => []];
 $targetUrl   = '';
 
-if (stripos($contentType, 'application/json') !== false) {
+if ($contentType === 'application/json') {
     $jsonBody = json_decode($_mpRawBody, true);
     if (!is_array($jsonBody)) {
         mp_error('invalid_request', 'Malformed JSON body');
@@ -320,14 +332,18 @@ if (stripos($contentType, 'application/json') !== false) {
         if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             mp_error('invalid_request', 'file upload error');
         }
+        \CMS\MicropubAuth::requireScope($mpAuthz, 'media', 'create');
         try {
             $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media');
             $result       = $mediaService->upload($f);
         } catch (\RuntimeException $e) {
             mp_error('invalid_request', $e->getMessage(), 422);
         }
+        $mediaUrl = rtrim($db->getSetting('site_url', ''), '/') . $result['url'];
         http_response_code(201);
-        header('Location: ' . $result['url']);
+        header('Location: ' . $mediaUrl);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['url' => $mediaUrl], JSON_UNESCAPED_SLASHES);
         exit;
     }
 
@@ -374,23 +390,22 @@ if (stripos($contentType, 'application/json') !== false) {
 // ── action: delete ──────────────────────────────────────────────────────────
 
 if ($action === 'delete') {
+    \CMS\MicropubAuth::requireScope($mpAuthz, 'delete');
     if ($targetUrl === '') {
         mp_error('invalid_request', 'url is required');
     }
     $post = mp_resolve_post_by_url($db, $targetUrl);
-    if (!$post) {
+    if (!$post || $post->deleted_at !== null) {
         mp_error('invalid_request', 'post not found for url', 404);
     }
 
     $wasPublished = $post->status === 'published';
     $prev = $wasPublished ? \CMS\Post::findPrev($db, $post) : null;
     $next = $wasPublished ? \CMS\Post::findNext($db, $post) : null;
-    $title = $post->title;
-    $id    = $post->id;
 
-    $post->delete();
-    // buildPost() with status !== 'published' removes the output file and rebuilds taxonomy archives.
-    $post->status = 'draft';
+    // Soft delete so action=undelete can restore. buildPost() removes the
+    // output file and rebuilds taxonomy archives for deleted posts.
+    $post->softDelete();
     $builder->buildPost($post);
     if ($wasPublished) {
         if ($prev) $builder->buildPost($prev);
@@ -398,7 +413,36 @@ if ($action === 'delete') {
         $builder->rebuildSharedResources();
     }
 
-    $activityLog->log('delete', 'post', $id, $title . ' (via micropub)');
+    $activityLog->log('delete', 'post', $post->id, $post->title . ' (via micropub)');
+
+    http_response_code(204);
+    exit;
+}
+
+// ── action: undelete ────────────────────────────────────────────────────────
+
+if ($action === 'undelete') {
+    \CMS\MicropubAuth::requireScope($mpAuthz, 'delete');
+    if ($targetUrl === '') {
+        mp_error('invalid_request', 'url is required');
+    }
+    $post = mp_resolve_post_by_url($db, $targetUrl);
+    if (!$post) {
+        mp_error('invalid_request', 'post not found for url', 404);
+    }
+    if ($post->deleted_at === null) {
+        mp_error('invalid_request', 'post is not deleted');
+    }
+
+    $post->restore();
+    if ($post->status === 'published') {
+        $builder->buildPost($post);
+        if ($p = \CMS\Post::findPrev($db, $post)) $builder->buildPost($p);
+        if ($n = \CMS\Post::findNext($db, $post)) $builder->buildPost($n);
+        $builder->rebuildSharedResources();
+    }
+
+    $activityLog->log('undelete', 'post', $post->id, $post->title . ' (via micropub)');
 
     http_response_code(204);
     exit;
@@ -407,11 +451,12 @@ if ($action === 'delete') {
 // ── action: update ──────────────────────────────────────────────────────────
 
 if ($action === 'update') {
+    \CMS\MicropubAuth::requireScope($mpAuthz, 'update');
     if ($targetUrl === '') {
         mp_error('invalid_request', 'url is required');
     }
     $post = mp_resolve_post_by_url($db, $targetUrl);
-    if (!$post) {
+    if (!$post || $post->deleted_at !== null) {
         mp_error('invalid_request', 'post not found for url', 404);
     }
 
@@ -445,6 +490,17 @@ if ($action === 'update') {
     $touchedTerms = false;
     $newCategoryIds = array_map('intval', array_column($post->categories, 'id'));
     $newTagIds      = array_map('intval', array_column($post->tags, 'id'));
+
+    $updSiteUrl    = rtrim($db->getSetting('site_url', ''), '/');
+    $touchedPhotos = false;
+    $newPhotos     = $post->photos;
+
+    // Normalize photo urls from update ops the same way stored rows are kept
+    // (site-relative for own-origin urls) so delete-by-value matches.
+    $normalizePhotoUrls = fn(array $vals): array => array_map(
+        fn($r) => $r['url'],
+        mp_parse_photo_values($vals, $updSiteUrl)
+    );
 
     $applyCategories = function (array $cats) use ($db, &$newCategoryIds, &$newTagIds): void {
         $newCategoryIds = [];
@@ -509,6 +565,11 @@ if ($action === 'update') {
                 $touchedTerms = true;
                 break;
 
+            case 'photo':
+                $newPhotos     = mp_parse_photo_values($vals, $updSiteUrl);
+                $touchedPhotos = true;
+                break;
+
             case 'post-status':
                 $newStatus = (string) ($vals[0] ?? '');
                 if ($newStatus === 'draft') {
@@ -540,12 +601,28 @@ if ($action === 'update') {
         } elseif ($prop === 'summary') {
             $first = is_string($vals[0] ?? null) ? trim($vals[0]) : '';
             if ($first !== '') $post->excerpt = $first;
+        } elseif ($prop === 'photo') {
+            $newPhotos     = array_merge($newPhotos, mp_parse_photo_values($vals, $updSiteUrl));
+            $touchedPhotos = true;
         }
     }
 
-    // `delete` per-property: category clearing/removal and summary clearing.
+    // `delete` per-property: category/photo clearing/removal and summary clearing.
     foreach ($updateOps['delete'] as $prop => $vals) {
-        if ($prop === 'category') {
+        if ($prop === 'photo') {
+            // delete: [photo] (empty $vals) → clear all
+            // delete: {photo: [urls]}       → remove matching urls
+            if (empty($vals)) {
+                $newPhotos = [];
+            } else {
+                $remove    = $normalizePhotoUrls($vals);
+                $newPhotos = array_values(array_filter(
+                    $newPhotos,
+                    fn($p) => !in_array($p['url'], $remove, true)
+                ));
+            }
+            $touchedPhotos = true;
+        } elseif ($prop === 'category') {
             // delete: [category] (empty $vals) → clear all
             // delete: {category: [a, b]}      → remove specific values
             if (empty($vals)) {
@@ -567,6 +644,9 @@ if ($action === 'update') {
     }
     if ($touchedTerms) {
         $post->saveTerms($newCategoryIds, $newTagIds);
+    }
+    if ($touchedPhotos) {
+        $post->savePhotos($newPhotos);
     }
 
     // Remove stale output file if the slug changed (old date-path no longer matches).
@@ -591,20 +671,30 @@ if ($action === 'update') {
 
     $activityLog->log('update', 'post', $post->id, $post->title . ' (via micropub)');
 
+    // Spec: 201 + Location when the update changed the post's URL, else 204.
     $siteUrl = rtrim($db->getSetting('site_url', ''), '/');
     $cfgTz   = $db->getSetting('timezone', '');
-    $location = ($post->status === 'published' && $post->published_at !== null && $siteUrl !== '')
+    $newUrl = ($post->status === 'published' && $post->published_at !== null && $siteUrl !== '')
         ? $siteUrl . '/' . \CMS\Post::datePath($post->published_at, $post->slug, $cfgTz) . '/'
         : '';
+    $oldUrl = ($wasPublished && $snapPublishedAt !== null && $siteUrl !== '')
+        ? $siteUrl . '/' . \CMS\Post::datePath($snapPublishedAt, $snapSlug, $cfgTz) . '/'
+        : '';
 
-    http_response_code(200);
-    if ($location !== '') header('Location: ' . $location);
+    if ($newUrl !== '' && $newUrl !== $oldUrl) {
+        http_response_code(201);
+        header('Location: ' . $newUrl);
+    } else {
+        http_response_code(204);
+    }
     exit;
 }
 
 if ($action !== 'create') {
     mp_error('invalid_request', "unsupported action: {$action}");
 }
+
+\CMS\MicropubAuth::requireScope($mpAuthz, 'create');
 
 // ── Property accessors ──────────────────────────────────────────────────────
 
@@ -632,24 +722,34 @@ $categories = isset($properties['category']) && is_array($properties['category']
     ? array_values(array_filter(array_map('strval', $properties['category']), fn($c) => $c !== ''))
     : [];
 
-if ($content === '' && empty($photoFiles)) {
-    mp_error('invalid_request', 'content or photo is required');
-}
+// ── Photos: first-class u-photo property ────────────────────────────────────
+//
+// Sources: `photo` property values (URL strings or mf2 {value, alt} objects,
+// typically pointing at the media endpoint) and direct multipart uploads.
+// Alt text for multipart files may arrive via mp-photo-alt[] (by index).
 
-// ── Photos: upload and prepend Markdown image lines ─────────────────────────
+$mpSiteUrl = rtrim($db->getSetting('site_url', ''), '/');
+$photoRows = isset($properties['photo']) && is_array($properties['photo'])
+    ? mp_parse_photo_values($properties['photo'], $mpSiteUrl)
+    : [];
 
 if (!empty($photoFiles)) {
-    $mediaService  = new \CMS\Media($db, $config['paths']['content'] . '/media');
-    $imageMarkdown = '';
-    foreach ($photoFiles as $photo) {
+    $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media');
+    $photoAlts    = isset($properties['mp-photo-alt']) && is_array($properties['mp-photo-alt'])
+        ? array_map('strval', $properties['mp-photo-alt'])
+        : [];
+    foreach ($photoFiles as $i => $photo) {
         try {
-            $result        = $mediaService->upload($photo);
-            $imageMarkdown .= '![](' . $result['url'] . ")\n\n";
+            $result = $mediaService->upload($photo);
         } catch (\RuntimeException $e) {
             mp_error('invalid_request', 'photo upload failed: ' . $e->getMessage(), 422);
         }
+        $photoRows[] = ['url' => $result['url'], 'alt' => $photoAlts[$i] ?? '', 'media_id' => $result['id']];
     }
-    $content = $imageMarkdown . $content;
+}
+
+if ($content === '' && $photoRows === []) {
+    mp_error('invalid_request', 'content or photo is required');
 }
 
 // ── Title fallback ──────────────────────────────────────────────────────────
@@ -724,11 +824,22 @@ $post->excerpt      = $summary !== '' ? $summary : null;
 $post->status       = $status;
 $post->published_at = $publishedAt;
 
+// mp-syndicate-to: when the property is present, syndicate only to the listed
+// target uids (empty list = none). Absent = default auto-syndication.
+if (array_key_exists('mp-syndicate-to', $properties)) {
+    $requested = array_map('strval', $properties['mp-syndicate-to']);
+    $post->mastodon_skip = in_array('mastodon', $requested, true) ? 0 : 1;
+    $post->bluesky_skip  = in_array('bluesky', $requested, true) ? 0 : 1;
+}
+
 if (!$post->save()) {
     mp_error('server_error', 'Failed to save post', 500);
 }
 
 $post->saveTerms($categoryIds, $tagIds);
+if ($photoRows !== []) {
+    $post->savePhotos($photoRows);
+}
 
 // ── Build static output + neighbors + shared resources ──────────────────────
 
@@ -797,6 +908,7 @@ $location = $publishedAt !== null && $siteUrl !== ''
     ? $siteUrl . '/' . \CMS\Post::datePath($publishedAt, $post->slug, $cfgTz) . '/'
     : ($siteUrl !== '' ? $siteUrl . '/admin/post-edit.php?id=' . $post->id : '/admin/post-edit.php?id=' . $post->id);
 
-http_response_code(201);
+// Spec: 202 Accepted when the post will be processed later (scheduled).
+http_response_code($status === 'scheduled' ? 202 : 201);
 header('Location: ' . $location);
 exit;

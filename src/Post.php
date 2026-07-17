@@ -26,12 +26,16 @@ class Post
     public ?string $og_image_hash      = null;
     public ?string $webmentions_sent_at = null;
     public string  $post_kind    = 'standard';
+    public ?string $deleted_at   = null;
 
     /** @var array<array<string,mixed>>  [['id'=>int,'name'=>string,'slug'=>string,'description'=>string], ...] */
     public array $categories = [];
 
     /** @var array<array<string,mixed>>  [['id'=>int,'name'=>string,'slug'=>string], ...] */
     public array $tags = [];
+
+    /** @var array<array<string,mixed>>  [['id'=>int,'url'=>string,'alt'=>string,'sort_order'=>int,'media_id'=>?int], ...] */
+    public array $photos = [];
 
     private Database $db;
 
@@ -50,9 +54,24 @@ class Post
      */
     public static function findAll(Database $db, ?string $status = null): array
     {
-        $sql    = "SELECT * FROM posts" . ($status !== null ? " WHERE status = :status" : "") . " ORDER BY published_at DESC, created_at DESC";
+        $sql    = "SELECT * FROM posts WHERE deleted_at IS NULL" . ($status !== null ? " AND status = :status" : "") . " ORDER BY published_at DESC, created_at DESC";
         $params = $status !== null ? ['status' => $status] : [];
         $posts  = array_map(fn($row) => self::fromRow($db, $row), $db->select($sql, $params));
+        self::hydrateManyTerms($db, $posts);
+        return $posts;
+    }
+
+    /**
+     * All soft-deleted posts, most recently deleted first.
+     *
+     * @return self[]
+     */
+    public static function findDeleted(Database $db): array
+    {
+        $posts = array_map(
+            fn($row) => self::fromRow($db, $row),
+            $db->select("SELECT * FROM posts WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+        );
         self::hydrateManyTerms($db, $posts);
         return $posts;
     }
@@ -89,7 +108,7 @@ class Post
         $rows = $db->select(
             "SELECT p.* FROM posts p
               JOIN post_categories pc ON pc.post_id = p.id
-             WHERE pc.category_id = :cid AND p.status = 'published'
+             WHERE pc.category_id = :cid AND p.status = 'published' AND p.deleted_at IS NULL
              ORDER BY p.published_at DESC",
             ['cid' => $categoryId]
         );
@@ -108,7 +127,7 @@ class Post
         $rows = $db->select(
             "SELECT p.* FROM posts p
               JOIN post_tags pt ON pt.post_id = p.id
-             WHERE pt.tag_id = :tid AND p.status = 'published'
+             WHERE pt.tag_id = :tid AND p.status = 'published' AND p.deleted_at IS NULL
              ORDER BY p.published_at DESC",
             ['tid' => $tagId]
         );
@@ -153,6 +172,32 @@ class Post
         }
         $affected = $this->db->delete('posts', 'id = :id', ['id' => $this->id]);
         return $affected > 0;
+    }
+
+    /**
+     * Soft-delete: mark the post deleted without removing the row, so a
+     * Micropub undelete can restore it.
+     */
+    public function softDelete(): bool
+    {
+        if ($this->id === null) {
+            return false;
+        }
+        $now = date('Y-m-d H:i:s');
+        $this->deleted_at = $now;
+        return $this->db->update('posts', ['deleted_at' => $now, 'updated_at' => $now], 'id = :id', ['id' => $this->id]) >= 0;
+    }
+
+    /**
+     * Undo a soft delete.
+     */
+    public function restore(): bool
+    {
+        if ($this->id === null) {
+            return false;
+        }
+        $this->deleted_at = null;
+        return $this->db->update('posts', ['deleted_at' => null, 'updated_at' => date('Y-m-d H:i:s')], 'id = :id', ['id' => $this->id]) >= 0;
     }
 
     /**
@@ -209,6 +254,95 @@ class Post
               ORDER BY t.name",
             [':post_id' => $this->id]
         );
+    }
+
+    /**
+     * Replace all photo rows for this post (Micropub u-photo property).
+     * Each entry: ['url' => string, 'alt' => string, 'media_id' => ?int].
+     * Order in the array becomes sort_order.
+     *
+     * @param array<array<string,mixed>> $photos
+     */
+    public function savePhotos(array $photos): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+
+        $this->db->delete('post_photos', 'post_id = :post_id', ['post_id' => $this->id]);
+        foreach (array_values($photos) as $i => $photo) {
+            $url = trim((string) ($photo['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $this->db->insert('post_photos', [
+                'post_id'    => $this->id,
+                'url'        => $url,
+                'alt'        => (string) ($photo['alt'] ?? ''),
+                'sort_order' => $i,
+                'media_id'   => $photo['media_id'] ?? null,
+            ]);
+        }
+
+        // Refresh the in-memory array.
+        $this->photos = $this->db->select(
+            "SELECT id, url, alt, sort_order, media_id
+               FROM post_photos
+              WHERE post_id = :post_id
+              ORDER BY sort_order, id",
+            ['post_id' => $this->id]
+        );
+    }
+
+    /**
+     * Photos for a set of post ids, keyed by post id — for the feed generators,
+     * which select raw rows instead of Post objects.
+     *
+     * @param int[] $ids
+     * @return array<int, array<array<string,mixed>>>
+     */
+    public static function photosForPostIds(Database $db, array $ids): array
+    {
+        if (empty($ids)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $map = [];
+        $rows = $db->select(
+            "SELECT post_id, url, alt
+               FROM post_photos
+              WHERE post_id IN ($placeholders)
+              ORDER BY post_id, sort_order, id",
+            $ids
+        );
+        foreach ($rows as $row) {
+            $map[(int) $row['post_id']][] = [
+                'url' => (string) $row['url'],
+                'alt' => (string) ($row['alt'] ?? ''),
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Render photos as h-entry figures (u-photo). Used by the feed generators;
+     * templates render their own markup.
+     *
+     * @param array<array<string,mixed>> $photos
+     */
+    public static function photosHtml(array $photos, string $siteUrl = ''): string
+    {
+        $html = '';
+        foreach ($photos as $photo) {
+            $url = (string) $photo['url'];
+            if ($siteUrl !== '' && str_starts_with($url, '/')) {
+                $url = rtrim($siteUrl, '/') . $url;
+            }
+            $alt   = htmlspecialchars((string) ($photo['alt'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $src   = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+            $html .= '<figure><img class="u-photo" src="' . $src . '" alt="' . $alt . '"></figure>' . "\n";
+        }
+        return $html;
     }
 
     // ── Build helpers ─────────────────────────────────────────────────────────
@@ -392,6 +526,7 @@ class Post
         $row = $db->selectOne(
             "SELECT * FROM posts
               WHERE status = 'published'
+                AND deleted_at IS NULL
                 AND published_at < :pub
               ORDER BY published_at DESC
               LIMIT 1",
@@ -416,6 +551,7 @@ class Post
         $row = $db->selectOne(
             "SELECT * FROM posts
               WHERE status = 'published'
+                AND deleted_at IS NULL
                 AND published_at > :pub
               ORDER BY published_at ASC
               LIMIT 1",
@@ -442,6 +578,7 @@ class Post
         $due = $db->select(
             "SELECT id FROM posts
               WHERE status = 'scheduled'
+                AND deleted_at IS NULL
                 AND published_at <= datetime('now')"
         );
 
@@ -484,6 +621,7 @@ class Post
         $post->og_image_hash       = $row['og_image_hash']       ?? null;
         $post->webmentions_sent_at = $row['webmentions_sent_at'] ?? null;
         $post->post_kind           = $row['post_kind']           ?? 'standard';
+        $post->deleted_at          = $row['deleted_at']          ?? null;
 
         return $post;
     }
@@ -549,6 +687,30 @@ class Post
                     'id'   => $row['id'],
                     'name' => $row['name'],
                     'slug' => $row['slug'],
+                ];
+            }
+        }
+
+        // Photos ride along with terms so every finder hydrates them too.
+        foreach ($posts as $post) {
+            $post->photos = [];
+        }
+        $photoRows = $db->select(
+            "SELECT post_id, id, url, alt, sort_order, media_id
+               FROM post_photos
+              WHERE post_id IN ($placeholders)
+              ORDER BY post_id, sort_order, id",
+            $ids
+        );
+        foreach ($photoRows as $row) {
+            $pid = (int) $row['post_id'];
+            if (isset($byId[$pid])) {
+                $byId[$pid]->photos[] = [
+                    'id'         => (int) $row['id'],
+                    'url'        => (string) $row['url'],
+                    'alt'        => (string) ($row['alt'] ?? ''),
+                    'sort_order' => (int) $row['sort_order'],
+                    'media_id'   => $row['media_id'] !== null ? (int) $row['media_id'] : null,
                 ];
             }
         }

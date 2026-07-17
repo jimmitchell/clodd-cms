@@ -10,38 +10,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'generate' || $action === 'revoke') {
+        // The <link rel="micropub"> advert no longer depends on the token, so
+        // toggling it requires no site rebuild.
         if ($action === 'generate') {
             $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
             $db->upsertSetting('micropub_token', $token);
             $activityLog->log('settings', 'settings', null, 'micropub token issued');
             // One-time display after the redirect — the GET side below consumes it.
             $_SESSION['micropub_new_token'] = $token;
-            $auth->flash('New Micropub token generated — copy it below. Site rebuild started in the background; check the activity log to confirm completion.');
+            $auth->flash('New Micropub token generated — copy it below.');
         } else {
             $db->upsertSetting('micropub_token', '');
             $activityLog->log('settings', 'settings', null, 'micropub token revoked');
-            $auth->flash('Micropub token revoked — site rebuild started in the background. Check the activity log to confirm completion.');
+            $auth->flash('Micropub token revoked.');
         }
 
-        // Toggling the token adds/removes <link rel="micropub"> on every static
-        // page, and rebuilding them all can take many minutes — long enough that
-        // nginx's fastcgi_read_timeout would cut the response off. Send the
-        // redirect immediately, then keep building after FastCGI hangs up.
-        // Completion is recorded in the activity log.
         header('Location: /admin/settings.php?tab=micropub');
+        exit;
+    }
 
-        ignore_user_abort(true);
-        set_time_limit(0);
-        session_write_close();
-        if (function_exists('fastcgi_finish_request')) {
-            fastcgi_finish_request();
+    if ($action === 'revoke_token') {
+        $tokenId = (int) ($_POST['token_id'] ?? 0);
+        if ($tokenId > 0 && (new \CMS\IndieAuth($db))->revokeTokenById($tokenId)) {
+            $activityLog->log('settings', 'settings', null, "indieauth token #{$tokenId} revoked");
+            $auth->flash('App authorization revoked.');
+        } else {
+            $auth->flash('Token not found or already revoked.', 'error');
         }
-
-        $builder->rebuildPosts();
-        $builder->rebuildPages();
-        $builder->rebuildSharedResources();
-
-        $activityLog->log('settings', 'settings', null, 'micropub rebuild finished');
+        header('Location: /admin/settings.php?tab=micropub');
         exit;
     }
 
@@ -56,3 +52,12 @@ $siteUrl  = rtrim($db->getSetting('site_url', ''), '/');
 $endpoint = ($siteUrl !== '' ? $siteUrl : '') . '/micropub.php';
 $hasToken = $db->getSetting('micropub_token', '') !== '';
 $csrf     = $auth->csrfToken();
+
+$indieauthTokens    = (new \CMS\IndieAuth($db))->listTokens();
+$indieauthEndpoints = [
+    'Micropub endpoint'      => $endpoint,
+    'Media endpoint'         => ($siteUrl !== '' ? $siteUrl : '') . '/media.php',
+    'Authorization endpoint' => ($siteUrl !== '' ? $siteUrl : '') . '/indieauth.php',
+    'Token endpoint'         => ($siteUrl !== '' ? $siteUrl : '') . '/token.php',
+    'Server metadata'        => ($siteUrl !== '' ? $siteUrl : '') . '/indieauth-metadata.php',
+];

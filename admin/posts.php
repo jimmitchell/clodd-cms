@@ -30,9 +30,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     exit;
 }
 
+// Restore a soft-deleted post (deleted via Micropub).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'restore') {
+    $auth->verifyCsrf($_POST['csrf_token'] ?? '');
+    $post = Post::findById($db, (int) ($_POST['id'] ?? 0));
+    if ($post && $post->deleted_at !== null) {
+        $post->restore();
+        if ($post->status === 'published') {
+            $builder->buildPost($post);
+            if ($p = Post::findPrev($db, $post)) $builder->buildPost($p);
+            if ($n = Post::findNext($db, $post)) $builder->buildPost($n);
+            $builder->rebuildSharedResources();
+        }
+    }
+    header('Location: /admin/posts.php?status=deleted');
+    exit;
+}
+
 $statusFilter = $_GET['status'] ?? 'all';
 $search       = trim($_GET['q'] ?? '');
-$posts        = Post::findAll($db, $statusFilter === 'all' ? null : $statusFilter);
+$posts        = $statusFilter === 'deleted'
+    ? Post::findDeleted($db)
+    : Post::findAll($db, $statusFilter === 'all' ? null : $statusFilter);
 
 // Apply title search filter.
 if ($search !== '') {
@@ -60,8 +79,12 @@ $counts = $db->selectOne(
         SUM(CASE WHEN status='published' THEN 1 ELSE 0 END) AS published,
         SUM(CASE WHEN status='draft'     THEN 1 ELSE 0 END) AS draft,
         SUM(CASE WHEN status='scheduled' THEN 1 ELSE 0 END) AS scheduled
-     FROM posts"
+     FROM posts
+    WHERE deleted_at IS NULL"
 );
+$deletedCount = (int) ($db->selectOne(
+    "SELECT COUNT(*) AS cnt FROM posts WHERE deleted_at IS NOT NULL"
+)['cnt'] ?? 0);
 
 // Pagination.
 $perPage    = 20;
@@ -116,6 +139,9 @@ $flashType = $flash['type']    ?? 'success';
                 'draft'     => 'Draft (' . ($counts['draft'] ?? 0) . ')',
                 'scheduled' => 'Scheduled (' . ($counts['scheduled'] ?? 0) . ')',
             ];
+            if ($deletedCount > 0 || $statusFilter === 'deleted') {
+                $tabs['deleted'] = 'Deleted (' . $deletedCount . ')';
+            }
             foreach ($tabs as $key => $label):
                 $tabHref = '/admin/posts.php?status=' . $key . ($search !== '' ? '&q=' . urlencode($search) : '');
             ?>
@@ -168,15 +194,34 @@ $flashType = $flash['type']    ?? 'success';
                     </a>
                 </td>
                 <td>
+                    <?php if ($post->deleted_at !== null): ?>
+                    <span class="badge badge--draft">deleted</span>
+                    <?php else: ?>
                     <span class="badge badge--<?= $post->status ?>">
                         <?= $post->status ?>
                     </span>
+                    <?php endif; ?>
                 </td>
                 <td class="meta">
                     <?= $post->published_at ? Helpers::formatDate($post->published_at, 'M j, Y g:i a', '', $timezone) : '—' ?>
                 </td>
                 <td>
                     <div class="actions">
+                        <?php if ($post->deleted_at !== null): ?>
+                        <form method="post" action="/admin/posts.php">
+                            <input type="hidden" name="csrf_token" value="<?= Helpers::e($csrf) ?>">
+                            <input type="hidden" name="action"     value="restore">
+                            <input type="hidden" name="id"         value="<?= $post->id ?>">
+                            <button type="submit" class="btn btn--sm btn--secondary">Restore</button>
+                        </form>
+                        <form method="post" action="/admin/posts.php"
+                              onsubmit="return confirm(<?= json_encode('Permanently delete "' . $post->title . '"? This cannot be undone.', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)">
+                            <input type="hidden" name="csrf_token" value="<?= Helpers::e($csrf) ?>">
+                            <input type="hidden" name="action"     value="delete">
+                            <input type="hidden" name="id"         value="<?= $post->id ?>">
+                            <button type="submit" class="btn btn--sm btn--danger">Delete permanently</button>
+                        </form>
+                        <?php else: ?>
                         <a href="/admin/post-edit.php?id=<?= $post->id ?>" class="btn btn--sm btn--secondary">Edit</a>
                         <?php if ($post->status === 'published'): ?>
                         <a href="/<?= Helpers::e(Post::datePath($post->published_at, $post->slug, $timezone)) ?>/" target="_blank" class="btn btn--sm btn--secondary">View</a>
@@ -188,6 +233,7 @@ $flashType = $flash['type']    ?? 'success';
                             <input type="hidden" name="id"         value="<?= $post->id ?>">
                             <button type="submit" class="btn btn--sm btn--danger">Delete</button>
                         </form>
+                        <?php endif; ?>
                     </div>
                 </td>
             </tr>
