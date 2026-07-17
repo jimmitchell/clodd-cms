@@ -6,7 +6,8 @@ namespace CMS;
 
 /**
  * Self-hosted IndieAuth server storage: authorization codes, bearer tokens,
- * and PKCE verification (S256 only).
+ * and PKCE verification (S256 only; codes issued without a challenge, for
+ * legacy clients, must be redeemed without a verifier).
  *
  * Codes and tokens are stored as sha256 hashes; the plaintext is returned to
  * the caller once and never persisted. Codes are single-use with a 10-minute
@@ -79,10 +80,14 @@ class IndieAuth
         ) {
             return null;
         }
-        if ($row['code_challenge'] !== '') {
-            if ($codeVerifier === '' || !self::verifyPkce($codeVerifier, (string) $row['code_challenge'], (string) $row['code_challenge_method'])) {
+        if ($row['code_challenge'] === '') {
+            // Downgrade guard: a verifier for a challenge-less code means the
+            // authorization and token requests disagree about PKCE — reject.
+            if ($codeVerifier !== '') {
                 return null;
             }
+        } elseif ($codeVerifier === '' || !self::verifyPkce($codeVerifier, (string) $row['code_challenge'], (string) $row['code_challenge_method'])) {
+            return null;
         }
 
         $claimed = $this->db->update(

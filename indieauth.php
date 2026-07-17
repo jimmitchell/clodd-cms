@@ -181,8 +181,11 @@ if (!in_array($responseType, ['code', 'id'], true)) {
 if ($state === '') {
     $redirectError('invalid_request', 'state is required');
 }
-if ($responseType === 'code' && ($challenge === '' || $method !== 'S256')) {
-    $redirectError('invalid_request', 'PKCE is required: code_challenge with code_challenge_method=S256');
+// Spec allows accepting requests without PKCE for backwards compatibility
+// with older clients (e.g. micropub.rocks); when a challenge is present the
+// method must be S256.
+if ($responseType === 'code' && $challenge !== '' && $method !== 'S256') {
+    $redirectError('invalid_request', 'code_challenge_method must be S256');
 }
 
 $requestedScopes = IndieAuth::filterScopes($scopeParam);
