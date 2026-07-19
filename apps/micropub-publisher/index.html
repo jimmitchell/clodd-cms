@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- The <title> is what IndieAuth servers fall back to when naming this app on
-     their consent screen, so it is the bare app name with no site suffix. -->
+<!-- The page title is what IndieAuth servers fall back to when naming this app
+     on their consent screen, so it is the bare app name with no site suffix.
+     Do not write a literal title tag anywhere else on this page: the common
+     server-side regex is naive and will match the first one it finds. -->
 <title>Micropub Publisher</title>
 <meta name="description" content="A Micropub publishing client for macOS and iOS.">
 <link rel="canonical" href="https://jimmitchell.org/apps/micropub-publisher/">
