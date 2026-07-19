@@ -140,14 +140,21 @@ if (
     ia_error_page('client_id must be an absolute http(s) URL without a fragment.');
 }
 
-// redirect_uri: absolute http(s) URL.
+// redirect_uri: an absolute URL. Native apps are allowed an application-
+// specific scheme (e.g. org.example.app://callback) per IndieAuth §5.2.1;
+// those can never be same-origin with an http(s) client_id, so they always
+// fall through to the registration check below. A few schemes are refused
+// outright because they would turn the Location header into script or a
+// local file read.
 $ru = parse_url($redirectUri);
+$ruScheme = strtolower($ru['scheme'] ?? '');
 if (
     $redirectUri === ''
     || filter_var($redirectUri, FILTER_VALIDATE_URL) === false
-    || !in_array(strtolower($ru['scheme'] ?? ''), ['http', 'https'], true)
+    || $ruScheme === ''
+    || in_array($ruScheme, ['javascript', 'data', 'vbscript', 'file'], true)
 ) {
-    ia_error_page('redirect_uri must be an absolute http(s) URL.');
+    ia_error_page('redirect_uri must be an absolute URL with a safe scheme.');
 }
 
 // redirect_uri registration: same origin as client_id is auto-trusted;
