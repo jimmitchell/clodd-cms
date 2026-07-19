@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The <title> is what IndieAuth servers fall back to when naming this app on
+     their consent screen, so it is the bare app name with no site suffix. -->
+<title>Micropub Publisher</title>
+<meta name="description" content="A Micropub publishing client for macOS and iOS.">
+<link rel="canonical" href="https://jimmitchell.org/apps/micropub-publisher/">
+<link rel="stylesheet" href="/theme.css">
+<!-- IndieAuth client registration. The authorization endpoint fetches this page
+     to confirm the app is allowed to receive the callback below; without this
+     declaration a custom-scheme redirect is refused, since it can never be
+     same-origin with an https client_id. -->
+<link rel="redirect_uri" href="org.jimmitchell.micropub-publisher://callback">
+<style>
+    .app { max-width: 42rem; margin: 3rem auto; padding: 0 1.25rem; }
+    .app__scopes { margin: 0; padding-left: 1.25rem; }
+    .app__note { font-size: 0.9em; opacity: 0.75; }
+</style>
+</head>
+<body>
+<main class="app h-app">
+    <h1 class="p-name">Micropub Publisher</h1>
+
+    <p class="p-summary">
+        A <a href="https://www.w3.org/TR/micropub/">Micropub</a> publishing client
+        for macOS and iOS. It signs in to any Micropub-capable site with
+        <a href="https://indieauth.spec.indieweb.org/">IndieAuth</a> and posts
+        notes, articles, and photos.
+    </p>
+
+    <h2>What it asks for</h2>
+    <p>When you sign in, your own site asks whether to grant:</p>
+    <ul class="app__scopes">
+        <li><code>create</code> — publish new posts and upload media</li>
+        <li><code>update</code> — edit posts you have already published</li>
+        <li><code>delete</code> — delete and undelete posts</li>
+        <li><code>media</code> — upload files to your media endpoint</li>
+    </ul>
+    <p>
+        Your access token is stored in the system Keychain on your device. It is
+        never sent anywhere except your own site.
+    </p>
+
+    <p class="app__note">
+        This page is also the app's IndieAuth <code>client_id</code>. Authorization
+        servers fetch it to identify the app and to verify its callback URL.
+    </p>
+</main>
+</body>
+</html>

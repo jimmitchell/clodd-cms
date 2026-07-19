@@ -289,9 +289,53 @@ class IndieAuth
         if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $body, $m)) {
             $info['name'] = trim(html_entity_decode(strip_tags($m[1]), ENT_QUOTES, 'UTF-8'));
         }
+        // An h-app's p-name is the name the client actually chose to present,
+        // so it wins over <title> (which on a CMS-rendered page carries the
+        // site name too). Falls back to <title> when absent or empty.
+        if ($appName = self::parseHAppName($body)) {
+            $info['name'] = $appName;
+        }
 
         $info['redirect_uris'] = array_values(array_unique($info['redirect_uris']));
         return $info;
+    }
+
+    /**
+     * Extract the display name from an h-app on the client_id page
+     * (microformats2). Best-effort and regex-based like the rest of this
+     * parser; returns '' when there is no usable name.
+     */
+    private static function parseHAppName(string $body): string
+    {
+        $class = fn(string $name): string => '\bclass=["\'][^"\']*\b' . $name . '\b[^"\']*["\']';
+
+        if (!preg_match('/<([a-z0-9]+)\b[^>]*' . $class('h-app') . '[^>]*>/is', $body, $open, PREG_OFFSET_CAPTURE)) {
+            return '';
+        }
+        $tag   = strtolower($open[1][0]);
+        $start = (int) $open[0][1] + strlen($open[0][0]);
+
+        // The name may sit on the h-app element itself (<a class="h-app p-name">).
+        $scope = preg_match('/' . $class('p-name') . '/i', $open[0][0])
+            ? substr($body, $start)
+            : null;
+
+        if ($scope === null) {
+            // Otherwise look inside it. Take the element's own content when the
+            // closing tag is findable, else fall back to the rest of the body.
+            $scope = preg_match('/<\/' . preg_quote($tag, '/') . '\s*>/is', $body, $close, PREG_OFFSET_CAPTURE, $start)
+                ? substr($body, $start, (int) $close[0][1] - $start)
+                : substr($body, $start);
+
+            if (!preg_match('/<([a-z0-9]+)\b[^>]*' . $class('p-name') . '[^>]*>(.*?)<\/\1\s*>/is', $scope, $m)) {
+                return '';
+            }
+            $scope = $m[2];
+        } elseif (preg_match('/^(.*?)<\/' . preg_quote($tag, '/') . '\s*>/is', $scope, $m)) {
+            $scope = $m[1];
+        }
+
+        return trim(html_entity_decode(strip_tags($scope), ENT_QUOTES, 'UTF-8'));
     }
 
     /**
