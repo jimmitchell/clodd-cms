@@ -172,46 +172,26 @@ function xmlrpc_kind_from_struct(array $struct): string
 }
 
 /**
- * Resolve a unique slug for a standard (non-aside) post by slugifying $raw and
- * appending a numeric suffix on collision. Numeric-only slugs are reserved for
- * asides, so a standard post that would slugify to digits gets a "-post" suffix.
+ * Resolve a unique slug for $post from the raw string $raw.
  */
-function xmlrpc_resolve_standard_slug(Post $post, string $raw): string
+function xmlrpc_resolve_slug(Post $post, string $raw): string
 {
     global $db;
 
-    $base = Helpers::slugify($raw);
-    if ($base === '') {
-        $base = 'post';
-    }
-    if (ctype_digit($base)) {
-        $base .= '-post';
-    }
-    $candidate = $base;
-    $suffix    = 2;
-    while (true) {
-        $existing = Post::findBySlug($db, $candidate);
-        if ($existing === null || $existing->id === $post->id) {
-            return $candidate;
-        }
-        $candidate = $base . '-' . $suffix++;
-    }
+    return Post::resolveUniqueSlug($db, $raw, $post->id);
 }
 
 /**
- * After a post has been saved (id is known), give an aside its numeric slug.
- * Idempotent: only writes when the slug is empty or stale.
+ * After a post has been saved (id is known), give an aside with no words to slug
+ * from — a photo-only note — the autoincrement id as its slug.
+ * Idempotent: only writes when the slug is still empty.
  */
 function xmlrpc_finalize_aside_slug(Post $post): void
 {
-    if (!$post->isAside() || $post->id === null) {
+    if ($post->slug !== '' || $post->id === null) {
         return;
     }
-    $target = (string) $post->id;
-    if ($post->slug === $target) {
-        return;
-    }
-    $post->slug = $target;
+    $post->slug = (string) $post->id;
     $post->save();
 }
 
@@ -240,21 +220,22 @@ function applyStruct(Post $post, array $struct, bool $publish, string $timezone)
         $post->excerpt = $ex !== '' ? $ex : null;
     }
 
-    // Slug
-    if ($post->isAside()) {
-        // Asides use the numeric post id as their slug. Defer to xmlrpc_finalize_aside_slug()
-        // after save(), since the id may not exist yet on a new post.
-        if (!ctype_digit($post->slug)) {
-            $post->slug = '';
-        }
-    } else {
-        $rawSlug = trim((string) ($struct['wp_slug'] ?? ''));
-        if ($rawSlug === '' && ($post->slug === '' || ctype_digit($post->slug))) {
+    // Slug — an aside with none yet derives one from its body; a photo-only note
+    // yields nothing and defers to xmlrpc_finalize_aside_slug() after save().
+    // A standard post holding a digit-only slug is a converted legacy aside and
+    // re-derives, since digit-only slugs belong to that older numbering.
+    $rawSlug = trim((string) ($struct['wp_slug'] ?? ''));
+    if ($rawSlug === '') {
+        if ($post->isAside()) {
+            if ($post->slug === '') {
+                $rawSlug = Post::slugFromContent($post->content);
+            }
+        } elseif ($post->slug === '' || ctype_digit($post->slug)) {
             $rawSlug = $post->title;
         }
-        if ($rawSlug !== '') {
-            $post->slug = xmlrpc_resolve_standard_slug($post, $rawSlug);
-        }
+    }
+    if ($rawSlug !== '') {
+        $post->slug = xmlrpc_resolve_slug($post, $rawSlug);
     }
 
     // post_status field overrides $publish for draft detection.
@@ -676,19 +657,19 @@ function applyWpPostStruct(Post $post, array $struct, string $timezone): void
         $post->excerpt = $ex !== '' ? $ex : null;
     }
 
-    // Slug — asides defer to xmlrpc_finalize_aside_slug() (numeric id after save).
-    if ($post->isAside()) {
-        if (!ctype_digit($post->slug)) {
-            $post->slug = '';
-        }
-    } else {
-        $rawSlug = trim((string) ($struct['post_name'] ?? ''));
-        if ($rawSlug === '' && ($post->slug === '' || ctype_digit($post->slug))) {
+    // Slug — see applyStruct() for the aside/standard derivation rules.
+    $rawSlug = trim((string) ($struct['post_name'] ?? ''));
+    if ($rawSlug === '') {
+        if ($post->isAside()) {
+            if ($post->slug === '') {
+                $rawSlug = Post::slugFromContent($post->content);
+            }
+        } elseif ($post->slug === '' || ctype_digit($post->slug)) {
             $rawSlug = $post->title;
         }
-        if ($rawSlug !== '') {
-            $post->slug = xmlrpc_resolve_standard_slug($post, $rawSlug);
-        }
+    }
+    if ($rawSlug !== '') {
+        $post->slug = xmlrpc_resolve_slug($post, $rawSlug);
     }
 
     // Date

@@ -127,7 +127,7 @@ RURL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{
   }
 }" "$MP")
 check "titleless reply create → Location" y "$([ -n "$RURL" ] && echo y || echo n)" "$RURL"
-echo "$RURL" | grep -qE '/[0-9]+/$' && check "reply is an aside (id slug)" y y || check "reply is an aside (id slug)" y n "$RURL"
+echo "$RURL" | grep -q '/replying-from-verify-script/$' && check "reply slugs from its body" y y || check "reply slugs from its body" y n "$RURL"
 status "$RURL" > /dev/null
 grep -q 'u-in-reply-to' "$TMP/body" && check "page renders u-in-reply-to" y y || check "page renders u-in-reply-to" y n
 grep -q "$REPLY_TARGET" "$TMP/body" && check "page links reply target" y y || check "page links reply target" y n
@@ -144,10 +144,32 @@ grep -q '"in-reply-to"' "$TMP/body" && check "in-reply-to removed from source" n
 # Bare bookmark: no content, no photo — context alone is enough.
 BURL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"bookmark-of\":[\"https://example.com/bookmarked\"],\"mp-syndicate-to\":[]}}" "$MP")
 check "bare bookmark create → Location" y "$([ -n "$BURL" ] && echo y || echo n)"
+# No content to slug from, so this one falls back to the autoincrement id.
+echo "$BURL" | grep -qE '/[0-9]+/$' && check "bodyless bookmark falls back to id slug" y y || check "bodyless bookmark falls back to id slug" y n "$BURL"
 status "$BURL" > /dev/null
 grep -q 'u-bookmark-of' "$TMP/body" && check "page renders u-bookmark-of" y y || check "page renders u-bookmark-of" y n
 BAD_DATA="{\"type\":[\"h-entry\"],\"properties\":{\"in-reply-to\":[\"not-a-url\"]}}"
 check "invalid context URL → 400" 400 "$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "$BAD_DATA" "$MP")"
+
+echo "== Titleless notes become asides"
+# No name property and no context: still an aside, slugged from its opening words.
+NOTE_BODY="Kettle boiled over again this morning"
+NURL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"content\":[\"$NOTE_BODY\"],\"mp-syndicate-to\":[]}}" "$MP")
+check "contextless note create → Location" y "$([ -n "$NURL" ] && echo y || echo n)" "$NURL"
+echo "$NURL" | grep -q '/kettle-boiled-over-again-this/$' && check "note slugs from first 5 words" y y || check "note slugs from first 5 words" y n "$NURL"
+status "$NURL" > /dev/null
+grep -q '<h1' "$TMP/body" && check "note renders without an h1" n y || check "note renders without an h1" n n
+grep -q 'post--note' "$TMP/body" && check "note renders as an aside" y y || check "note renders as an aside" y n
+
+# Same opening words again: the second must not collide.
+NURL2=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"content\":[\"$NOTE_BODY too\"],\"mp-syndicate-to\":[]}}" "$MP")
+check "duplicate opening words → Location" y "$([ -n "$NURL2" ] && echo y || echo n)" "$NURL2"
+echo "$NURL2" | grep -q '/kettle-boiled-over-again-this-2/$' && check "collision gets -2 suffix" y y || check "collision gets -2 suffix" y n "$NURL2"
+
+# mp-slug still wins on a titleless post.
+MSURL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"content\":[\"Body words are ignored here\"],\"mp-slug\":[\"$SLUG-chosen\"],\"mp-syndicate-to\":[]}}" "$MP")
+check "titleless + mp-slug → Location" y "$([ -n "$MSURL" ] && echo y || echo n)" "$MSURL"
+echo "$MSURL" | grep -q "/$SLUG-chosen/\$" && check "mp-slug wins over derived slug" y y || check "mp-slug wins over derived slug" y n "$MSURL"
 
 echo "== Photo property"
 PHOTO_URL_1="https://example.com/a.jpg"

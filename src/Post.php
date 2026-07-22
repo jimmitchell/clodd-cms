@@ -601,6 +601,84 @@ class Post
         return trim($text);
     }
 
+    // ── Slug helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * Derive a slug from the opening words of a post body — used for asides,
+     * which have no title to slugify.
+     *
+     * Returns '' when the body yields nothing usable (a bare like-of, or a
+     * photo-only post). Callers treat that as "fall back to the post id".
+     * Note this cannot defer to Helpers::slugify() for the empty check: that
+     * returns the literal 'untitled' rather than an empty string.
+     */
+    public static function slugFromContent(string $content, int $words = 5, int $maxChars = 60): string
+    {
+        $plain = self::plaintextFromMarkdown($content);
+        if ($plain === '') {
+            return '';
+        }
+
+        $opening = implode(' ', array_slice(preg_split('/\s+/', $plain), 0, $words));
+        $slug    = Helpers::slugify($opening);
+        if ($slug === 'untitled') {
+            return '';
+        }
+
+        // Cap the length so a body opening with a URL or long compound token
+        // doesn't produce an unwieldy slug. Trim back to a hyphen boundary so
+        // the last word isn't chopped mid-way.
+        if (strlen($slug) > $maxChars) {
+            $slug     = substr($slug, 0, $maxChars);
+            $lastDash = strrpos($slug, '-');
+            if ($lastDash !== false && $lastDash > 0) {
+                $slug = substr($slug, 0, $lastDash);
+            }
+            $slug = trim($slug, '-');
+        }
+
+        return $slug;
+    }
+
+    /**
+     * Slugify $base and make it unique, appending a numeric suffix on collision.
+     * Pass the id of the post being saved as $excludeId so it doesn't collide
+     * with itself.
+     *
+     * Digit-only slugs get a "-post" suffix: asides created before slugs were
+     * derived from content use the bare post id, and a new post must not land
+     * on one of those legacy URLs.
+     */
+    public static function resolveUniqueSlug(Database $db, string $base, ?int $excludeId = null): string
+    {
+        // Check before slugifying: Helpers::slugify() renders empty input as the
+        // literal 'untitled', which admin validation rejects as a slug.
+        $base = trim($base) === '' ? 'post' : Helpers::slugify($base);
+
+        // A legacy aside keeps its own numeric slug when re-saved — applying the
+        // digit guard here would rewrite "234" to "234-post" and break a live URL.
+        if ($excludeId !== null) {
+            $current = $db->selectOne("SELECT slug FROM posts WHERE id = :id", ['id' => $excludeId]);
+            if ($current && $current['slug'] === $base) {
+                return $base;
+            }
+        }
+
+        if (ctype_digit($base)) {
+            $base .= '-post';
+        }
+
+        $candidate = $base;
+        $suffix    = 2;
+        while (true) {
+            $existing = self::findBySlug($db, $candidate);
+            if ($existing === null || $existing->id === $excludeId) {
+                return $candidate;
+            }
+            $candidate = $base . '-' . $suffix++;
+        }
+    }
+
     // ── URL helpers ───────────────────────────────────────────────────────────
 
     /**

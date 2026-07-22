@@ -11,7 +11,7 @@ A lightweight flat-file CMS with a PHP/SQLite admin panel and a fully static HTM
 - **Static output** — generates plain HTML files; public pages need no PHP at serve time
 - **Markdown editor** — EasyMDE with GitHub-flavored Markdown, footnotes, and server-side syntax highlighting (xcode-dark palette)
 - **Posts & pages** — separate content types; pages can appear in site navigation, with optional one-level sub-pages that render as a desktop dropdown and indented mobile menu items
-- **Aside notes** — titleless short-form posts (`post_kind = aside`) for IndieWeb-style notes; render the full Markdown body in place of title/excerpt on listings, drop the title and term pills on single pages, and emit a proper h-entry without `p-name`. URLs use the autoincrement post id (`/YYYY/MM/DD/{id}/`)
+- **Aside notes** — titleless short-form posts (`post_kind = aside`) for IndieWeb-style notes; render the full Markdown body in place of title/excerpt on listings, drop the title and term pills on single pages, and emit a proper h-entry without `p-name`. URLs slug from the note's opening words (`/YYYY/MM/DD/kettle-boiled-over-again/`); a note with no body to slug from falls back to the post id
 - **Date-based post URLs** — posts live at `/YYYY/MM/DD/{slug}/` for clean, chronological permalinks
 - **Draft preview** — preview any saved draft (or published post) in the full public theme by clicking **Preview** in the post editor sidebar; opens in a new tab without publishing or triggering a site rebuild
 - **Scheduling** — set a future publish date; posts promote automatically on next admin load

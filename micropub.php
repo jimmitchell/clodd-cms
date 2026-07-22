@@ -877,41 +877,21 @@ if ($content === '' && $photoRows === [] && $contextRows === []) {
     mp_error('invalid_request', 'content, photo, or a context property (in-reply-to, like-of, repost-of, bookmark-of) is required');
 }
 
-// Titleless interaction posts become asides: no derived title, no h1, and the
-// autoincrement id as slug (finalized after save, matching admin/post-edit.php).
-$isAside = $title === '' && $contextRows !== [];
-
-// ── Title fallback ──────────────────────────────────────────────────────────
-
-if ($title === '' && !$isAside) {
-    $plain = trim((string) preg_replace('/\s+/', ' ', strip_tags($content)));
-    if ($plain !== '') {
-        $title = mb_substr($plain, 0, 80);
-        if (mb_strlen($plain) > 80) {
-            $title = rtrim($title) . '…';
-        }
-    }
-}
-if ($title === '' && !$isAside) {
-    $title = 'Untitled';
-}
+// An absent name property is the note/article distinction in Micropub, so every
+// titleless post is an aside: no derived title, no h1.
+$isAside = $title === '';
 
 // ── Slug + uniqueness ───────────────────────────────────────────────────────
 
-if ($isAside) {
-    $slug = ''; // finalized to the autoincrement id after save
-} else {
-    $slug = \CMS\Helpers::slugify($slugInput !== '' ? $slugInput : $title);
-    // A purely numeric slug would collide with the aside numbering space.
-    if (ctype_digit($slug)) {
-        $slug .= '-post';
-    }
-    $base = $slug;
-    $n    = 2;
-    while (\CMS\Post::findBySlug($db, $slug) !== null) {
-        $slug = $base . '-' . $n++;
-    }
-}
+// mp-slug wins when supplied; otherwise a standard post slugs from its title
+// and an aside from the opening words of its body.
+$slugBase = $slugInput !== ''
+    ? $slugInput
+    : ($isAside ? \CMS\Post::slugFromContent($content) : $title);
+
+// A photo-only or bare like-of aside has no words to slug from — leave the slug
+// empty and finalize it to the autoincrement id after save.
+$slug = $slugBase !== '' ? \CMS\Post::resolveUniqueSlug($db, $slugBase) : '';
 
 // ── Status + published_at ───────────────────────────────────────────────────
 
@@ -974,8 +954,9 @@ if (!$post->save()) {
     mp_error('server_error', 'Failed to save post', 500);
 }
 
-// Asides slug = autoincrement id. Re-save once the id is known.
-if ($post->isAside() && $post->slug !== (string) $post->id) {
+// An aside with no words to slug from falls back to the autoincrement id.
+// Re-save once the id is known.
+if ($post->slug === '' && $post->id !== null) {
     $post->slug = (string) $post->id;
     $post->save();
 }

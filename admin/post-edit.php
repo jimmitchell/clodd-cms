@@ -86,14 +86,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $post->content   = $_POST['content'] ?? '';
     $post->excerpt   = trim($_POST['excerpt'] ?? '') ?: null;
 
-    if ($post->isAside()) {
-        // Asides use the numeric post id as their slug; finalized after save() below.
-        if (!ctype_digit($post->slug)) {
-            $post->slug = '';
+    if ($post->slug !== '') {
+        $post->slug = Helpers::slugify($post->slug);
+        // Digit-only slugs belong to legacy asides, which used the bare post id.
+        // A legacy aside re-saved here is submitting its *own* slug back, so guard
+        // only when the slug isn't already this post's — otherwise opening one in
+        // the editor and pressing Save would rewrite "234" to "234-post".
+        if (ctype_digit($post->slug) && $post->slug !== $snapSlug) {
+            $post->slug .= '-post';
+        }
+    } elseif ($post->isAside()) {
+        // No slug typed: derive one from the opening words of the note. Auto-derived
+        // slugs resolve collisions silently — the author didn't choose them, so an
+        // error would be about a string they never typed. Empty means there was
+        // nothing to slug from (photo-only note); finalized to the id after save().
+        $derived = Post::slugFromContent($post->content);
+        if ($derived !== '') {
+            $post->slug = Post::resolveUniqueSlug($db, $derived, $post->id);
         }
     } else {
-        $post->slug = Helpers::slugify($post->slug !== '' ? $post->slug : $post->title);
-        // A purely numeric slug would collide with the aside numbering space.
+        $post->slug = Helpers::slugify($post->title);
         if (ctype_digit($post->slug)) {
             $post->slug .= '-post';
         }
@@ -103,13 +115,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($post->title === '' && !$post->isAside()) {
         $errors[] = 'Title is required.';
     }
-    if (!$post->isAside() && ($post->slug === '' || $post->slug === 'untitled')) {
+    // An aside may end up with an empty slug — that's the id fallback. Every other
+    // case needs a real one, including a typed slug that slugified to nothing.
+    if ((!$post->isAside() && $post->slug === '') || $post->slug === 'untitled') {
         $errors[] = 'A valid slug is required.';
     }
 
-    // Check slug uniqueness for standard posts. Asides skip this — their slug is
-    // the autoincrement id, which is unique by construction.
-    if (!$post->isAside() && $post->slug !== '') {
+    // A typed slug that collides is an error rather than a silent rename, so the
+    // author sees what happened. Asides are included now that they carry real
+    // slugs; only the empty id-fallback case skips the check.
+    if ($post->slug !== '') {
         $existing = Post::findBySlug($db, $post->slug);
         if ($existing && $existing->id !== $post->id) {
             $errors[] = 'That slug is already used by another post.';
@@ -169,8 +184,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $wasNew = $isNew || !$post->id;
         $post->save();
 
-        // Asides slug = autoincrement id. Re-save once the id is known.
-        if ($post->isAside() && $post->slug !== (string) $post->id) {
+        // An aside with no words to slug from falls back to the autoincrement id.
+        // Re-save once the id is known.
+        if ($post->slug === '' && $post->id !== null) {
             $post->slug = (string) $post->id;
             $post->save();
         }
@@ -418,11 +434,10 @@ if ($post->published_at) {
                            value="<?= Helpers::e($post->slug) ?>"
                            placeholder="auto-generated"
                            aria-describedby="slug-hint"
-                           <?= $post->isAside() ? 'readonly tabindex="-1"' : '' ?>
                            style="flex:1">
                 </div>
                 <p class="form-hint" id="slug-hint" data-kind-only="standard"<?= $post->isAside() ? ' hidden' : '' ?>>Leave blank to auto-generate from title. Only lowercase letters, numbers, and hyphens.</p>
-                <p class="form-hint" data-kind-only="aside"<?= $post->isAside() ? '' : ' hidden' ?>>Notes use the post id as their slug — assigned automatically on save.</p>
+                <p class="form-hint" data-kind-only="aside"<?= $post->isAside() ? '' : ' hidden' ?>>Leave blank to auto-generate from the first few words of the note.</p>
 
                 <label for="content" style="margin-top:1.25rem">Content</label>
                 <textarea id="content" name="content"><?= Helpers::e($post->content) ?></textarea>

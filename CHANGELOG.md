@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Every titleless Micropub post is now an aside** — previously a post became an aside only when it had both an empty `name` *and* a context property (`in-reply-to` / `like-of` / `repost-of` / `bookmark-of`). A plain titleless note fell through to a fallback that invented a title from the first 80 characters of the body — or literally `'Untitled'` — and published it as a standard post with an `<h1>`. In Micropub the absence of `name` *is* the note/article distinction, so the context requirement is gone and the title fallback is deleted.
+- **Aside slugs derive from the post body instead of the post id** — asides now get readable URLs like `/2026/07/22/this-is-a-new-post/` rather than `/2026/07/22/234/`, built from the first five words of the body (capped at 60 characters, trimmed to a word boundary). `mp-slug` still wins when supplied. An aside with nothing to slug from — a bare `like-of` or a photo-only note — still falls back to the autoincrement id. Existing asides keep their numeric slugs; there is no retroactive migration, since re-slugging would break every already-syndicated URL. Digit-only slugs stay reserved so a new post can't land on a legacy aside's URL.
+- **The aside slug is now editable in the admin post editor** — the slug field was `readonly` for asides and any non-numeric value was silently discarded on save. It now behaves like a standard post's: type one, or leave it blank to derive from the note body.
+
+### Fixed
+
+- **Saving an aside no longer destroys a non-numeric slug** — `admin/post-edit.php` and both XML-RPC struct handlers reset any aside slug that wasn't digit-only back to empty, which under the new slugs would have wiped a live URL the first time a note was opened in the editor or synced from MarsEdit.
+
+### Internal
+
+- Slug derivation and uniqueness resolution are centralized as `Post::slugFromContent()` and `Post::resolveUniqueSlug()`, replacing four near-identical implementations across `micropub.php`, `admin/post-edit.php`, `admin/xmlrpc.php`, and the WXR importer. Because a content-derived slug is known before insert, the two-phase "save, read the autoincrement id, save again" dance is gone from every path except the id fallback — including the importer's `__import_` random-placeholder workaround for `slug`'s `UNIQUE NOT NULL` constraint.
+
 ---
 
 ## [1.10.0] — 2026-05-11

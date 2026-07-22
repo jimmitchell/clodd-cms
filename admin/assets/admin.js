@@ -24,7 +24,9 @@ function slugify(text) {
     slugInput.addEventListener('input', () => { userEditedSlug = true; });
 
     titleInput.addEventListener('input', () => {
-        // Asides slug from the post id, not the title — leave the slug input alone.
+        // Asides slug from their body, not the title. The body is an EasyMDE
+        // instance whose input events don't reach the raw textarea, so leave the
+        // field blank and let the server derive it on save.
         if (kindSelect && kindSelect.value === 'aside') return;
         if (!userEditedSlug) {
             slugInput.value = slugify(titleInput.value);
@@ -37,7 +39,6 @@ function slugify(text) {
 (function initPostKindToggle() {
     const kindSelect = document.getElementById('post_kind');
     const titleInput = document.getElementById('title');
-    const slugInput  = document.getElementById('slug');
     if (!kindSelect) return;
 
     function apply() {
@@ -49,14 +50,6 @@ function slugify(text) {
 
         if (titleInput) {
             titleInput.required = !isAside;
-        }
-        if (slugInput) {
-            slugInput.readOnly = isAside;
-            if (isAside) {
-                slugInput.tabIndex = -1;
-            } else {
-                slugInput.removeAttribute('tabindex');
-            }
         }
     }
 

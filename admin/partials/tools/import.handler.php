@@ -147,33 +147,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $post->bluesky_skip  = 1;
 
                 if ($kind === 'aside') {
-                    // Placeholder unique slug; finalized to (string)$id after insert.
-                    // Can't use slug='' here: posts.slug is UNIQUE NOT NULL, so a
-                    // batch loop would collide on the second aside.
-                    $post->slug = '__import_' . bin2hex(random_bytes(8));
+                    $base = $wpPostName !== '' ? $wpPostName : Post::slugFromContent($contentEnc);
+                    // A titleless, bodyless item has nothing to slug from. Fall back
+                    // to the WXR post id: posts.slug is UNIQUE NOT NULL, so a batch
+                    // loop can't leave it empty the way a single insert can.
+                    if ($base === '') {
+                        $base = 'imported-' . (string) ((int) ($wp->post_id ?? 0) ?: time());
+                    }
                 } else {
                     $base = $wpPostName !== '' ? $wpPostName : Helpers::slugify($title);
                     if ($base === '' || $base === 'untitled') {
                         // Forced-standard on titleless WXR item; derive a stable fallback.
                         $base = 'imported-' . (string) ((int) ($wp->post_id ?? 0) ?: time());
                     }
-                    if (ctype_digit($base)) {
-                        $base .= '-post';  // avoid colliding with the aside id-as-slug space
-                    }
-                    $post->slug = importUniqueSlug($db, $base);
                 }
+                if (ctype_digit($base)) {
+                    $base .= '-post';  // digit-only slugs belong to legacy asides
+                }
+                $post->slug = importUniqueSlug($db, $base);
 
                 $post->save();
 
                 // Persist import_guid (Post::save() doesn't write this column).
                 if ($guid !== '') {
                     $db->update('posts', ['import_guid' => $guid], 'id = :id', ['id' => $post->id]);
-                }
-
-                // Aside slug finalize: numeric id, matching post-edit.php convention.
-                if ($kind === 'aside') {
-                    $post->slug = (string) $post->id;
-                    $post->save();
                 }
 
                 // Categories and tags: <category domain="category|post_tag" nicename="...">
