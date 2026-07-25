@@ -9,12 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.11.0] — 2026-07-25
+
 ### Added
 
+- **Full W3C Micropub compliance and a self-hosted IndieAuth server** — `indieauth.php` (authorization endpoint), `token.php` (token endpoint), and `indieauth-metadata.php` (metadata document) replace the dependency on an external IndieAuth provider. PKCE is supported, and PKCE-less authorization requests from legacy clients are still accepted. The Micropub endpoint advertises `q=config`, `q=source`, `q=syndicate-to`, and `q=category`.
+- **Micropub context post kinds** — `in-reply-to`, `like-of`, `repost-of`, and `bookmark-of` are stored per post and rendered as a context line on cards and permalinks. `published` is updatable.
 - **A `photo` post kind** — `post_kind` now accepts `photo` alongside `standard` and `aside`. No migration is needed; the column has no CHECK constraint, so the valid set was only ever enforced in PHP. Micropub assigns it automatically when an entry arrives with photos and no `name` (a titled post keeps its photos as illustration and stays `standard`), XML-RPC maps it from the WordPress `image` post format, and the admin editor offers it as a third option. Photo posts are notes: no `<h1>`, no byline, no reading time, and they syndicate to Mastodon and Bluesky as native notes with no link back. `Micropub update` does not re-derive the kind — adding a photo to an existing post leaves it alone, so a post can't silently change shape under an edit.
 - **A representative `h-card` on the home page** — the site previously had no h-card anywhere, so IndieAuth clients, webmention senders, and mf2 parsers had no author to discover for any entry on the page. A text-only introduction now sits above the feed on page 1, with `u-url` and `u-uid` both resolving to the home page (what makes an h-card *representative* rather than incidental) plus `rel="me author"`. Driven by a new **Home page intro** setting, falling back to the author bio; it renders nothing without an author name. The `/now` link appears only when a page with that slug exists.
 - **`h-feed` on the home page and taxonomy archives**, each carrying a `p-name`.
 - **A focus ring and a `prefers-reduced-motion` block in the public theme** — neither existed, so keyboard focus was invisible and `scroll-behavior: smooth` was ungated.
+- **A `rel="me"` link for Bridgy Fed verification.**
+- **Post cards are fully clickable**, and the prev/next post navigation shows the date and time of the target post.
+- **A Micropub publisher app page**, describing the client used to post to this site.
 
 ### Changed
 
@@ -26,12 +35,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Aside slugs derive from the post body instead of the post id** — asides now get readable URLs like `/2026/07/22/this-is-a-new-post/` rather than `/2026/07/22/234/`, built from the first five words of the body (capped at 60 characters, trimmed to a word boundary). `mp-slug` still wins when supplied. An aside with nothing to slug from — a bare `like-of` or a photo-only note — still falls back to the autoincrement id. Existing asides keep their numeric slugs; there is no retroactive migration, since re-slugging would break every already-syndicated URL. Digit-only slugs stay reserved so a new post can't land on a legacy aside's URL.
 - **The aside slug is now editable in the admin post editor** — the slug field was `readonly` for asides and any non-numeric value was silently discarded on save. It now behaves like a standard post's: type one, or leave it blank to derive from the note body.
 
+- **Theme refinements throughout** — content and header widths, body padding and line height, border radii, dark-mode link colour, and header/footer treatment (backgrounds matched to the page body, border rules and the sticky header removed) were all adjusted over the course of this release.
+
 ### Fixed
 
 - **Saving an aside no longer destroys a non-numeric slug** — `admin/post-edit.php` and both XML-RPC struct handlers reset any aside slug that wasn't digit-only back to empty, which under the new slugs would have wiped a live URL the first time a note was opened in the editor or synced from MarsEdit.
+- **IndieAuth authorization codes no longer expire instantly under a non-UTC PHP timezone.**
+- **A `client_id` page title is no longer misparsed by IndieAuth servers.**
+- **An access token sent in both the header and the request body is strictly rejected again**, per spec, after a period of tolerating the duplicate.
+- **Generating or revoking a Micropub token no longer times out.**
+- **Saving settings runs its site rebuild in the background** instead of blocking the response.
+- **Orphaned `og.png` files in legacy flat post directories are cleaned up.**
+- **Category and tag pills show on aside post pages.**
+- **Feeds report the real version in their generator tag** — `bin/build.php` never defined `CMS_VERSION`, unlike every other entry point, so the static build fell through to the `'1.0.0'` default and every published feed advertised that regardless of the actual release.
 
 ### Internal
 
+- Shortcode rendering is extracted into `ShortcodeRenderer`.
+- Nginx gains gzip, `open_file_cache`, and a 7-day cache for theme and admin assets.
 - Slug derivation and uniqueness resolution are centralized as `Post::slugFromContent()` and `Post::resolveUniqueSlug()`, replacing four near-identical implementations across `micropub.php`, `admin/post-edit.php`, `admin/xmlrpc.php`, and the WXR importer. Because a content-derived slug is known before insert, the two-phase "save, read the autoincrement id, save again" dance is gone from every path except the id fallback — including the importer's `__import_` random-placeholder workaround for `slug`'s `UNIQUE NOT NULL` constraint.
 
 ---
