@@ -283,7 +283,10 @@ class Builder
                 'kind'    => $post->post_kind,
             ];
             if ($post->isNote()) {
-                $entry['body_text'] = Post::plaintextFromMarkdown($post->content);
+                // noteText() rather than the raw body: a photo post's content is
+                // only the picture, which strips to nothing, so it would be
+                // unsearchable and render a blank result card.
+                $entry['body_text'] = $post->noteText();
             }
             $data[] = $entry;
         }

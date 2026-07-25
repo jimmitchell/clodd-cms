@@ -286,12 +286,19 @@ function syndicatePost(Post $post): void
     // no title, no link back.
     if ($post->isNote()) {
         $postUrl = '';
-        $excerpt = trim(Post::plaintextFromMarkdown($post->content));
+        $excerpt = $post->noteText();
     } else {
         $postUrl = rtrim($siteUrl, '/') . '/' . Post::datePath($post->published_at, $post->slug, $timezone) . '/';
         $excerpt = ($post->effectiveExcerpt() !== null)
             ? strip_tags($post->effectiveExcerpt())
             : Helpers::truncate($post->content, 280);
+    }
+
+    // A note syndicates with no title and no link back, so the text is all there
+    // is. Nothing to say — a photo post with no excerpt — means there is no post
+    // to make; don't publish a blank status.
+    if ($post->isNote() && $excerpt === '') {
+        return;
     }
 
     if ($hasMastodon && $post->tooted_at === null && $post->mastodon_skip === 0) {

@@ -1002,7 +1002,7 @@ if ($status === 'published' && trim($post->content) !== '') {
         // notes — no title, no link back.
         if ($post->isNote()) {
             $postUrl = '';
-            $excerpt = trim(\CMS\Post::plaintextFromMarkdown($post->content));
+            $excerpt = $post->noteText();
         } else {
             $postUrl = rtrim($db->getSetting('site_url', ''), '/')
                      . '/' . \CMS\Post::datePath($post->published_at, $post->slug, $cfgTz) . '/';
@@ -1013,16 +1013,23 @@ if ($status === 'published' && trim($post->content) !== '') {
                 : \CMS\Helpers::truncate($post->content, 280);
         }
 
-        if ($hasMastodon && $post->mastodon_skip === 0 && $post->tooted_at === null) {
-            $mastodon = new \CMS\Mastodon($mastodonInstance, $mastodonToken);
-            if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl)) {
-                $post->markTooted($tootUrl);
+        // A note syndicates with no title and no link back, so the text is all
+        // there is. Nothing to say — a photo post with no excerpt — means there
+        // is no post to make; don't publish a blank status.
+        if ($post->isNote() && $excerpt === '') {
+            error_log('[micropub] Skipping syndication for post ' . $post->id . ': note has no text');
+        } else {
+            if ($hasMastodon && $post->mastodon_skip === 0 && $post->tooted_at === null) {
+                $mastodon = new \CMS\Mastodon($mastodonInstance, $mastodonToken);
+                if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl)) {
+                    $post->markTooted($tootUrl);
+                }
             }
-        }
-        if ($hasBluesky && $post->bluesky_skip === 0 && $post->bluesky_at === null) {
-            $bluesky = new \CMS\Bluesky($blueskyHandle, $blueskyAppPassword);
-            if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl)) {
-                $post->markBluesky($bskyUrl);
+            if ($hasBluesky && $post->bluesky_skip === 0 && $post->bluesky_at === null) {
+                $bluesky = new \CMS\Bluesky($blueskyHandle, $blueskyAppPassword);
+                if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl)) {
+                    $post->markBluesky($bskyUrl);
+                }
             }
         }
     }

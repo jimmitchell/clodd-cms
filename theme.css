@@ -1103,6 +1103,15 @@ audio { width: 100%; }
     margin-top: .1rem;
 }
 
+/* A photo post's caption on its permalink. It is the post's only words, so it
+   reads at full size rather than as fine print — but it sits close under the
+   picture it belongs to, not adrift as a separate paragraph. */
+.post__caption {
+    margin-top: 1rem;
+}
+
+.post--photo .post__content > :first-child { margin-top: 0; }
+
 /* On the single-post page, .post--note hides nothing extra (the h1, author,
    and reading time are already omitted server-side); just tighten spacing
    where the byline used to be. */

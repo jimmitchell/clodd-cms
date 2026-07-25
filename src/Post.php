@@ -843,6 +843,42 @@ class Post
     }
 
     /**
+     * The plain-text words of a note, for syndication and the search index.
+     *
+     * A photo post keeps its words in the excerpt — the content holds only the
+     * picture, and plaintextFromMarkdown() strips images, so reading the body
+     * would yield an empty string and syndicate a blank status.
+     */
+    public function noteText(): string
+    {
+        return $this->isPhoto()
+            ? trim((string) $this->excerpt)
+            : trim(self::plaintextFromMarkdown($this->content));
+    }
+
+    /**
+     * A photo post's caption as an HTML paragraph, for appending to feed content
+     * and the permalink body. Empty string for any other kind, or no excerpt.
+     *
+     * Takes raw values rather than a Post because the feed generators select
+     * rows directly.
+     */
+    public static function photoCaptionHtml(?string $kind, ?string $excerpt, string $class = ''): string
+    {
+        if ($kind !== 'photo') {
+            return '';
+        }
+        $text = trim((string) $excerpt);
+        if ($text === '') {
+            return '';
+        }
+
+        return '<p' . ($class !== '' ? ' class="' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '"' : '') . '>'
+            . htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '</p>';
+    }
+
+    /**
      * Batch-load categories and tags for an array of Post objects.
      * Executes exactly 2 queries regardless of how many posts are passed.
      *

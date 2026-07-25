@@ -225,9 +225,10 @@ function setAction(action) {
 // author knows when the note will be truncated on either platform.
 
 (function initNoteLengthHint() {
-    const status     = document.getElementById('note-length-status');
-    const kindSelect = document.getElementById('post_kind');
-    const textarea   = document.getElementById('content');
+    const status       = document.getElementById('note-length-status');
+    const kindSelect   = document.getElementById('post_kind');
+    const textarea     = document.getElementById('content');
+    const excerptField = document.getElementById('excerpt');
     if (!status || !kindSelect || !textarea) return;
 
     const MASTODON_LIMIT = 500;
@@ -264,9 +265,19 @@ function setAction(action) {
             : textarea.value;
     }
 
+    // What actually gets syndicated. Mirrors Post::noteText(): a photo post
+    // sends its excerpt, since its content is only the picture and images strip
+    // to nothing — counting the body there would always read zero.
+    function getSyndicatedText() {
+        if (kindSelect.value === 'photo') {
+            return excerptField ? excerptField.value : '';
+        }
+        return getContent();
+    }
+
     function update() {
         if (kindSelect.value === 'standard') return;
-        const text   = plaintextFromMarkdown(getContent());
+        const text   = plaintextFromMarkdown(getSyndicatedText());
         const chars  = [...text].length;     // code points — matches PHP mb_strlen
         const graphs = graphemeCount(text);
 
@@ -290,6 +301,9 @@ function setAction(action) {
         window._editor.codemirror.on('change', update);
     } else {
         textarea.addEventListener('input', update);
+    }
+    if (excerptField) {
+        excerptField.addEventListener('input', update);
     }
     update();
 })();

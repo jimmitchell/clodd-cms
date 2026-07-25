@@ -238,7 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // notes — no title, no link back.
             if ($post->isNote()) {
                 $postUrl = '';
-                $excerpt = trim(Post::plaintextFromMarkdown($post->content));
+                $excerpt = $post->noteText();
             } else {
                 $postUrl = rtrim($db->getSetting('site_url', ''), '/') . '/' . Post::datePath($post->published_at, $post->slug, $cfgTz) . '/';
                 $effectiveExcerpt = $post->effectiveExcerpt();
@@ -247,14 +247,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     : Helpers::truncate($post->content, 280);
             }
 
-            if ($isFirstPublish) {
+            // A note syndicates with no title and no link back, so the text is
+            // all there is. Nothing to say — a photo post with no excerpt —
+            // means there is no post to make; don't publish a blank status.
+            $hasNoteText = !$post->isNote() || $excerpt !== '';
+
+            if ($isFirstPublish && $hasNoteText) {
                 $mastodon = new Mastodon($mastodonInstance, $mastodonToken);
                 if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl)) {
                     $post->markTooted($tootUrl);
                 }
             }
 
-            if ($isFirstBluesky) {
+            if ($isFirstBluesky && $hasNoteText) {
                 $bluesky = new Bluesky($blueskyHandle, $blueskyAppPassword);
                 if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl)) {
                     $post->markBluesky($bskyUrl);
@@ -444,6 +449,8 @@ if ($post->published_at) {
                 <label for="content" style="margin-top:1.25rem">Content</label>
                 <textarea id="content" name="content"><?= Helpers::e($post->content) ?></textarea>
 
+                <p class="form-hint" data-kind-only="photo"<?= $post->isPhoto() ? '' : ' hidden' ?>>Put only the image or gallery here — the words go in the excerpt below.</p>
+
                 <p class="form-hint" id="note-length-hint" data-kind-only="aside photo"<?= $post->isNote() ? '' : ' hidden' ?>>
                     <span id="note-length-status"></span>
                 </p>
@@ -451,7 +458,8 @@ if ($post->published_at) {
                 <label for="excerpt">Excerpt <span style="font-weight:400;color:var(--color-muted)">(optional)</span></label>
                 <textarea id="excerpt" name="excerpt" style="min-height:80px"
                           aria-describedby="excerpt-hint"><?= Helpers::e($post->excerpt ?? '') ?></textarea>
-                <p class="form-hint" id="excerpt-hint">Shown on the post index. Leave blank to use the start of the post content.</p>
+                <p class="form-hint" id="excerpt-hint" data-kind-only="standard aside"<?= $post->isPhoto() ? ' hidden' : '' ?>>Shown on the post index. Leave blank to use the start of the post content.</p>
+                <p class="form-hint" data-kind-only="photo"<?= $post->isPhoto() ? '' : ' hidden' ?>>The caption for this photo. Shown under the picture on the post page and in feeds, and syndicated to Mastodon and Bluesky. Not shown on the home page.</p>
             </div>
 
             <!-- Right: sidebar -->

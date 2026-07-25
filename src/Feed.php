@@ -69,7 +69,8 @@ class Feed
             $postUrl = $siteUrl . '/' . Post::datePath($post['published_at'], $post['slug'], $tz) . '/';
             $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [])
                      . Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
-                     . $this->converter->convert($post['content'])->getContent();
+                     . $this->converter->convert($post['content'])->getContent()
+                     . Post::photoCaptionHtml($post['post_kind'] ?? null, $post['excerpt'] ?? null);
 
             $tinylyticsCode = $this->settings['tinylytics_code'] ?? '';
             if ($tinylyticsCode !== '') {
@@ -139,7 +140,8 @@ class Feed
             $postUrl = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
             $html    = Post::contextsHtml($post->contexts)
                      . Post::photosHtml($post->photos, $siteUrl)
-                     . $this->converter->convert($post->content)->getContent();
+                     . $this->converter->convert($post->content)->getContent()
+                     . Post::photoCaptionHtml($post->post_kind, $post->excerpt);
 
             $xml .= '  <entry>' . "\n";
             $xml .= $post->isNote()

@@ -100,6 +100,11 @@ ob_start();
     <?php endif; ?>
     <div class="post__content prose e-content">
         <?= $html ?>
+        <?php /* On a photo post the content is only the picture and the words
+                 live in the excerpt, so the caption goes here — inside e-content,
+                 so a feed reader parsing this post gets the picture and the words
+                 together, exactly as the generated feeds carry them. */ ?>
+        <?= CMS\Post::photoCaptionHtml($post->post_kind, $post->excerpt, 'post__caption p-summary') ?>
     </div>
     <?php
     $showKudos = ($settings['tinylytics_code'] ?? '') !== ''
