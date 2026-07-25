@@ -80,7 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $post = new Post($db);
     }
 
-    $post->post_kind = ($_POST['post_kind'] ?? 'standard') === 'aside' ? 'aside' : 'standard';
+    $submittedKind   = (string) ($_POST['post_kind'] ?? 'standard');
+    $post->post_kind = in_array($submittedKind, ['aside', 'photo'], true) ? $submittedKind : 'standard';
     $post->title     = trim($_POST['title']   ?? '');
     $post->slug      = trim($_POST['slug']    ?? '');
     $post->content   = $_POST['content'] ?? '';
@@ -95,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (ctype_digit($post->slug) && $post->slug !== $snapSlug) {
             $post->slug .= '-post';
         }
-    } elseif ($post->isAside()) {
+    } elseif ($post->isNote()) {
         // No slug typed: derive one from the opening words of the note. Auto-derived
         // slugs resolve collisions silently — the author didn't choose them, so an
         // error would be about a string they never typed. Empty means there was
@@ -112,17 +113,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Validation.
-    if ($post->title === '' && !$post->isAside()) {
+    if ($post->title === '' && !$post->isNote()) {
         $errors[] = 'Title is required.';
     }
-    // An aside may end up with an empty slug — that's the id fallback. Every other
+    // A note may end up with an empty slug — that's the id fallback. Every other
     // case needs a real one, including a typed slug that slugified to nothing.
-    if ((!$post->isAside() && $post->slug === '') || $post->slug === 'untitled') {
+    if ((!$post->isNote() && $post->slug === '') || $post->slug === 'untitled') {
         $errors[] = 'A valid slug is required.';
     }
 
     // A typed slug that collides is an error rather than a silent rename, so the
-    // author sees what happened. Asides are included now that they carry real
+    // author sees what happened. Notes are included now that they carry real
     // slugs; only the empty id-fallback case skips the check.
     if ($post->slug !== '') {
         $existing = Post::findBySlug($db, $post->slug);
@@ -233,8 +234,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Syndicate to Mastodon and/or Bluesky on first publish (unless opted out).
         if ($isFirstPublish || $isFirstBluesky) {
-            // POSSE: asides syndicate as native-looking notes — no title, no link back.
-            if ($post->isAside()) {
+            // POSSE: notes (asides and photo posts) syndicate as native-looking
+            // notes — no title, no link back.
+            if ($post->isNote()) {
                 $postUrl = '';
                 $excerpt = trim(Post::plaintextFromMarkdown($post->content));
             } else {
@@ -292,7 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 || $post->published_at !== $snapPublishedAt
                 || $post->excerpt      !== $snapExcerpt
                 || $post->post_kind    !== $snapPostKind
-                || $post->isAside()
+                || $post->isNote()
                 || !empty($addedCategoryIds)
                 || !empty($removedCategoryIds);
             if ($sharedMetaChanged) {
@@ -413,7 +415,7 @@ if ($post->published_at) {
 
             <!-- Left: main content -->
             <div class="editor-main">
-                <label for="title">Title <span data-kind-only="aside" hidden style="font-weight:400;color:var(--color-muted)">(optional for notes)</span></label>
+                <label for="title">Title <span data-kind-only="aside photo" hidden style="font-weight:400;color:var(--color-muted)">(optional for notes)</span></label>
                 <input type="text" id="title" name="title"
                        value="<?= Helpers::e($post->title) ?>"
                        placeholder="Post title"
@@ -436,14 +438,14 @@ if ($post->published_at) {
                            aria-describedby="slug-hint"
                            style="flex:1">
                 </div>
-                <p class="form-hint" id="slug-hint" data-kind-only="standard"<?= $post->isAside() ? ' hidden' : '' ?>>Leave blank to auto-generate from title. Only lowercase letters, numbers, and hyphens.</p>
-                <p class="form-hint" data-kind-only="aside"<?= $post->isAside() ? '' : ' hidden' ?>>Leave blank to auto-generate from the first few words of the note.</p>
+                <p class="form-hint" id="slug-hint" data-kind-only="standard"<?= $post->isNote() ? ' hidden' : '' ?>>Leave blank to auto-generate from title. Only lowercase letters, numbers, and hyphens.</p>
+                <p class="form-hint" data-kind-only="aside photo"<?= $post->isNote() ? '' : ' hidden' ?>>Leave blank to auto-generate from the first few words of the note.</p>
 
                 <label for="content" style="margin-top:1.25rem">Content</label>
                 <textarea id="content" name="content"><?= Helpers::e($post->content) ?></textarea>
 
-                <p class="form-hint" id="aside-length-hint" data-kind-only="aside"<?= $post->isAside() ? '' : ' hidden' ?>>
-                    <span id="aside-length-status"></span>
+                <p class="form-hint" id="note-length-hint" data-kind-only="aside photo"<?= $post->isNote() ? '' : ' hidden' ?>>
+                    <span id="note-length-status"></span>
                 </p>
 
                 <label for="excerpt">Excerpt <span style="font-weight:400;color:var(--color-muted)">(optional)</span></label>
@@ -465,10 +467,11 @@ if ($post->published_at) {
 
                     <label for="post_kind" style="margin-top:0">Post kind</label>
                     <select id="post_kind" name="post_kind" aria-describedby="post-kind-hint">
-                        <option value="standard"<?= $post->post_kind === 'aside' ? '' : ' selected' ?>>Standard</option>
-                        <option value="aside"<?= $post->post_kind === 'aside' ? ' selected' : '' ?>>Aside (note)</option>
+                        <option value="standard"<?= $post->isNote() ? '' : ' selected' ?>>Standard</option>
+                        <option value="aside"<?= $post->isAside() ? ' selected' : '' ?>>Aside (note)</option>
+                        <option value="photo"<?= $post->isPhoto() ? ' selected' : '' ?>>Photo</option>
                     </select>
-                    <p class="form-hint" id="post-kind-hint">Asides are titleless notes shown in full on the home page.</p>
+                    <p class="form-hint" id="post-kind-hint">Asides and photo posts are titleless notes shown in full on the home page. A photo post leads with its image.</p>
 
                     <?php if ($hasMastodon && $post->tooted_at === null): ?>
                     <?php $mastodonDisabled = $post->status === 'published'; ?>

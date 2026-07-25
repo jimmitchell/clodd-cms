@@ -79,10 +79,10 @@ class Feed
                     . ' alt="" style="width:1px;height:1px;border:0;" />';
             }
 
-            $isAside = ($post['post_kind'] ?? 'standard') === 'aside';
+            $isNote = Post::isNoteKind($post['post_kind'] ?? null);
 
             $xml .= '  <entry>' . "\n";
-            $xml .= $isAside
+            $xml .= $isNote
                 ? '    <title/>' . "\n"
                 : '    <title>' . $this->x($post['title']) . '</title>' . "\n";
             $xml .= '    <link href="' . $this->x($postUrl) . '" rel="alternate" type="text/html"/>' . "\n";
@@ -142,7 +142,7 @@ class Feed
                      . $this->converter->convert($post->content)->getContent();
 
             $xml .= '  <entry>' . "\n";
-            $xml .= $post->isAside()
+            $xml .= $post->isNote()
                 ? '    <title/>' . "\n"
                 : '    <title>' . $this->x($post->title) . '</title>' . "\n";
             $xml .= '    <link href="' . $this->x($postUrl) . '" rel="alternate" type="text/html"/>' . "\n";

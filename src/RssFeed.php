@@ -61,9 +61,9 @@ class RssFeed
             $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [])
                      . Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
                      . $this->converter->convert($post['content'])->getContent();
-            $isAside = ($post['post_kind'] ?? 'standard') === 'aside';
+            $isNote  = Post::isNoteKind($post['post_kind'] ?? null);
             $xml    .= $this->itemXml(
-                title:       $isAside ? null : $post['title'],
+                title:       $isNote ? null : $post['title'],
                 url:         $postUrl,
                 publishedAt: $post['published_at'],
                 html:        $html
@@ -104,7 +104,7 @@ class RssFeed
                      . Post::photosHtml($post->photos, $siteUrl)
                      . $this->converter->convert($post->content)->getContent();
             $xml    .= $this->itemXml(
-                title:       $post->isAside() ? null : $post->title,
+                title:       $post->isNote() ? null : $post->title,
                 url:         $postUrl,
                 publishedAt: $post->published_at,
                 html:        $html

@@ -6,8 +6,6 @@
  *            $settings, $navPages, $siteUrl, $render
  */
 
-use CMS\Helpers;
-
 $siteTitle   = $settings['site_title'] ?? 'My CMS';
 $termName    = htmlspecialchars($term['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $heading     = $type === 'category'
@@ -55,60 +53,14 @@ ob_start();
         <?php endif; ?>
     </header>
 
-    <div class="post-list">
+    <div class="post-list h-feed">
+        <data class="p-name" value="<?= htmlspecialchars($heading, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"></data>
         <?php if (empty($posts)): ?>
         <p class="post-list__empty">No published posts yet.</p>
         <?php else: ?>
 
         <?php foreach ($posts as $post): ?>
-        <?php $postUrl = rtrim($siteUrl, '/') . '/' . CMS\Post::datePath($post->published_at, $post->slug, $settings['timezone'] ?? '') . '/'; ?>
-        <?php if ($post->isAside()): ?>
-        <article class="post-card post-card--note h-entry">
-            <?php if ($post->published_at): ?>
-            <time class="post-card__date dt-published" datetime="<?= date('Y-m-d\TH:i:s\Z', strtotime($post->published_at)) ?>">
-                <a class="u-url" href="<?= htmlspecialchars($postUrl) ?>"><?= Helpers::formatDate($post->published_at, 'l, F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '') ?></a>
-            </time>
-            <?php endif; ?>
-            <?php if (!empty($post->contexts)): ?>
-            <div class="post-card__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
-            <?php endif; ?>
-            <?php if (!empty($post->photos)): ?>
-            <div class="post-card__photos">
-                <?php foreach ($post->photos as $photo): ?>
-                <figure class="post-card__photo">
-                    <img class="u-photo" src="<?= htmlspecialchars($photo['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
-                         alt="<?= htmlspecialchars($photo['alt'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" loading="lazy">
-                </figure>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-            <div class="post-card__body prose e-content"><?= $postHtml[$post->id] ?? '' ?></div>
-        </article>
-        <?php else: ?>
-        <article class="post-card h-entry">
-            <h2 class="post-card__title">
-                <a href="<?= htmlspecialchars($postUrl) ?>" class="u-url p-name"><?= htmlspecialchars($post->title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></a>
-            </h2>
-            <?php if ($post->published_at): ?>
-            <time class="post-card__date dt-published" datetime="<?= date('Y-m-d\TH:i:s\Z', strtotime($post->published_at)) ?>">
-                <?= Helpers::formatDate($post->published_at, 'l, F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '') ?>
-            </time>
-            <?php endif; ?>
-            <?php if (!empty($post->contexts)): ?>
-            <div class="post-card__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
-            <?php endif; ?>
-            <?php if (!empty($post->photos)): $cardPhoto = $post->photos[0]; ?>
-            <figure class="post-card__photo post-card__photo--thumb">
-                <img class="u-photo" src="<?= htmlspecialchars($cardPhoto['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
-                     alt="<?= htmlspecialchars($cardPhoto['alt'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" loading="lazy">
-            </figure>
-            <?php endif; ?>
-            <?php $cardExcerpt = $post->effectiveExcerpt(); ?>
-            <?php if ($cardExcerpt !== null): ?>
-            <p class="post-card__excerpt p-summary"><?= htmlspecialchars(strip_tags($cardExcerpt), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
-            <?php endif; ?>
-        </article>
-        <?php endif; ?>
+        <?php include __DIR__ . '/partials/post-card.php'; ?>
         <?php endforeach; ?>
 
         <?php endif; ?>

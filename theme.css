@@ -50,6 +50,12 @@
     --color-link:       #0176d3;
     --color-header-bg:  var(--color-bg);
     --color-chrome-border: var(--color-border);
+    /* Recessed fill that marks a card as a note. Deliberately achromatic — the
+       kinds are told apart by weight, not by colour. */
+    --color-card-tint:  #f7f7f8;
+    /* Hairline above an article's footer meta; lighter than a card border so it
+       reads as a division inside the card rather than another edge. */
+    --color-rule:       color-mix(in srgb, var(--color-border) 60%, transparent);
     --max-content:      680px;
     --max-wide:         720px;
 }
@@ -68,6 +74,9 @@
         --color-link:          #45c8f7;
         --color-header-bg:     var(--color-chrome-bg);
         --color-chrome-border: rgba(255,255,255,0.08);
+        /* On a dark page a note recesses by lifting slightly, not by darkening. */
+        --color-card-tint:     #202124;
+        --color-rule:          color-mix(in srgb, var(--color-border) 70%, transparent);
     }
 }
 
@@ -83,9 +92,32 @@
     --color-link:          #45c8f7;
     --color-header-bg:     var(--color-chrome-bg);
     --color-chrome-border: rgba(255,255,255,0.08);
+    --color-card-tint:     #202124;
+    --color-rule:          color-mix(in srgb, var(--color-border) 70%, transparent);
 }
 
 html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
+
+/* ── Quality floor ────────────────────────────────────────────────────────── */
+
+/* Keyboard users need to see where they are. Nothing in the theme drew a focus
+   ring before this, so tabbing through the nav and cards was invisible. */
+:focus-visible {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
 
 
 body {
@@ -734,6 +766,47 @@ audio { width: 100%; }
     color: #fff;
 }
 
+/* ── Home intro (representative h-card) ───────────────────────────────────────
+   A greeting, not a card. It deliberately has no frame, avatar, or fill: the
+   feed below is all cards, so the one thing that isn't a post shouldn't look
+   like one. Set in the reading face because it is a sentence, not chrome. */
+
+/* No rule under the greeting — whitespace does the separating. A line here reads
+   as a masthead and makes the intro feel like site furniture rather than a
+   sentence someone wrote. */
+.home-intro {
+    margin: .5rem 0 2.5rem;
+}
+
+.home-intro__text {
+    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 1.1rem;
+    line-height: 1.55;
+    text-wrap: pretty;
+    color: var(--color-text);
+    max-width: 34em;
+}
+
+.home-intro__text .p-name {
+    color: var(--color-text);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.home-intro__text .p-name:hover { color: var(--color-link); }
+
+.home-intro__text .p-note { color: var(--color-muted); }
+
+/* The one link that goes somewhere sits on its own line, so the eye lands on it
+   after the sentence rather than competing with it. */
+.home-intro__now {
+    margin-top: .6rem;
+    font-size: .95rem;
+}
+
+.home-intro__now a { text-decoration: none; }
+.home-intro__now a:hover { text-decoration: underline; }
+
 /* ── Post list / index ────────────────────────────────────────────────────── */
 .post-list {
     display: grid;
@@ -746,15 +819,34 @@ audio { width: 100%; }
     grid-template-columns: 1fr;
 }
 
+/* ── Card family ──────────────────────────────────────────────────────────────
+   One frame, three weights. The kind is legible from the fill, the padding, and
+   whether the card carries a footer rule — no badges, no colour coding:
+
+     --note     tinted and compact; the whole note is right there
+     --photo    the image bleeds to the card edge and leads; caption beneath
+     --article  a title, an excerpt, and a footer rule with the date and how
+                long the piece runs — the only kind with further to go.
+
+   Padding lives on .post-card__inner, never on .post-card, so a photo can reach
+   the frame's edge without the other kinds losing their gutters. */
+
 .post-card {
     position: relative;
     border: 1px solid var(--color-border);
-    padding: 1.5rem;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow .15s ease, border-color .15s ease;
+}
+
+.post-card__inner {
     display: flex;
     flex-direction: column;
     gap: .35rem;
-    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-    border-radius: 6px;
+    padding: 1.5rem;
+    flex: 1;
 }
 
 .post-card:hover {
@@ -762,9 +854,24 @@ audio { width: 100%; }
     box-shadow: 0 4px 12px rgba(0,0,0,.08);
 }
 
+/* Notes are the everyday voice of the site and by far the most common card, so
+   they sit back: a recessed fill and tighter gutters keep a long run of them
+   from shouting, and make a titled post read as an event by contrast. */
+.post-card--note .post-card__inner {
+    padding: 1.15rem 1.25rem;
+}
+
+.post-card--note {
+    background: var(--color-card-tint);
+}
+
 .post-card__title {
-    font-size: 1.25rem;
+    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 700;
     line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin-bottom: .15rem;
 }
 
 .post-card__title a {
@@ -776,9 +883,11 @@ audio { width: 100%; }
 .post-card:hover .post-card__title a { color: var(--color-link); }
 
 /* Stretch the card's primary anchor over the whole card so the entire card is
-   one click target. Article cards use the title link; notes use the date link. */
+   one click target. Article cards use the title link; notes and photo posts use
+   the date link. */
 .post-card__title a::after,
-.post-card--note .post-card__date a::after {
+.post-card--note .post-card__date a::after,
+.post-card--photo .post-card__date a::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -799,10 +908,35 @@ audio { width: 100%; }
 }
 
 .post-card__excerpt {
+    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--color-muted);
-    font-size: .9rem;
+    font-size: .95rem;
     flex: 1;
 }
+
+/* ── Article footer rule ──────────────────────────────────────────────────────
+   The one thing only a long-form post has is somewhere further to go, so it is
+   the one kind that says how far. Date left, distance right, hairline above. */
+.post-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-top: 1.1rem;
+    padding-top: .7rem;
+    border-top: 1px solid var(--color-rule);
+    font-size: .78rem;
+    letter-spacing: .02em;
+    color: var(--color-muted);
+}
+
+.post-card__readtime {
+    white-space: nowrap;
+    transition: color .15s ease;
+}
+
+.post-card:hover .post-card__readtime { color: var(--color-link); }
 
 /* ── Note (titleless aside) — list cards ──────────────────────────────────── */
 
@@ -858,12 +992,116 @@ audio { width: 100%; }
     object-fit: cover;
 }
 
-.post-card--note .post-card__date a {
+.post-card--note .post-card__date a,
+.post-card--photo .post-card__date a {
     color: inherit;
     text-decoration: none;
 }
 
-.post-card--note .post-card__date a:hover { text-decoration: underline; }
+.post-card--note .post-card__date a:hover,
+.post-card--photo .post-card__date a:hover { text-decoration: underline; }
+
+/* ── Photo post ───────────────────────────────────────────────────────────────
+   A photo post has no card at all. A border around a photograph is a second
+   frame competing with the one the image already has, and the caption is not a
+   summary of something else — it belongs to the picture. Dropping the frame also
+   makes photo posts the one kind that breaks the card rhythm of the feed, which
+   is a stronger and more honest signal than any amount of restyling inside a box.
+   The gallery carries the radius now that there is no card to clip against. */
+
+.post-card--photo {
+    border: none;
+    border-radius: 0;
+    background: none;
+    overflow: visible;
+    /* Frameless items need their own air; the list gap alone lets them crowd
+       the bordered cards on either side. */
+    margin: 1rem 0;
+}
+
+.post-card--photo:hover {
+    box-shadow: none;
+    border-color: transparent;
+}
+
+/* Caption sits under the image and flush to its edges — no gutters to align to. */
+.post-card--photo .post-card__inner {
+    padding: .8rem 0 0;
+    gap: .3rem;
+}
+
+.post-card__gallery {
+    display: grid;
+    gap: 2px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.post-card__gallery[data-count="2"],
+.post-card__gallery[data-count="4"] {
+    grid-template-columns: 1fr 1fr;
+}
+
+.post-card__gallery[data-count="3"] {
+    grid-template-columns: 2fr 1fr;
+}
+
+/* In a 3-up, the first frame spans both rows so the lead image stays the lead. */
+.post-card__gallery[data-count="3"] img:first-child {
+    grid-row: span 2;
+}
+
+.post-card__gallery img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-height: 520px;
+    object-fit: cover;
+    background: var(--color-card-tint);
+}
+
+/* A single image keeps its own proportions — cropping one photo to a fixed box
+   is a decision the photographer already made. */
+.post-card__gallery[data-count="1"] img {
+    height: auto;
+    object-fit: contain;
+}
+
+/* Five or more collapse to a uniform grid rather than growing new cases. */
+.post-card__gallery:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]):not([data-count="4"]) {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.post-card__gallery:not([data-count="1"]) img { aspect-ratio: 1 / 1; }
+
+/* The caption block under a photo is chrome, not prose: quiet and close in. */
+.post-card--photo .post-card__body {
+    font-size: .9rem;
+    color: var(--color-muted);
+}
+
+/* A photo post can carry its picture two ways: attached u-photo rows, which
+   become the gallery above, or an image written inline in the body. Match them —
+   same full width, same radius, same absence of frame — so the two authoring
+   routes produce one look. */
+.post-card--photo .prose img:not(.gallery img) {
+    width: 100%;
+    max-width: 100%;
+    /* Same ceiling the single-image gallery uses, so a tall portrait can't take
+       over the feed. contain rather than cover — the framing was the
+       photographer's decision, not the theme's. */
+    max-height: 520px;
+    object-fit: contain;
+    margin: 0 0 .75rem;
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+/* The date trails a photo post rather than leading it, so it needs its own
+   top spacing instead of the gap the flex column gives the leading case. */
+.post-card__date--after {
+    margin-top: .1rem;
+}
 
 /* On the single-post page, .post--note hides nothing extra (the h1, author,
    and reading time are already omitted server-side); just tighten spacing
@@ -878,6 +1116,7 @@ audio { width: 100%; }
    margins. Notes live inside a padded .post-card (lists) or a tighter single
    layout, so that overflow breaks the frame — keep their images contained. */
 .post-card--note .prose img:not(.gallery img),
+.post-card--photo .prose img:not(.gallery img),
 .post.post--note .prose img:not(.gallery img) {
     width: 100%;
     max-width: 100%;
@@ -1205,6 +1444,26 @@ audio { width: 100%; }
     .post-card__title { font-size: 1.4rem; }
     .site-header__inner { gap: .5rem; }
     .site-main { margin: 2rem auto 1.75rem; }
+
+    /* Narrow screens can't spare the gutters; hold the ratio between the kinds
+       rather than the absolute values. */
+    .post-card__inner { padding: 1.25rem; }
+    .post-card--note .post-card__inner { padding: 1rem 1.1rem; }
+    .post-card--photo .post-card__inner { padding: .7rem 0 0; }
+
+    .home-intro { margin-bottom: 2rem; }
+    .home-intro__text { font-size: 1.05rem; }
+
+    /* A 3-up crop is unreadable at this width — stack every gallery in one column. */
+    .post-card__gallery { grid-template-columns: 1fr !important; }
+    .post-card__gallery[data-count="3"] img:first-child { grid-row: auto; }
+    .post-card__gallery img {
+        aspect-ratio: auto;
+        height: auto;
+        max-height: 340px;
+        object-fit: cover;
+    }
+    .post-card__gallery[data-count="1"] img { max-height: 420px; object-fit: contain; }
 }
 
 /* =END CRITICAL= */

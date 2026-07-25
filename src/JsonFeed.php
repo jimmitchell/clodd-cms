@@ -62,7 +62,7 @@ class JsonFeed
             $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [])
                      . Post::photosHtml($photos, $siteUrl)
                      . $this->converter->convert($post['content'])->getContent();
-            $isAside = ($post['post_kind'] ?? 'standard') === 'aside';
+            $isNote  = Post::isNoteKind($post['post_kind'] ?? null);
 
             $item = [
                 'id'             => $postUrl,
@@ -71,7 +71,7 @@ class JsonFeed
                 'date_published' => $this->rfc3339($post['published_at']),
                 'date_modified'  => $this->rfc3339($post['updated_at'] ?? $post['published_at']),
             ];
-            if (!$isAside) {
+            if (!$isNote) {
                 $item['title'] = $post['title'];
             }
             if ($photos !== []) {
@@ -136,7 +136,7 @@ class JsonFeed
                 'date_published' => $this->rfc3339($post->published_at),
                 'date_modified'  => $this->rfc3339($post->updated_at ?? $post->published_at),
             ];
-            if (!$post->isAside()) {
+            if (!$post->isNote()) {
                 $item['title'] = $post->title;
             }
             if ($post->photos !== []) {

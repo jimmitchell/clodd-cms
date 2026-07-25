@@ -7,8 +7,10 @@
 use CMS\Helpers;
 
 $siteTitle   = $settings['site_title'] ?? 'My CMS';
-$isAside     = $post->isAside();
-$pageTitle   = $isAside ? $siteTitle : ($post->title . ' — ' . $siteTitle);
+// Notes (asides and photo posts) carry no title: no h1, no byline, no reading
+// time, and the site title stands in for the page title.
+$isNote      = $post->isNote();
+$pageTitle   = $isNote ? $siteTitle : ($post->title . ' — ' . $siteTitle);
 $effectiveExcerpt = $post->effectiveExcerpt();
 $description = $effectiveExcerpt !== null
     ? strip_tags($effectiveExcerpt)
@@ -16,13 +18,13 @@ $description = $effectiveExcerpt !== null
 $canonical   = rtrim($siteUrl, '/') . '/' . CMS\Post::datePath($post->published_at, $post->slug, $settings['timezone'] ?? '') . '/';
 $ogType      = 'article';
 
-// JSON-LD structured data (BlogPosting). Asides have no title; use the
+// JSON-LD structured data (BlogPosting). Notes have no title; use the
 // derived description as the headline so the schema stays valid.
 $authorName = $settings['author_name'] ?? '';
 $jsonLdData = [
     '@context'      => 'https://schema.org',
     '@type'         => 'BlogPosting',
-    'headline'      => $isAside ? $description : $post->title,
+    'headline'      => $isNote ? $description : $post->title,
     'description'   => $description,
     'url'           => $canonical,
     'datePublished' => date('Y-m-d\TH:i:s\Z', strtotime($post->published_at)),
@@ -42,9 +44,9 @@ $readingTime = Helpers::readingTime($html);
 
 ob_start();
 ?>
-<article class="post<?= $isAside ? ' post--note' : '' ?> h-entry">
+<article class="post<?= $isNote ? ' post--note' : '' ?><?= $post->isPhoto() ? ' post--photo' : '' ?> h-entry">
     <header class="post__header">
-        <?php if (!$isAside): ?>
+        <?php if (!$isNote): ?>
         <h1 class="post__title p-name"><?= htmlspecialchars($post->title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></h1>
         <a class="post__author p-author h-card" href="<?= htmlspecialchars($siteUrl . '/', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" rel="author"><?= htmlspecialchars($authorName !== '' ? $authorName : $siteTitle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></a>
         <?php endif; ?>
@@ -52,7 +54,7 @@ ob_start();
         <time class="post__date dt-published" datetime="<?= date('Y-m-d\TH:i:s\Z', strtotime($post->published_at)) ?>">
             <a class="u-url" href="<?= htmlspecialchars($canonical, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"><?= Helpers::formatDate($post->published_at, 'F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '') ?></a>
         </time>
-        <?php if (!$isAside): ?>
+        <?php if (!$isNote): ?>
         <span class="post__reading-time"><?= $readingTime ?> min read</span>
         <?php endif; ?>
         <?php if ($post->updated_at && $post->updated_at !== $post->published_at): ?>
@@ -111,7 +113,7 @@ ob_start();
     <?php if ($showKudos || $post->mastodon_url || $post->bluesky_url || $showEmail): ?>
     <footer class="post__syndication">
         <?php if ($showEmail):
-            $emailSubject = $isAside
+            $emailSubject = $isNote
                 ? 'Re: note from ' . Helpers::formatDate($post->published_at, 'Y-m-d', $settings['locale'] ?? '', $settings['timezone'] ?? '')
                 : 'Re: ' . $post->title;
         ?>
@@ -141,7 +143,7 @@ ob_start();
 <?php endif; ?>
 <?php
 $navLabel = function (CMS\Post $p) use ($settings): string {
-    if (!$p->isAside() && $p->title !== '') {
+    if (!$p->isNote() && $p->title !== '') {
         return $p->title;
     }
     $date = CMS\Helpers::formatDate($p->published_at, 'F j, Y', $settings['locale'] ?? '', $settings['timezone'] ?? '');

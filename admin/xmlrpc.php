@@ -163,12 +163,18 @@ function postToStruct(Post $post, string $siteUrl, string $timezone = ''): array
 
 /**
  * Pick the post_kind from an incoming struct (MetaWeblog or WordPress).
- * Returns 'aside' when the struct carries that format; otherwise 'standard'.
+ * Recognises the 'aside' and 'image' WordPress post formats; anything else
+ * (including an absent format) is 'standard'.
  */
 function xmlrpc_kind_from_struct(array $struct): string
 {
     $raw = strtolower(trim((string) ($struct['wp_post_format'] ?? $struct['post_format'] ?? '')));
-    return $raw === 'aside' ? 'aside' : 'standard';
+
+    return match ($raw) {
+        'aside'          => 'aside',
+        'image', 'photo' => 'photo',
+        default          => 'standard',
+    };
 }
 
 /**
@@ -226,7 +232,7 @@ function applyStruct(Post $post, array $struct, bool $publish, string $timezone)
     // re-derives, since digit-only slugs belong to that older numbering.
     $rawSlug = trim((string) ($struct['wp_slug'] ?? ''));
     if ($rawSlug === '') {
-        if ($post->isAside()) {
+        if ($post->isNote()) {
             if ($post->slug === '') {
                 $rawSlug = Post::slugFromContent($post->content);
             }
@@ -276,8 +282,9 @@ function syndicatePost(Post $post): void
         return;
     }
 
-    // POSSE: asides syndicate as native-looking notes — no title, no link back.
-    if ($post->isAside()) {
+    // POSSE: notes (asides and photo posts) syndicate as native-looking notes —
+    // no title, no link back.
+    if ($post->isNote()) {
         $postUrl = '';
         $excerpt = trim(Post::plaintextFromMarkdown($post->content));
     } else {
@@ -660,7 +667,7 @@ function applyWpPostStruct(Post $post, array $struct, string $timezone): void
     // Slug — see applyStruct() for the aside/standard derivation rules.
     $rawSlug = trim((string) ($struct['post_name'] ?? ''));
     if ($rawSlug === '') {
-        if ($post->isAside()) {
+        if ($post->isNote()) {
             if ($post->slug === '') {
                 $rawSlug = Post::slugFromContent($post->content);
             }
@@ -844,7 +851,7 @@ switch ($method) {
         $post = new Post($db);
         applyStruct($post, $struct, $publish, $timezone);
 
-        if ($post->title === '' && !$post->isAside()) {
+        if ($post->title === '' && !$post->isNote()) {
             xmlrpc_fault(400, 'Title is required.');
         }
 
@@ -870,7 +877,7 @@ switch ($method) {
 
         applyStruct($post, $struct, $publish, $timezone);
 
-        if ($post->title === '' && !$post->isAside()) {
+        if ($post->title === '' && !$post->isNote()) {
             xmlrpc_fault(400, 'Title is required.');
         }
 
@@ -1288,7 +1295,7 @@ switch ($method) {
         } else {
             $post = new Post($db);
             applyWpPostStruct($post, $struct, $timezone);
-            if ($post->title === '' && !$post->isAside()) {
+            if ($post->title === '' && !$post->isNote()) {
                 xmlrpc_fault(400, 'Title is required.');
             }
             $post->save();
@@ -1329,7 +1336,7 @@ switch ($method) {
         }
         $wasPublished = $post->status === 'published';
         applyWpPostStruct($post, $struct, $timezone);
-        if ($post->title === '' && !$post->isAside()) {
+        if ($post->title === '' && !$post->isNote()) {
             xmlrpc_fault(400, 'Title is required.');
         }
         $post->save();

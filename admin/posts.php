@@ -185,6 +185,8 @@ $flashType = $flash['type']    ?? 'success';
                     <a href="/admin/post-edit.php?id=<?= $post->id ?>">
                         <?php if ($post->isAside()): ?>
                             <span class="badge badge--kind-aside">Aside</span>
+                        <?php elseif ($post->isPhoto()): ?>
+                            <span class="badge badge--kind-photo">Photo</span>
                         <?php endif; ?>
                         <?php if (trim($post->title) !== ''): ?>
                             <?= Helpers::e($post->title) ?>

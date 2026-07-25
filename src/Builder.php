@@ -154,7 +154,7 @@ class Builder
             $slice    = array_slice($allPosts, ($p - 1) * $perPage, $perPage);
             $rendered = $this->render('index.php', [
                 'posts'       => $slice,
-                'postHtml'    => $this->renderAsideHtmlMap($slice),
+                'postHtml'    => $this->renderNoteHtmlMap($slice),
                 'currentPage' => $p,
                 'totalPages'  => $pages,
                 'totalPosts'  => $total,
@@ -271,17 +271,18 @@ class Builder
         $data = [];
         foreach ($posts as $post) {
             $excerpt = $post->effectiveExcerpt();
-            $isAside = $post->isAside();
             $entry = [
-                'title'    => $post->title,
-                'url'      => $siteUrl . '/' . Post::datePath($post->published_at ?? date('Y-m-d H:i:s'), $post->slug, $this->settings['timezone'] ?? '') . '/',
-                'excerpt'  => $excerpt !== null ? strip_tags($excerpt) : '',
-                'date'     => $post->published_at
+                'title'   => $post->title,
+                'url'     => $siteUrl . '/' . Post::datePath($post->published_at ?? date('Y-m-d H:i:s'), $post->slug, $this->settings['timezone'] ?? '') . '/',
+                'excerpt' => $excerpt !== null ? strip_tags($excerpt) : '',
+                'date'    => $post->published_at
                     ? Helpers::formatDate($post->published_at, 'M j, Y', $locale, $tz)
                     : '',
-                'is_aside' => $isAside,
+                // 'standard' | 'aside' | 'photo' — the search page branches on
+                // this the same way the list templates do.
+                'kind'    => $post->post_kind,
             ];
-            if ($isAside) {
+            if ($post->isNote()) {
                 $entry['body_text'] = Post::plaintextFromMarkdown($post->content);
             }
             $data[] = $entry;
@@ -296,17 +297,18 @@ class Builder
     }
 
     /**
-     * Pre-render Markdown bodies for any aside posts in $posts, keyed by post id.
-     * Standard posts are skipped — list templates use the excerpt for them.
+     * Pre-render Markdown bodies for the note-kind posts in $posts (asides and
+     * photo posts), keyed by post id. Standard posts are skipped — list
+     * templates use the excerpt for them.
      *
      * @param Post[] $posts
      * @return array<int,string>
      */
-    private function renderAsideHtmlMap(array $posts): array
+    private function renderNoteHtmlMap(array $posts): array
     {
         $map = [];
         foreach ($posts as $post) {
-            if ($post->isAside() && $post->id !== null) {
+            if ($post->isNote() && $post->id !== null) {
                 $map[$post->id] = $this->md->convert($post->content)->getContent();
             }
         }
@@ -498,7 +500,7 @@ class Builder
                 'type'        => $type,
                 'term'        => $term,
                 'posts'       => $slice,
-                'postHtml'    => $this->renderAsideHtmlMap($slice),
+                'postHtml'    => $this->renderNoteHtmlMap($slice),
                 'currentPage' => $p,
                 'totalPages'  => $totalPages,
                 'totalPosts'  => $total,
@@ -647,9 +649,10 @@ class Builder
      */
     private function buildOgImage(Post $post): string
     {
-        // Asides have no title; OG cards rendered from a missing title look broken.
-        // Skip image generation for asides — social previews fall back to the site OG.
-        if ($post->isAside()) {
+        // Notes have no title; OG cards rendered from a missing title look broken.
+        // Skip image generation for them — social previews fall back to the site OG
+        // (or, for a photo post, to the photo itself via the og:image meta).
+        if ($post->isNote()) {
             return '';
         }
 

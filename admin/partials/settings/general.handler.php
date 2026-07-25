@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'site_title'         => trim($_POST['site_title']         ?? ''),
         'author_name'        => trim($_POST['author_name']        ?? ''),
         'author_bio'         => trim($_POST['author_bio']         ?? ''),
+        'home_intro'         => trim($_POST['home_intro']         ?? ''),
         'author_avatar_url'  => trim($_POST['author_avatar_url']  ?? ''),
         'site_description'   => trim($_POST['site_description']   ?? ''),
         'site_url'           => rtrim(trim($_POST['site_url'] ?? ''), '/'),

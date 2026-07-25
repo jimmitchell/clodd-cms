@@ -24,17 +24,19 @@ function slugify(text) {
     slugInput.addEventListener('input', () => { userEditedSlug = true; });
 
     titleInput.addEventListener('input', () => {
-        // Asides slug from their body, not the title. The body is an EasyMDE
+        // Notes slug from their body, not the title. The body is an EasyMDE
         // instance whose input events don't reach the raw textarea, so leave the
         // field blank and let the server derive it on save.
-        if (kindSelect && kindSelect.value === 'aside') return;
+        if (kindSelect && kindSelect.value !== 'standard') return;
         if (!userEditedSlug) {
             slugInput.value = slugify(titleInput.value);
         }
     });
 })();
 
-// ── Post kind toggle (Standard / Aside) ───────────────────────────────────────
+// ── Post kind toggle (Standard / Aside / Photo) ──────────────────────────────
+// data-kind-only holds a space-separated list of the kinds an element applies
+// to, so a hint shared by asides and photo posts is written once.
 
 (function initPostKindToggle() {
     const kindSelect = document.getElementById('post_kind');
@@ -42,14 +44,15 @@ function slugify(text) {
     if (!kindSelect) return;
 
     function apply() {
-        const isAside = kindSelect.value === 'aside';
+        const kind = kindSelect.value;
 
         document.querySelectorAll('[data-kind-only]').forEach(el => {
-            el.hidden = el.dataset.kindOnly !== (isAside ? 'aside' : 'standard');
+            el.hidden = !el.dataset.kindOnly.split(/\s+/).includes(kind);
         });
 
+        // Only standard posts require a title; asides and photo posts are notes.
         if (titleInput) {
-            titleInput.required = !isAside;
+            titleInput.required = kind === 'standard';
         }
     }
 
@@ -216,13 +219,13 @@ function setAction(action) {
     });
 })();
 
-// ── Aside syndication length heads-up ────────────────────────────────────────
-// For aside (note) posts, the full content is syndicated natively to Mastodon
-// and Bluesky with no link back. Show a live counter so the author knows when
-// the note will be truncated on either platform.
+// ── Note syndication length heads-up ─────────────────────────────────────────
+// For note posts (asides and photo posts), the full content is syndicated
+// natively to Mastodon and Bluesky with no link back. Show a live counter so the
+// author knows when the note will be truncated on either platform.
 
-(function initAsideLengthHint() {
-    const status     = document.getElementById('aside-length-status');
+(function initNoteLengthHint() {
+    const status     = document.getElementById('note-length-status');
     const kindSelect = document.getElementById('post_kind');
     const textarea   = document.getElementById('content');
     if (!status || !kindSelect || !textarea) return;
@@ -262,7 +265,7 @@ function setAction(action) {
     }
 
     function update() {
-        if (kindSelect.value !== 'aside') return;
+        if (kindSelect.value === 'standard') return;
         const text   = plaintextFromMarkdown(getContent());
         const chars  = [...text].length;     // code points — matches PHP mb_strlen
         const graphs = graphemeCount(text);

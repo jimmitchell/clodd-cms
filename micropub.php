@@ -878,8 +878,13 @@ if ($content === '' && $photoRows === [] && $contextRows === []) {
 }
 
 // An absent name property is the note/article distinction in Micropub, so every
-// titleless post is an aside: no derived title, no h1.
+// titleless post is a note: no derived title, no h1. A titleless post carrying
+// photos is a photo post — the image is the point, so it gets its own kind. A
+// titled post keeps its photos as illustration and stays standard.
 $isAside = $title === '';
+$postKind = $isAside
+    ? ($photoRows !== [] ? 'photo' : 'aside')
+    : 'standard';
 
 // ── Slug + uniqueness ───────────────────────────────────────────────────────
 
@@ -934,7 +939,7 @@ foreach ($categories as $cat) {
 // ── Save ────────────────────────────────────────────────────────────────────
 
 $post               = new \CMS\Post($db);
-$post->post_kind    = $isAside ? 'aside' : 'standard';
+$post->post_kind    = $postKind;
 $post->title        = $title;
 $post->slug         = $slug;
 $post->content      = $content;
@@ -993,8 +998,9 @@ if ($status === 'published' && trim($post->content) !== '') {
     $hasBluesky         = $blueskyHandle !== '' && $blueskyAppPassword !== '';
 
     if (($hasMastodon && $post->mastodon_skip === 0) || ($hasBluesky && $post->bluesky_skip === 0)) {
-        // POSSE: asides syndicate as native-looking notes — no title, no link back.
-        if ($post->isAside()) {
+        // POSSE: notes (asides and photo posts) syndicate as native-looking
+        // notes — no title, no link back.
+        if ($post->isNote()) {
             $postUrl = '';
             $excerpt = trim(\CMS\Post::plaintextFromMarkdown($post->content));
         } else {

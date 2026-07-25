@@ -59,7 +59,7 @@ ob_start();
             var results = data.filter(function (item) {
                 return (item.title || '').toLowerCase().indexOf(ql) !== -1
                     || (item.excerpt || '').toLowerCase().indexOf(ql) !== -1
-                    || (item.is_aside && (item.body_text || '').toLowerCase().indexOf(ql) !== -1);
+                    || (item.body_text || '').toLowerCase().indexOf(ql) !== -1;
             });
 
             if (results.length === 0) {
@@ -68,21 +68,31 @@ ob_start();
                 return;
             }
 
+            // Mirrors templates/partials/post-card.php. Results have no photo
+            // rows in the index, so a photo post renders as its caption — it
+            // still reads as the same card family.
             resultEl.innerHTML = results.map(function (item) {
-                if (item.is_aside) {
-                    return '<article class="post-card post-card--note">'
+                // 'aside' maps to the --note modifier, matching the server's
+                // class names exactly; a mismatch silently drops the styling.
+                var modifier = item.kind === 'aside' ? 'note'
+                             : item.kind === 'photo' ? 'photo'
+                             : 'article';
+                if (modifier !== 'article') {
+                    return '<article class="post-card post-card--' + modifier + '">'
+                        + '<div class="post-card__inner">'
                         + (item.date
                             ? '<time class="post-card__date"><a href="' + escHtml(item.url) + '">' + escHtml(item.date) + '</a></time>'
                             : '')
                         + '<p class="post-card__body">' + escHtml(item.body_text || '') + '</p>'
-                        + '</article>';
+                        + '</div></article>';
                 }
-                return '<article class="post-card">'
+                return '<article class="post-card post-card--article">'
+                    + '<div class="post-card__inner">'
                     + '<h2 class="post-card__title"><a href="' + escHtml(item.url) + '">'
                     + escHtml(item.title) + '</a></h2>'
-                    + (item.date ? '<time class="post-card__date">' + escHtml(item.date) + '</time>' : '')
                     + (item.excerpt ? '<p class="post-card__excerpt">' + escHtml(item.excerpt) + '</p>' : '')
-                    + '</article>';
+                    + (item.date ? '<footer class="post-card__meta"><time>' + escHtml(item.date) + '</time></footer>' : '')
+                    + '</div></article>';
             }).join('');
         })
         .catch(function () {

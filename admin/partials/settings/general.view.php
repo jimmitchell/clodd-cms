@@ -28,6 +28,11 @@ use CMS\Helpers;
                   placeholder="A short bio (≤ 280 characters recommended)"><?= Helpers::e($_POST['author_bio'] ?? $settings['author_bio'] ?? '') ?></textarea>
         <p class="form-hint">Exposed as <code>&lt;byline:context&gt;</code> in the RSS and Atom feeds (per the <a href="https://www.bylinespec.org/spec" target="_blank" rel="noopener">Byline spec</a>). 280 characters or fewer recommended.</p>
 
+        <label for="home_intro">Home page intro</label>
+        <textarea id="home_intro" name="home_intro" rows="3"
+                  placeholder="Leave blank to reuse the author bio"><?= Helpers::e($_POST['home_intro'] ?? $settings['home_intro'] ?? '') ?></textarea>
+        <p class="form-hint">A sentence or two introducing yourself, shown above the feed on page 1 of the home page and marked up as your representative <code>h-card</code>. Needs an author name to appear. Leave blank to reuse the author bio.</p>
+
         <label for="author_avatar_url">Author avatar URL</label>
         <?php $_avatarCurrent = $_POST['author_avatar_url'] ?? $settings['author_avatar_url'] ?? ''; ?>
         <input type="url" id="author_avatar_url" name="author_avatar_url"

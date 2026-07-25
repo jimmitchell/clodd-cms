@@ -635,6 +635,7 @@ code {
 .badge--success   { background: #dcfce7; color: #166534; }
 .badge--error     { background: #fee2e2; color: #991b1b; }
 .badge--kind-aside { background: #ede9fe; color: #5b21b6; margin-right: .4em; }
+.badge--kind-photo { background: #cffafe; color: #155e75; margin-right: .4em; }
 
 .post-untitled {
     color: var(--color-muted);

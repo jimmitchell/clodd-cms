@@ -817,6 +817,31 @@ class Post
         return $this->post_kind === 'aside';
     }
 
+    public function isPhoto(): bool
+    {
+        return $this->post_kind === 'photo';
+    }
+
+    /**
+     * Body-first kinds: asides and photo posts. These render their full content
+     * on list cards instead of an excerpt, omit the h1 on their permalink, and
+     * syndicate as native notes (no title, no link back).
+     */
+    public function isNote(): bool
+    {
+        return self::isNoteKind($this->post_kind);
+    }
+
+    /**
+     * isNote() for callers holding a raw `post_kind` value rather than a Post —
+     * the feed generators select rows directly for speed. Keeping the definition
+     * here means adding a kind can't silently miss one of them.
+     */
+    public static function isNoteKind(?string $kind): bool
+    {
+        return in_array($kind ?? 'standard', ['aside', 'photo'], true);
+    }
+
     /**
      * Batch-load categories and tags for an array of Post objects.
      * Executes exactly 2 queries regardless of how many posts are passed.
