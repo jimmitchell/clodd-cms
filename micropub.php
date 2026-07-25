@@ -96,6 +96,34 @@ function mp_syndication_targets(\CMS\Database $db): array
     return $targets;
 }
 
+// ── Post types ──────────────────────────────────────────────────────────────
+
+/**
+ * The post-types advertised in q=config — a Micropub extension clients use to
+ * populate a type picker instead of guessing what the server accepts.
+ *
+ * Types are Post Type Discovery names, listed most-used first (clients render
+ * them in order). Only the ones this server stores end-to-end appear: `article`
+ * and `note` are the name/no-name split, `photo` is the photo property, and the
+ * four interaction types are the CONTEXT_KINDS. Deliberately absent are video,
+ * audio, rsvp, and checkin — their properties are currently dropped on create,
+ * so advertising them would invite posts that lose their point.
+ *
+ * @return array<array<string,string>>
+ */
+function mp_post_types(): array
+{
+    return [
+        ['type' => 'note',     'name' => 'Note'],
+        ['type' => 'article',  'name' => 'Article'],
+        ['type' => 'photo',    'name' => 'Photo'],
+        ['type' => 'reply',    'name' => 'Reply'],
+        ['type' => 'repost',   'name' => 'Repost'],
+        ['type' => 'like',     'name' => 'Like'],
+        ['type' => 'bookmark', 'name' => 'Bookmark'],
+    ];
+}
+
 // ── Photo property parsing ──────────────────────────────────────────────────
 
 /**
@@ -255,6 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'HEAD
         mp_json([
             'media-endpoint' => $siteUrl . '/media.php',
             'syndicate-to'   => mp_syndication_targets($db),
+            'post-types'     => mp_post_types(),
             'q'              => ['config', 'source', 'syndicate-to', 'category'],
         ]);
     }

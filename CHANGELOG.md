@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`post-types` in the Micropub `q=config` response** — a Micropub extension that lets clients populate a type picker instead of guessing what the endpoint accepts. Advertises the seven types the server stores end-to-end: `note`, `article`, `photo`, `reply`, `repost`, `like`, and `bookmark`. Video, audio, RSVP, and check-in are deliberately left out, since those properties are currently dropped on create.
+- **The Gallery and Link post formats over XML-RPC**, so MarsEdit can produce every kind of post the site can hold. Neither is a new `post_kind`; both map onto what was already there, which keeps a post built in MarsEdit identical to the same post built over Micropub.
+  - **Gallery** is the `photo` kind carrying more than one picture. Pictures attached as `u-photo` rows and images written inline in the body both count, so a gallery reads as a gallery whichever client built it — MarsEdit embeds its uploads in the body rather than attaching them. A photo post travels as `gallery` when it holds two or more, `image` when it holds one.
+  - **Link** is a post carrying a `bookmark-of` context, so a bookmark made in MarsEdit and one made over Micropub are the same object. Since no MetaWeblog or WordPress struct carries a URL field, the target is parsed from the first `http(s)` link in the body — HTML anchor, Markdown link, autolink, or bare URL — which is how WordPress derives it too. Switching a post off the Link format drops the bookmark; reply, like, and repost contexts are never touched, having no WordPress format to be edited through.
+- **A gallery layout on post permalinks** — a post with two or more attached photos now pairs them into two columns instead of stacking them full width, collapsing to one column under 600px. The pictures are not cropped, unlike the card gallery: a card is a teaser and can crop to a tidy grid, but a reader who opened the post came to look at the pictures.
+
+### Fixed
+
+- **XML-RPC now speaks WordPress's post-format vocabulary** — the `photo` post kind added in 1.11.0 was emitted to clients as `post_format: "photo"`, which is not a WordPress format, and `wp.getPostFormats` advertised only `standard` and `aside`. Photo posts were therefore invisible in MarsEdit's format picker and unidentifiable in its post list. The kind is now translated at the XML-RPC boundary, `wp.getPostFormats` advertises the full set, and `status` is accepted as an alias for `aside`. Storage is unchanged — the internal name is still `photo`.
+- **Editing a post over XML-RPC no longer resets its kind** — the post format was applied unconditionally from the incoming struct, so any client that edited a post without restating its format silently demoted an aside or photo post to standard. An absent format now leaves the existing kind alone, matching Micropub update, which likewise never re-derives it.
+
 ---
 
 ## [1.11.0] — 2026-07-25

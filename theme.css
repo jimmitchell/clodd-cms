@@ -414,6 +414,15 @@ audio { width: 100%; }
     margin-bottom: 2rem;
 }
 
+/* Two or more pictures pair up into a gallery. Unlike the card gallery, these
+   are never cropped: the card is a teaser and can crop to a tidy grid, but a
+   reader who opened the post came to look at the pictures, so each keeps the
+   proportions it was shot in and the rows are allowed to sit ragged. */
+.post__photos:not([data-count="1"]) {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+}
+
 .post__photo { margin: 0; }
 
 .post__photo img {
@@ -1465,6 +1474,7 @@ audio { width: 100%; }
 
     /* A 3-up crop is unreadable at this width — stack every gallery in one column. */
     .post-card__gallery { grid-template-columns: 1fr !important; }
+    .post__photos:not([data-count="1"]) { grid-template-columns: 1fr; }
     .post-card__gallery[data-count="3"] img:first-child { grid-row: auto; }
     .post-card__gallery img {
         aspect-ratio: auto;

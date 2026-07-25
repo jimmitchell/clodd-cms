@@ -57,6 +57,7 @@ echo "== Queries"
 check "q=config → 200"       200 "$(status -H "$AUTHZ" "$MP?q=config")"
 grep -q '"media-endpoint"' "$TMP/body" && check "config has media-endpoint" y y || check "config has media-endpoint" y n "$(body)"
 grep -q '"syndicate-to"'   "$TMP/body" && check "config has syndicate-to"   y y || check "config has syndicate-to"   y n
+grep -q '"post-types"'     "$TMP/body" && check "config has post-types"     y y || check "config has post-types"     y n "$(body)"
 check "q=syndicate-to → 200" 200 "$(status -H "$AUTHZ" "$MP?q=syndicate-to")"
 check "q=category → 200"     200 "$(status -H "$AUTHZ" "$MP?q=category")"
 

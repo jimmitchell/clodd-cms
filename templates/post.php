@@ -89,7 +89,7 @@ ob_start();
     <div class="post__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
     <?php endif; ?>
     <?php if (!empty($post->photos)): ?>
-    <div class="post__photos">
+    <div class="post__photos" data-count="<?= count($post->photos) ?>">
         <?php foreach ($post->photos as $photo): ?>
         <figure class="post__photo">
             <img class="u-photo" src="<?= htmlspecialchars($photo['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"

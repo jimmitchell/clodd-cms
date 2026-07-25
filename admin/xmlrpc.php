@@ -157,24 +157,177 @@ function postToStruct(Post $post, string $siteUrl, string $timezone = ''): array
         'permaLink'      => $url,
         'categories'     => array_column($post->categories, 'name'),
         'post_status'    => $post->status,
-        'wp_post_format' => $post->post_kind,
+        'wp_post_format' => xmlrpc_format_from_post($post),
     ];
 }
 
 /**
- * Pick the post_kind from an incoming struct (MetaWeblog or WordPress).
- * Recognises the 'aside' and 'image' WordPress post formats; anything else
- * (including an absent format) is 'standard'.
+ * WordPress post formats this endpoint speaks, as advertised by
+ * wp.getPostFormats. WordPress's vocabulary is closed, so these are its names,
+ * not ours: `photo` travels as `image` or `gallery` depending on how many
+ * pictures it carries, and a post bookmarking something travels as `link`.
  */
-function xmlrpc_kind_from_struct(array $struct): string
-{
-    $raw = strtolower(trim((string) ($struct['wp_post_format'] ?? $struct['post_format'] ?? '')));
+const XMLRPC_POST_FORMATS = [
+    'standard' => 'Standard',
+    'aside'    => 'Aside',
+    'image'    => 'Image',
+    'gallery'  => 'Gallery',
+    'link'     => 'Link',
+];
 
-    return match ($raw) {
-        'aside'          => 'aside',
-        'image', 'photo' => 'photo',
-        default          => 'standard',
+/**
+ * Count the pictures in a post. Photos attached as u-photo rows (how Micropub
+ * and the admin editor store them) and images written inline in the body (how
+ * MarsEdit stores them, via metaWeblog.newMediaObject) both count, so a gallery
+ * reads as a gallery whichever client built it.
+ */
+function xmlrpc_image_count(Post $post): int
+{
+    return count($post->photos) + preg_match_all('/<img\b/i', $post->content);
+}
+
+/**
+ * Translate a post to its WordPress post format name for output.
+ *
+ * `link` wins over everything: a post carrying a bookmark-of context is a link
+ * post in WordPress's vocabulary regardless of what else it holds, and it is
+ * the only format that round-trips a context. Reply, like and repost contexts
+ * have no WordPress equivalent, so those posts travel as their bare kind.
+ */
+function xmlrpc_format_from_post(Post $post): string
+{
+    foreach ($post->contexts as $context) {
+        if (($context['kind'] ?? '') === 'bookmark-of') {
+            return 'link';
+        }
+    }
+
+    if ($post->post_kind === 'photo') {
+        return xmlrpc_image_count($post) > 1 ? 'gallery' : 'image';
+    }
+
+    return $post->post_kind;
+}
+
+/**
+ * The first http(s) URL in a body, as a link post's bookmark target. WordPress
+ * derives a link post's URL the same way — from the content rather than a field
+ * of its own — because no MetaWeblog or WordPress struct carries one.
+ *
+ * Handles HTML anchors, Markdown links and autolinks, and finally a bare URL;
+ * MarsEdit may send any of them depending on how its editor is configured. In
+ * every pattern the URL is the last capture group.
+ */
+function xmlrpc_first_link_url(string $content): string
+{
+    $patterns = [
+        '/<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1/i',          // <a href="…">
+        '/\[[^\]]*\]\(\s*<?([^)\s>]+)>?/',                  // [text](…)
+        '/<(https?:\/\/[^>\s]+)>/i',                        // <https://…>
+        '/(?<![\w"\'(\[])(https?:\/\/[^\s<>"\')\]]+)/i',    // bare https://…
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (!preg_match($pattern, $content, $m)) {
+            continue;
+        }
+        $url    = html_entity_decode(trim((string) end($m)), ENT_QUOTES, 'UTF-8');
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if (in_array($scheme, ['http', 'https'], true)) {
+            return $url;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Pick the post_kind from an incoming struct (MetaWeblog or WordPress).
+ * Accepts the WordPress format names plus our internal `photo`, and treats
+ * `status` as an alias for `aside` (both are WordPress's titleless note).
+ *
+ * Returns null when the struct carries no format key at all — the caller keeps
+ * the post's existing kind rather than demoting it, so a client that edits a
+ * post without touching its format can't silently reshape it. This mirrors
+ * Micropub update, which likewise never re-derives the kind.
+ */
+function xmlrpc_kind_from_struct(array $struct): ?string
+{
+    $raw = $struct['wp_post_format'] ?? $struct['post_format'] ?? null;
+    if ($raw === null) {
+        return null;
+    }
+
+    $format = strtolower(trim((string) $raw));
+
+    // A link post has no kind of its own — the bookmark lives in a context, so
+    // the post is shaped by its title like any other: titled → standard,
+    // titleless → aside. (Every client that sends a format sends a title key
+    // alongside it, even when empty.)
+    if ($format === 'link') {
+        $title = trim((string) ($struct['title'] ?? $struct['post_title'] ?? ''));
+        return $title !== '' ? 'standard' : 'aside';
+    }
+
+    return match ($format) {
+        'aside', 'status'           => 'aside',
+        'image', 'photo', 'gallery' => 'photo',
+        default                     => 'standard',
     };
+}
+
+/**
+ * Apply the link format's bookmark-of context, after save() so the post has an
+ * id. Only runs when the struct actually states a format: a client editing a
+ * post without touching its format leaves every context alone.
+ *
+ * Switching a post away from `link` drops the bookmark-of context, which is
+ * what picking a different format in the client means. Reply, like and repost
+ * contexts are never touched — no WordPress format maps to them, so an edit
+ * from a WordPress client must not be able to destroy them.
+ */
+function xmlrpc_apply_link_context(Post $post, array $struct): void
+{
+    $raw = $struct['wp_post_format'] ?? $struct['post_format'] ?? null;
+    if ($raw === null || $post->id === null) {
+        return;
+    }
+
+    $others = array_values(array_filter(
+        $post->contexts,
+        fn(array $c) => ($c['kind'] ?? '') !== 'bookmark-of'
+    ));
+
+    if (strtolower(trim((string) $raw)) !== 'link') {
+        if (count($others) !== count($post->contexts)) {
+            $post->saveContexts($others);
+        }
+        return;
+    }
+
+    // A body with no link in it — a bookmark posted as a bare comment, say —
+    // leaves any existing target in place rather than clearing it.
+    $url = xmlrpc_first_link_url($post->content);
+    if ($url === '') {
+        return;
+    }
+
+    $post->saveContexts(array_merge($others, [['kind' => 'bookmark-of', 'url' => $url]]));
+}
+
+/**
+ * Apply the incoming struct's post format to $post, if it carries one.
+ * A new post with no format stated is a standard post.
+ */
+function xmlrpc_apply_kind(Post $post, array $struct): void
+{
+    $kind = xmlrpc_kind_from_struct($struct);
+
+    if ($kind !== null) {
+        $post->post_kind = $kind;
+    } elseif ($post->id === null) {
+        $post->post_kind = 'standard';
+    }
 }
 
 /**
@@ -208,7 +361,7 @@ function xmlrpc_finalize_aside_slug(Post $post): void
 function applyStruct(Post $post, array $struct, bool $publish, string $timezone): void
 {
     // Post kind (WordPress post_format). 'aside' = titleless note.
-    $post->post_kind = xmlrpc_kind_from_struct($struct);
+    xmlrpc_apply_kind($post, $struct);
 
     // Title
     if (isset($struct['title'])) {
@@ -630,7 +783,7 @@ function wpPostToStruct(Post $post, string $siteUrl, string $timezone = ''): arr
         'post_author'       => '1',
         'comment_status'    => 'closed',
         'ping_status'       => 'closed',
-        'post_format'       => $post->post_kind,
+        'post_format'       => xmlrpc_format_from_post($post),
         'post_thumbnail'    => '',
         'terms'             => array_merge(
             array_map(fn($c) => [
@@ -656,7 +809,7 @@ function wpPostToStruct(Post $post, string $siteUrl, string $timezone = ''): arr
  */
 function applyWpPostStruct(Post $post, array $struct, string $timezone): void
 {
-    $post->post_kind = xmlrpc_kind_from_struct($struct);
+    xmlrpc_apply_kind($post, $struct);
 
     if (isset($struct['post_title'])) {
         $post->title = trim((string) $struct['post_title']);
@@ -864,6 +1017,7 @@ switch ($method) {
 
         $post->save();
         xmlrpc_finalize_aside_slug($post);
+        xmlrpc_apply_link_context($post, $struct);
         xmlrpc_save_terms($post, $struct);
         syndicatePost($post);
         rebuildPost($post);
@@ -890,6 +1044,7 @@ switch ($method) {
 
         $post->save();
         xmlrpc_finalize_aside_slug($post);
+        xmlrpc_apply_link_context($post, $struct);
         xmlrpc_save_terms($post, $struct);
         syndicatePost($post);
         rebuildPost($post, $wasPublished);
@@ -1096,7 +1251,7 @@ switch ($method) {
     // ── wp.getPostFormats(blogid, username, password[, filter]) ───────────────
     case 'wp.getPostFormats':
         xmlrpc_auth($params, 1, 2);
-        echo XmlRpc::encodeResponse(['standard' => 'Standard', 'aside' => 'Aside']);
+        echo XmlRpc::encodeResponse(XMLRPC_POST_FORMATS);
         break;
 
     // ── wp.getTaxonomies(blogid, username, password) ──────────────────────────
@@ -1307,6 +1462,7 @@ switch ($method) {
             }
             $post->save();
             xmlrpc_finalize_aside_slug($post);
+            xmlrpc_apply_link_context($post, $struct);
             xmlrpc_save_terms($post, $struct);
             syndicatePost($post);
             rebuildPost($post);
@@ -1348,6 +1504,7 @@ switch ($method) {
         }
         $post->save();
         xmlrpc_finalize_aside_slug($post);
+        xmlrpc_apply_link_context($post, $struct);
         xmlrpc_save_terms($post, $struct);
         syndicatePost($post);
         rebuildPost($post, $wasPublished);
