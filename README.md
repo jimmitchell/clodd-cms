@@ -566,7 +566,7 @@ Stale pagination pages and unpublished post/page files are removed automatically
 
 ## Theme & Styling
 
-The public theme is a single file, `theme.css`, with no build step. It uses CSS custom properties for all colors:
+The public theme is a single file, `theme.css`, edited directly — there is no preprocessor. It uses CSS custom properties for all colors:
 
 | Variable | Light | Dark |
 |----------|-------|------|
@@ -580,6 +580,24 @@ The public theme is a single file, `theme.css`, with no build step. It uses CSS 
 Dark mode activates automatically when the system preference is `dark`. The toggle button in the header overrides this and persists the choice in `localStorage`. An inline script in `<head>` applies the stored preference before the stylesheet loads, preventing any flash of the wrong color scheme.
 
 The UI typeface is [Figtree](https://fonts.google.com/specimen/Figtree) and the prose body typeface is [Atkinson Hyperlegible Next](https://fonts.google.com/specimen/Atkinson+Hyperlegible+Next) (both self-hosted variable WOFF2, OFL license). To add custom styles without editing `theme.css`, use **Settings → Custom CSS**.
+
+### Critical CSS
+
+A marker comment in `theme.css` splits the stylesheet in two:
+
+```css
+/* =END CRITICAL= */
+```
+
+Everything above it is the critical subset — inlined into each page's `<head>` so the first paint needs no network round trip. Everything below arrives via a preloaded `theme.min.css`. Both files are generated; only `theme.css` is edited. Sections below the marker keep their relative order with those above, so moving the boundary never changes which rule wins, but a media query must stay after the rules it overrides.
+
+After editing the theme, rebuild the stylesheets alone rather than the whole site:
+
+```bash
+php bin/build.php --css
+```
+
+This regenerates both files and, when the critical subset changed, patches the inlined block in every already-generated page — a sub-second operation. The admin panel does the same automatically when it notices `theme.css` is newer than `theme.min.css`, though it does not patch existing pages.
 
 ---
 
@@ -595,6 +613,7 @@ clodd-cms/
 │   ├── api.php             # REST API endpoint (HTTP Basic Auth)
 │   └── xmlrpc.php          # WordPress/MetaWeblog XML-RPC API endpoint
 ├── bin/
+│   ├── build.php           # CLI: full static rebuild, or --css for styles only
 │   ├── setup.php           # CLI installer (password hash + DB init)
 │   └── send-webmentions.php  # CLI: send outgoing webmention pings
 ├── content/

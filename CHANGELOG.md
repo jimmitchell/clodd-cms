@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.12.0] — 2026-07-26
+
 ### Added
 
+- **`php bin/build.php --css`** (alias `--styles`) — rebuild the stylesheets without re-rendering the site. Editing `theme.css` previously meant a full rebuild, because the critical CSS subset is inlined into every page's `<head>` at render time and only a re-render could refresh it. The flag regenerates `theme.min.css` and `theme.critical.css`, then patches the inlined `<style>` block directly in the generated HTML — but only when the critical subset actually changed, so an edit below the marker touches no pages at all. It locates the block by the preload link that always follows it, leaving the separate Custom CSS `<style>` tag alone. On a site of 849 pages this is a sub-second operation against roughly eighteen seconds for the full rebuild.
 - **`post-types` in the Micropub `q=config` response** — a Micropub extension that lets clients populate a type picker instead of guessing what the endpoint accepts. Advertises the seven types the server stores end-to-end: `note`, `article`, `photo`, `reply`, `repost`, `like`, and `bookmark`. Video, audio, RSVP, and check-in are deliberately left out, since those properties are currently dropped on create.
 - **The Gallery and Link post formats over XML-RPC**, so MarsEdit can produce every kind of post the site can hold. Neither is a new `post_kind`; both map onto what was already there, which keeps a post built in MarsEdit identical to the same post built over Micropub.
   - **Gallery** is the `photo` kind carrying more than one picture. Pictures attached as `u-photo` rows and images written inline in the body both count, so a gallery reads as a gallery whichever client built it — MarsEdit embeds its uploads in the body rather than attaching them. A photo post travels as `gallery` when it holds two or more, `image` when it holds one.
@@ -21,8 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Search opens over the page instead of navigating to it** — the header magnifier used to be a link that discarded whatever you were reading in exchange for an empty page holding a text field. It now opens an overlay: the page blurs behind a single field in the upper third, Enter takes you to `/search/?q=…` as before, and Esc returns you to exactly where you were. The field is set in Atkinson Hyperlegible Next, the site's reading face, so the query looks like the prose it searches. The results page is unchanged and keeps its own form for refining a search. Nothing here depends on JavaScript to reach results — the overlay is a plain `GET` form, and with scripting off the magnifier is still a link to `/search/`.
 
+- **Less CSS inlined into every page** — the critical marker sat near the end of `theme.css`, making the inlined block 81% of the whole stylesheet. 490 lines that render below the fold, behind an interaction, or only on one page type — the search overlay and results page, syntax highlighting, notices, button links, pagination, footnotes, the syndication footer, post navigation, the site footer, and the 404 page — now sit after the marker and arrive with the linked stylesheet instead. The Responsive block deliberately stays critical: it is entirely above-the-fold, and media queries have to follow the rules they override. Sections keep their relative order, so no rule changed which one wins; the inlined block fell 35%, from 25,392 to 16,561 bytes.
+
 ### Fixed
 
+- **Critical CSS never actually reached the page** — `base.php` has long had a branch to inline the above-the-fold styles and preload the rest, but every template that renders it passed an explicit `compact()` list that omitted `criticalCss`. The branch could therefore never fire: `theme.critical.css` was generated on every build and never used, and each page shipped a plain blocking stylesheet link. All six templates now forward it.
+- **`composer.lock` was out of date with `composer.json`** — because `composer.json` carries a `version` field, every release bump changes its content hash and invalidates the lock, which `composer validate` reported as an error. The lock is regenerated here; no dependency versions changed.
 - **XML-RPC now speaks WordPress's post-format vocabulary** — the `photo` post kind added in 1.11.0 was emitted to clients as `post_format: "photo"`, which is not a WordPress format, and `wp.getPostFormats` advertised only `standard` and `aside`. Photo posts were therefore invisible in MarsEdit's format picker and unidentifiable in its post list. The kind is now translated at the XML-RPC boundary, `wp.getPostFormats` advertises the full set, and `status` is accepted as an alias for `aside`. Storage is unchanged — the internal name is still `photo`.
 - **Editing a post over XML-RPC no longer resets its kind** — the post format was applied unconditionally from the incoming struct, so any client that edited a post without restating its format silently demoted an aside or photo post to standard. An absent format now leaves the existing kind alone, matching Micropub update, which likewise never re-derives it.
 
