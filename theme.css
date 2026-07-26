@@ -42,8 +42,8 @@
 :root {
     --color-text:       #1E1B18;
     --color-muted:      #736B62;
-    --color-border:     #E7E0D6;
-    --color-border-hover: #D8CFC2;
+    --color-border:     #D9CEBB;
+    --color-border-hover: #C8B9A0;
     /* The page is warm paper and an article card is a white sheet resting on
        it, so the two need separate tokens. */
     --color-bg:         #F8F5F1;
