@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`spomky-labs/otphp` upgraded from 11.4.2 to 11.5.0**, clearing two advisories against the TOTP library behind two-factor authentication: an uncaught `DivisionByZeroError` from an unbounded `digits` parameter (high), and a mass-assignment in `Factory::loadFromProvisioningUri` (medium). Neither was reachable here — both are entered by parsing a hostile provisioning URI, and this CMS only ever *generates* one for the enrolment QR code, building every TOTP object from a secret it generated itself. Existing enrolments are unaffected: secrets are stored as-is and still verify.
+
 ---
 
 ## [1.12.0] — 2026-07-26
