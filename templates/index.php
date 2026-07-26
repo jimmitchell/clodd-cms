@@ -56,5 +56,5 @@ $bodyContent = ob_get_clean();
 
 echo $render('base.php', compact(
     'pageTitle', 'description', 'canonical', 'ogType', 'bodyContent',
-    'settings', 'navPages', 'siteUrl', 'render', 'isHomepage'
+    'settings', 'navPages', 'siteUrl', 'render', 'isHomepage', 'criticalCss'
 ));

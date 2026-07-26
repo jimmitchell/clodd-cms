@@ -369,6 +369,104 @@ class Builder
     }
 
     /**
+     * Rebuild the CSS bundles without re-rendering the site.
+     *
+     * theme.min.css is linked, so it takes effect on its own. The critical
+     * subset is inlined into each page's <head> at render time, which is why a
+     * theme change normally needs a full rebuild — so when that subset changes,
+     * swap the old <style> block for the new one directly in the generated HTML.
+     *
+     * @return array{changed:bool, updated:int, current:int, linked:int}
+     */
+    public function rebuildCss(): array
+    {
+        $critFile = $this->outputDir . '/theme.critical.css';
+        $before   = is_file($critFile) ? (string) file_get_contents($critFile) : '';
+
+        $this->buildCss();
+
+        $after = is_file($critFile) ? (string) file_get_contents($critFile) : '';
+
+        if ($before === $after) {
+            return ['changed' => false, 'updated' => 0, 'current' => 0, 'linked' => 0];
+        }
+
+        return ['changed' => true] + $this->syncInlineCriticalCss($after);
+    }
+
+    /**
+     * Replace the inlined critical CSS in every generated page.
+     *
+     * Identifies the block by the preload link that always follows it in
+     * base.php, so the separate custom_css <style> tag is never touched and the
+     * page's own age doesn't matter. Pages that link the stylesheet instead of
+     * inlining it need no patching — they pick up theme.min.css on their own.
+     *
+     * @return array{updated:int, current:int, linked:int}
+     */
+    private function syncInlineCriticalCss(string $new): array
+    {
+        $pattern = '/(<style>)(.*?)(<\/style>\s*<link rel="preload" href="\/theme\.min\.css")/s';
+
+        $updated = 0;
+        $current = 0;
+        $linked  = 0;
+
+        foreach ($this->generatedHtmlFiles() as $file) {
+            $html = (string) file_get_contents($file);
+
+            if (!preg_match($pattern, $html, $m)) {
+                $linked++;
+                continue;
+            }
+
+            if ($m[2] === $new) {
+                $current++;
+                continue;
+            }
+
+            $patched = preg_replace_callback(
+                $pattern,
+                static fn(array $parts): string => $parts[1] . $new . $parts[3],
+                $html,
+                1
+            );
+            file_put_contents($file, $patched);
+            $updated++;
+        }
+
+        return ['updated' => $updated, 'current' => $current, 'linked' => $linked];
+    }
+
+    /**
+     * Every HTML file this builder generates: the root pages plus the
+     * post, page, pagination, search, and taxonomy trees.
+     *
+     * @return list<string>
+     */
+    private function generatedHtmlFiles(): array
+    {
+        $files = glob($this->outputDir . '/*.html') ?: [];
+
+        foreach (['posts', 'pages', 'page', 'search', 'category', 'tag'] as $sub) {
+            $dir = $this->outputDir . '/' . $sub;
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $walk = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($walk as $entry) {
+                if ($entry->isFile() && strtolower($entry->getExtension()) === 'html') {
+                    $files[] = $entry->getPathname();
+                }
+            }
+        }
+
+        return array_values($files);
+    }
+
+    /**
      * Rebuild index pages, all feeds, and the sitemap.
      * Call once after any operation that changes which posts are publicly visible.
      */

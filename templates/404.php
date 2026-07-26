@@ -42,5 +42,5 @@ $is404Page   = true;
 
 echo $render('base.php', compact(
     'pageTitle', 'description', 'canonical', 'ogType', 'bodyContent',
-    'settings', 'navPages', 'siteUrl', 'render', 'is404Page'
+    'settings', 'navPages', 'siteUrl', 'render', 'is404Page', 'criticalCss'
 ));

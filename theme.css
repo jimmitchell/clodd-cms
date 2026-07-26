@@ -334,130 +334,6 @@ audio { width: 100%; }
 .search-toggle:hover { color: var(--color-text); }
 .search-toggle svg   { width: 1rem; height: 1rem; }
 
-/* ── Search (overlay) ─────────────────────────────────────────────────────── */
-/* Lives in the critical half deliberately: the overlay markup ships on every
-   page, so the rules that hide it must be inlined or the bare form flashes at
-   the foot of the document before the async stylesheet arrives. */
-
-.search-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 900; /* above the header (100), below the lightboxes (1000/1100) */
-    background: color-mix(in srgb, var(--color-bg) 55%, transparent);
-    backdrop-filter: blur(10px) saturate(70%);
-    -webkit-backdrop-filter: blur(10px) saturate(70%);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity .18s ease, visibility 0s linear .18s;
-}
-.search-overlay.is-open {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transition: opacity .18s ease;
-}
-
-/* Where blur is unavailable the tint has to carry the separation on its own. */
-@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
-    .search-overlay { background: color-mix(in srgb, var(--color-bg) 94%, transparent); }
-}
-
-.search-overlay__panel {
-    width: min(560px, calc(100% - 3rem));
-    margin: 18vh auto 0;
-    transform: translateY(-8px);
-    transition: transform .18s ease;
-}
-.search-overlay.is-open .search-overlay__panel { transform: translateY(0); }
-
-/* One field, no box: the rule under the text is the whole control. */
-.search-overlay__field {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    padding-bottom: .5rem;
-    border-bottom: 2px solid var(--color-border);
-    transition: border-color .15s;
-}
-.search-overlay__field:focus-within { border-bottom-color: var(--color-link); }
-.search-overlay__field svg {
-    width: 1.15rem;
-    height: 1.15rem;
-    flex-shrink: 0;
-    color: var(--color-muted);
-}
-.search-overlay__field input[type="search"] {
-    flex: 1;
-    min-width: 0;
-    border: none;
-    background: none;
-    outline: none;
-    color: var(--color-text);
-    /* The reading face, so the query looks like the prose it searches. */
-    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 1.5rem;
-    line-height: 1.3;
-    padding: 0;
-    -webkit-appearance: none;
-    appearance: none;
-}
-.search-overlay__field input[type="search"]::placeholder { color: var(--color-muted); }
-.search-overlay__field input[type="search"]::-webkit-search-decoration,
-.search-overlay__field input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
-
-.search-overlay__hint {
-    margin-top: .75rem;
-    font-size: .8rem;
-    letter-spacing: .02em;
-    color: var(--color-muted);
-}
-.search-overlay__hint span { margin: 0 .35em; }
-
-@media (max-width: 600px) {
-    .search-overlay__panel { margin-top: 12vh; width: calc(100% - 2.5rem); }
-    /* Stays at 1.5rem — anything under 16px makes iOS zoom the viewport. */
-}
-
-/* ── Search results page ──────────────────────────────────────────────────── */
-.search-page { max-width: var(--max-content); margin: 0 auto; }
-.search-page__title { margin-bottom: 1.5rem; }
-
-.search-page__form {
-    display: flex;
-    gap: .5rem;
-    margin-bottom: 2.5rem;
-}
-.search-page__form input[type="search"] {
-    flex: 1;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    background: var(--color-bg);
-    color: var(--color-text);
-    font: inherit;
-    font-size: 1rem;
-    padding: .5rem .75rem;
-    outline: none;
-    transition: border-color .15s;
-}
-.search-page__form input[type="search"]:focus { border-color: var(--color-link); }
-.search-page__form button {
-    background: var(--color-link);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    padding: .5rem 1rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    line-height: 0;
-    transition: background .15s;
-}
-.search-page__form button:hover { background: color-mix(in srgb, var(--color-link) 90%, #000); }
-.search-page__form button svg { width: 1rem; height: 1rem; }
-
-.search-empty { color: var(--color-muted); font-style: italic; }
-
 /* ── Main content area ────────────────────────────────────────────────────── */
 .site-main {
     max-width: var(--max-content);
@@ -733,141 +609,6 @@ audio { width: 100%; }
     background: none;
     padding: 0;
     font-size: .7em;
-}
-
-/* ── Syntax highlighting — xcode-dark theme ───────────────────────────────── */
-
-.prose pre.syntax-hl {
-    background: #221E1B;
-    color:      #dfdfe0;
-}
-
-/* In dark mode the page bg is #1A1715 — bump the code block to be clearly distinct */
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .prose pre.syntax-hl { background: #26211D; }
-}
-[data-theme="dark"] .prose pre.syntax-hl { background: #26211D; }
-
-/* Copy button adjustments for dark code blocks */
-.code-block--dark .code-copy          { color: #6c7986; }
-.code-block--dark .code-copy:hover    { color: #dfdfe0; border-color: #3a342e; background: #26211D; }
-.code-block--dark .code-copy--copied,
-.code-block--dark .code-copy--copied:hover { color: #fff; background: #4C7A2E; border-color: #4C7A2E; opacity: 1; }
-
-/* Token colours */
-.hljs-comment,
-.hljs-quote                    { color: #6c7986; font-style: italic; }
-
-.hljs-keyword,
-.hljs-selector-tag,
-.hljs-operator                 { color: #ff7ab2; }
-
-.hljs-string,
-.hljs-attr,
-.hljs-selector-attr            { color: #ff8170; }
-
-.hljs-number,
-.hljs-literal                  { color: #d9c97c; }
-
-.hljs-built_in,
-.hljs-title,
-.hljs-title.function_          { color: #4eb0cc; }
-
-.hljs-type,
-.hljs-class .hljs-title,
-.hljs-variable                 { color: #dabaff; }
-
-.hljs-meta,
-.hljs-params                   { color: #dfdfe0; }
-
-.hljs-addition                 { color: #63da58; background: #1a3320; }
-.hljs-deletion                 { color: #ff8170; background: #3d1a18; }
-
-/* Images / media inside prose */
-.prose img,
-.prose video,
-.prose audio { margin-top: 1.5em; margin-bottom: 1.5em; }
-
-.prose img { box-shadow: 0 4px 20px rgba(var(--shadow-rgb), .10); border-radius: 0; }
-
-.prose img:not(.gallery img) {
-    max-width: 100%;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    margin-top: 2rem;
-    margin-bottom: 2rem;
-}
-
-@media (min-width: 880px) {
-    .prose img:not(.gallery img) {
-        max-width: calc(100% + 2rem);
-        width: calc(100% + 2rem);
-        margin-left: -1rem;
-        margin-right: -1rem;
-        margin-top: 2rem;
-        margin-bottom: 2rem;
-    }
-}
-
-.prose figure { margin-top: 1.5em; }
-.prose figcaption {
-    font-size: .825rem;
-    color: var(--color-muted);
-    margin-top: -2em;
-    margin-bottom: 2em;
-    text-align: center;
-    font-style: italic;
-}
-
-/* ── Notices / callouts ───────────────────────────────────────────────────── */
-.notice,
-.information,
-.warning {
-    border-left: 3px solid;
-    /* border-radius: 4px; */
-    padding: .75em 1em;
-    margin: 1.5em 0;
-}
-
-/* Diluting a cold hue into warm paper drains it, so these sit a little more
-   saturated than their fill percentage suggests. */
-.notice {
-    border-color: #2E72B0;
-    background: color-mix(in srgb, #2E72B0 13%, var(--color-bg));
-}
-
-.information {
-    border-color: #C1820B;
-    background: color-mix(in srgb, #C1820B 14%, var(--color-bg));
-}
-
-.warning {
-    border-color: #B3341F;
-    background: color-mix(in srgb, #B3341F 10%, var(--color-bg));
-}
-
-/* ── Button-style link ────────────────────────────────────────────────────── */
-.button-link {
-    display: inline-block;
-    background: var(--color-link);
-    color: #fff;
-    text-decoration: none;
-    border: none;
-    border-radius: 4px;
-    padding: .5rem 1rem;
-    margin: 3px;
-    font: inherit;
-    font-size: 1rem;
-    line-height: 1.2;
-    cursor: pointer;
-    transition: background .15s;
-}
-
-.button-link:hover {
-    background: color-mix(in srgb, var(--color-link) 90%, #000);
-    text-decoration: none;
-    color: #fff;
 }
 
 /* ── Home intro (representative h-card) ───────────────────────────────────────
@@ -1245,6 +986,377 @@ audio { width: 100%; }
     grid-column: 1 / -1;
 }
 
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .post-list { grid-template-columns: 1fr; }
+
+    /* Show hamburger, hide inline nav links */
+    .nav-toggle { display: flex; }
+
+    .site-header__inner { flex-wrap: nowrap; }
+
+    .site-nav {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        gap: 0;
+        margin-right: 0;
+        background: var(--color-header-bg);
+        border-top: 1px solid var(--color-border);
+        border-bottom: 1px solid var(--color-chrome-border);
+        padding: .375rem 0;
+        z-index: 100;
+        /* animation */
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-6px);
+        transition: opacity .2s ease, transform .2s ease, visibility 0s linear .2s;
+    }
+
+    .site-nav.is-open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+        transition: opacity .2s ease, transform .2s ease;
+    }
+
+    .site-nav a {
+        padding: .75rem 1.25rem;
+        font-size: .975rem;
+        border-radius: 0;
+    }
+
+    .site-nav a:hover {
+        background: var(--color-code-bg);
+        color: var(--color-text);
+    }
+
+    .site-nav__item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .site-nav__sub,
+    .site-nav__item.has-children:hover > .site-nav__sub,
+    .site-nav__item.has-children:focus-within > .site-nav__sub {
+        position: static;
+        opacity: 1;
+        visibility: inherit;
+        pointer-events: inherit;
+        transform: none;
+        transition: none;
+        background: transparent;
+        border: none;
+        padding: 0;
+        min-width: 0;
+    }
+
+    .site-nav__sub a {
+        padding: .6rem 1.25rem .6rem 2.5rem;
+        font-size: .925rem;
+        color: var(--color-muted);
+    }
+}
+
+@media (max-width: 600px) {
+    html { font-size: 16px; }
+    body { padding: 0; }
+    .post-card__title { font-size: 1.4rem; }
+    .site-header__inner { gap: .5rem; }
+    .site-main { margin: 2rem auto 1.75rem; }
+
+    /* Narrow screens can't spare the gutters; hold the ratio between the kinds
+       rather than the absolute values. */
+    .post-card__inner { padding: 1.25rem; }
+    .post-card--note .post-card__inner { padding: 1rem 1.1rem; }
+    .post-card--photo .post-card__inner { padding: .7rem 0 0; }
+
+    .home-intro { margin-bottom: 2rem; }
+    .home-intro__text { font-size: 1.05rem; }
+
+    /* A 3-up crop is unreadable at this width — stack every gallery in one column. */
+    .post-card__gallery { grid-template-columns: 1fr !important; }
+    .post__photos:not([data-count="1"]) { grid-template-columns: 1fr; }
+    .post-card__gallery[data-count="3"] img:first-child { grid-row: auto; }
+    .post-card__gallery img {
+        aspect-ratio: auto;
+        height: auto;
+        max-height: 340px;
+        object-fit: cover;
+    }
+    .post-card__gallery[data-count="1"] img { max-height: 420px; object-fit: contain; }
+}
+
+/* =END CRITICAL= */
+
+/* Everything below is deferred: it renders below the fold, behind an
+   interaction, or only on a specific page type. Sections keep their original
+   relative order — no rule changes which one wins. */
+
+/* ── Search (overlay) ─────────────────────────────────────────────────────── */
+/* Lives in the critical half deliberately: the overlay markup ships on every
+   page, so the rules that hide it must be inlined or the bare form flashes at
+   the foot of the document before the async stylesheet arrives. */
+
+.search-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900; /* above the header (100), below the lightboxes (1000/1100) */
+    background: color-mix(in srgb, var(--color-bg) 55%, transparent);
+    backdrop-filter: blur(10px) saturate(70%);
+    -webkit-backdrop-filter: blur(10px) saturate(70%);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .18s ease, visibility 0s linear .18s;
+}
+.search-overlay.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity .18s ease;
+}
+
+/* Where blur is unavailable the tint has to carry the separation on its own. */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    .search-overlay { background: color-mix(in srgb, var(--color-bg) 94%, transparent); }
+}
+
+.search-overlay__panel {
+    width: min(560px, calc(100% - 3rem));
+    margin: 18vh auto 0;
+    transform: translateY(-8px);
+    transition: transform .18s ease;
+}
+.search-overlay.is-open .search-overlay__panel { transform: translateY(0); }
+
+/* One field, no box: the rule under the text is the whole control. */
+.search-overlay__field {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding-bottom: .5rem;
+    border-bottom: 2px solid var(--color-border);
+    transition: border-color .15s;
+}
+.search-overlay__field:focus-within { border-bottom-color: var(--color-link); }
+.search-overlay__field svg {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
+    color: var(--color-muted);
+}
+.search-overlay__field input[type="search"] {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    outline: none;
+    color: var(--color-text);
+    /* The reading face, so the query looks like the prose it searches. */
+    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 1.5rem;
+    line-height: 1.3;
+    padding: 0;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.search-overlay__field input[type="search"]::placeholder { color: var(--color-muted); }
+.search-overlay__field input[type="search"]::-webkit-search-decoration,
+.search-overlay__field input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+.search-overlay__hint {
+    margin-top: .75rem;
+    font-size: .8rem;
+    letter-spacing: .02em;
+    color: var(--color-muted);
+}
+.search-overlay__hint span { margin: 0 .35em; }
+
+@media (max-width: 600px) {
+    .search-overlay__panel { margin-top: 12vh; width: calc(100% - 2.5rem); }
+    /* Stays at 1.5rem — anything under 16px makes iOS zoom the viewport. */
+}
+
+/* ── Search results page ──────────────────────────────────────────────────── */
+.search-page { max-width: var(--max-content); margin: 0 auto; }
+.search-page__title { margin-bottom: 1.5rem; }
+
+.search-page__form {
+    display: flex;
+    gap: .5rem;
+    margin-bottom: 2.5rem;
+}
+.search-page__form input[type="search"] {
+    flex: 1;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font: inherit;
+    font-size: 1rem;
+    padding: .5rem .75rem;
+    outline: none;
+    transition: border-color .15s;
+}
+.search-page__form input[type="search"]:focus { border-color: var(--color-link); }
+.search-page__form button {
+    background: var(--color-link);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: .5rem 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    line-height: 0;
+    transition: background .15s;
+}
+.search-page__form button:hover { background: color-mix(in srgb, var(--color-link) 90%, #000); }
+.search-page__form button svg { width: 1rem; height: 1rem; }
+
+.search-empty { color: var(--color-muted); font-style: italic; }
+
+/* ── Syntax highlighting — xcode-dark theme ───────────────────────────────── */
+
+.prose pre.syntax-hl {
+    background: #221E1B;
+    color:      #dfdfe0;
+}
+
+/* In dark mode the page bg is #1A1715 — bump the code block to be clearly distinct */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .prose pre.syntax-hl { background: #26211D; }
+}
+[data-theme="dark"] .prose pre.syntax-hl { background: #26211D; }
+
+/* Copy button adjustments for dark code blocks */
+.code-block--dark .code-copy          { color: #6c7986; }
+.code-block--dark .code-copy:hover    { color: #dfdfe0; border-color: #3a342e; background: #26211D; }
+.code-block--dark .code-copy--copied,
+.code-block--dark .code-copy--copied:hover { color: #fff; background: #4C7A2E; border-color: #4C7A2E; opacity: 1; }
+
+/* Token colours */
+.hljs-comment,
+.hljs-quote                    { color: #6c7986; font-style: italic; }
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-operator                 { color: #ff7ab2; }
+
+.hljs-string,
+.hljs-attr,
+.hljs-selector-attr            { color: #ff8170; }
+
+.hljs-number,
+.hljs-literal                  { color: #d9c97c; }
+
+.hljs-built_in,
+.hljs-title,
+.hljs-title.function_          { color: #4eb0cc; }
+
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-variable                 { color: #dabaff; }
+
+.hljs-meta,
+.hljs-params                   { color: #dfdfe0; }
+
+.hljs-addition                 { color: #63da58; background: #1a3320; }
+.hljs-deletion                 { color: #ff8170; background: #3d1a18; }
+
+/* Images / media inside prose */
+.prose img,
+.prose video,
+.prose audio { margin-top: 1.5em; margin-bottom: 1.5em; }
+
+.prose img { box-shadow: 0 4px 20px rgba(var(--shadow-rgb), .10); border-radius: 0; }
+
+.prose img:not(.gallery img) {
+    max-width: 100%;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+
+@media (min-width: 880px) {
+    .prose img:not(.gallery img) {
+        max-width: calc(100% + 2rem);
+        width: calc(100% + 2rem);
+        margin-left: -1rem;
+        margin-right: -1rem;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+}
+
+.prose figure { margin-top: 1.5em; }
+.prose figcaption {
+    font-size: .825rem;
+    color: var(--color-muted);
+    margin-top: -2em;
+    margin-bottom: 2em;
+    text-align: center;
+    font-style: italic;
+}
+
+/* ── Notices / callouts ───────────────────────────────────────────────────── */
+.notice,
+.information,
+.warning {
+    border-left: 3px solid;
+    /* border-radius: 4px; */
+    padding: .75em 1em;
+    margin: 1.5em 0;
+}
+
+/* Diluting a cold hue into warm paper drains it, so these sit a little more
+   saturated than their fill percentage suggests. */
+.notice {
+    border-color: #2E72B0;
+    background: color-mix(in srgb, #2E72B0 13%, var(--color-bg));
+}
+
+.information {
+    border-color: #C1820B;
+    background: color-mix(in srgb, #C1820B 14%, var(--color-bg));
+}
+
+.warning {
+    border-color: #B3341F;
+    background: color-mix(in srgb, #B3341F 10%, var(--color-bg));
+}
+
+/* ── Button-style link ────────────────────────────────────────────────────── */
+.button-link {
+    display: inline-block;
+    background: var(--color-link);
+    color: #fff;
+    text-decoration: none;
+    border: none;
+    border-radius: 4px;
+    padding: .5rem 1rem;
+    margin: 3px;
+    font: inherit;
+    font-size: 1rem;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background .15s;
+}
+
+.button-link:hover {
+    background: color-mix(in srgb, var(--color-link) 90%, #000);
+    text-decoration: none;
+    color: #fff;
+}
+
 /* ── Pagination ───────────────────────────────────────────────────────────── */
 .pagination {
     display: flex;
@@ -1476,113 +1588,6 @@ audio { width: 100%; }
     border-color: var(--color-muted);
 }
 
-/* ── Responsive ───────────────────────────────────────────────────────────── */
-@media (max-width: 640px) {
-    .post-list { grid-template-columns: 1fr; }
-
-    /* Show hamburger, hide inline nav links */
-    .nav-toggle { display: flex; }
-
-    .site-header__inner { flex-wrap: nowrap; }
-
-    .site-nav {
-        display: flex;
-        flex-direction: column;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        gap: 0;
-        margin-right: 0;
-        background: var(--color-header-bg);
-        border-top: 1px solid var(--color-border);
-        border-bottom: 1px solid var(--color-chrome-border);
-        padding: .375rem 0;
-        z-index: 100;
-        /* animation */
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        transform: translateY(-6px);
-        transition: opacity .2s ease, transform .2s ease, visibility 0s linear .2s;
-    }
-
-    .site-nav.is-open {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-        transform: translateY(0);
-        transition: opacity .2s ease, transform .2s ease;
-    }
-
-    .site-nav a {
-        padding: .75rem 1.25rem;
-        font-size: .975rem;
-        border-radius: 0;
-    }
-
-    .site-nav a:hover {
-        background: var(--color-code-bg);
-        color: var(--color-text);
-    }
-
-    .site-nav__item {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .site-nav__sub,
-    .site-nav__item.has-children:hover > .site-nav__sub,
-    .site-nav__item.has-children:focus-within > .site-nav__sub {
-        position: static;
-        opacity: 1;
-        visibility: inherit;
-        pointer-events: inherit;
-        transform: none;
-        transition: none;
-        background: transparent;
-        border: none;
-        padding: 0;
-        min-width: 0;
-    }
-
-    .site-nav__sub a {
-        padding: .6rem 1.25rem .6rem 2.5rem;
-        font-size: .925rem;
-        color: var(--color-muted);
-    }
-}
-
-@media (max-width: 600px) {
-    html { font-size: 16px; }
-    body { padding: 0; }
-    .post-card__title { font-size: 1.4rem; }
-    .site-header__inner { gap: .5rem; }
-    .site-main { margin: 2rem auto 1.75rem; }
-
-    /* Narrow screens can't spare the gutters; hold the ratio between the kinds
-       rather than the absolute values. */
-    .post-card__inner { padding: 1.25rem; }
-    .post-card--note .post-card__inner { padding: 1rem 1.1rem; }
-    .post-card--photo .post-card__inner { padding: .7rem 0 0; }
-
-    .home-intro { margin-bottom: 2rem; }
-    .home-intro__text { font-size: 1.05rem; }
-
-    /* A 3-up crop is unreadable at this width — stack every gallery in one column. */
-    .post-card__gallery { grid-template-columns: 1fr !important; }
-    .post__photos:not([data-count="1"]) { grid-template-columns: 1fr; }
-    .post-card__gallery[data-count="3"] img:first-child { grid-row: auto; }
-    .post-card__gallery img {
-        aspect-ratio: auto;
-        height: auto;
-        max-height: 340px;
-        object-fit: cover;
-    }
-    .post-card__gallery[data-count="1"] img { max-height: 420px; object-fit: contain; }
-}
-
-/* =END CRITICAL= */
 
 /* ── Lightbox ─────────────────────────────────────────────────────────────── */
 .lightbox {
