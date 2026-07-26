@@ -40,22 +40,27 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-    --color-text:       #1a1a1a;
-    --color-muted:      #6b7280;
-    --color-border:     #e5e7eb;
-    --color-border-hover: #d1d5db;
-    --color-bg:         #ffffff;
+    --color-text:       #1E1B18;
+    --color-muted:      #736B62;
+    --color-border:     #E7E0D6;
+    --color-border-hover: #D8CFC2;
+    /* The page is warm paper and an article card is a white sheet resting on
+       it, so the two need separate tokens. */
+    --color-bg:         #F8F5F1;
+    --color-surface:    #FFFFFF;
     --color-chrome-bg:  var(--color-bg);
-    --color-code-bg:    #f3f4f6;
-    --color-link:       #0176d3;
+    --color-code-bg:    #F1EBE2;
+    --color-link:       #0B5FA8;
     --color-header-bg:  var(--color-bg);
     --color-chrome-border: var(--color-border);
-    /* Recessed fill that marks a card as a note. Deliberately achromatic — the
-       kinds are told apart by weight, not by colour. */
-    --color-card-tint:  #f7f7f8;
+    /* A note recesses by staying at page tone while articles lift off it, so
+       the kinds are told apart by elevation rather than by a second fill. */
+    --color-card-tint:  var(--color-bg);
     /* Hairline above an article's footer meta; lighter than a card border so it
        reads as a division inside the card rather than another edge. */
     --color-rule:       color-mix(in srgb, var(--color-border) 60%, transparent);
+    /* A neutral black shadow reads blue against warm paper. */
+    --shadow-rgb:       60, 40, 20;
     --max-content:      680px;
     --max-wide:         720px;
 }
@@ -64,36 +69,39 @@
 /* Applied when the system prefers dark AND the user hasn't manually forced light */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-        --color-text:       #e5e7eb;
-        --color-muted:      #9ca3af;
-        --color-border:     #374151;
-        --color-border-hover: #4b5563;
-        --color-bg:         #181818;
+        --color-text:       #EDE6DC;
+        --color-muted:      #A39A8E;
+        --color-border:     #3A332C;
+        --color-border-hover: #4D453C;
+        --color-bg:         #1A1715;
+        --color-surface:    #211D1A;
         --color-chrome-bg:  var(--color-bg);
-        --color-code-bg:    #2a2a2a;
-        --color-link:          #45c8f7;
+        --color-code-bg:    #2A2521;
+        --color-link:          #6FC0EA;
         --color-header-bg:     var(--color-chrome-bg);
-        --color-chrome-border: rgba(255,255,255,0.08);
-        /* On a dark page a note recesses by lifting slightly, not by darkening. */
-        --color-card-tint:     #202124;
+        --color-chrome-border: rgba(255,255,255,0.07);
+        --color-card-tint:     var(--color-bg);
         --color-rule:          color-mix(in srgb, var(--color-border) 70%, transparent);
+        --shadow-rgb:          0, 0, 0;
     }
 }
 
 /* Applied when the user has manually toggled dark mode */
 [data-theme="dark"] {
-    --color-text:          #e5e7eb;
-    --color-muted:         #9ca3af;
-    --color-border:        #374151;
-    --color-border-hover:  #4b5563;
-    --color-bg:            #181818;
+    --color-text:          #EDE6DC;
+    --color-muted:         #A39A8E;
+    --color-border:        #3A332C;
+    --color-border-hover:  #4D453C;
+    --color-bg:            #1A1715;
+    --color-surface:       #211D1A;
     --color-chrome-bg:     var(--color-bg);
-    --color-code-bg:       #2a2a2a;
-    --color-link:          #45c8f7;
+    --color-code-bg:       #2A2521;
+    --color-link:          #6FC0EA;
     --color-header-bg:     var(--color-chrome-bg);
-    --color-chrome-border: rgba(255,255,255,0.08);
-    --color-card-tint:     #202124;
+    --color-chrome-border: rgba(255,255,255,0.07);
+    --color-card-tint:     var(--color-bg);
     --color-rule:          color-mix(in srgb, var(--color-border) 70%, transparent);
+    --shadow-rgb:          0, 0, 0;
 }
 
 html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
@@ -717,7 +725,7 @@ audio { width: 100%; }
 
 .code-copy--copied,
 .code-copy--copied:hover,
-.code-block:hover .code-copy--copied { color: #fff; background: #16a34a; border-color: #16a34a; opacity: 1; }
+.code-block:hover .code-copy--copied { color: #fff; background: #4C7A2E; border-color: #4C7A2E; opacity: 1; }
 
 .code-copy svg { width: .8rem; height: .8rem; }
 
@@ -730,21 +738,21 @@ audio { width: 100%; }
 /* ── Syntax highlighting — xcode-dark theme ───────────────────────────────── */
 
 .prose pre.syntax-hl {
-    background: #1c1c1e;
+    background: #221E1B;
     color:      #dfdfe0;
 }
 
-/* In dark mode the page bg is #181818 — bump the code block to be clearly distinct */
+/* In dark mode the page bg is #1A1715 — bump the code block to be clearly distinct */
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .prose pre.syntax-hl { background: #2c2c2e; }
+    :root:not([data-theme="light"]) .prose pre.syntax-hl { background: #26211D; }
 }
-[data-theme="dark"] .prose pre.syntax-hl { background: #2c2c2e; }
+[data-theme="dark"] .prose pre.syntax-hl { background: #26211D; }
 
 /* Copy button adjustments for dark code blocks */
 .code-block--dark .code-copy          { color: #6c7986; }
-.code-block--dark .code-copy:hover    { color: #dfdfe0; border-color: #3a3a3c; background: #2c2c2e; }
+.code-block--dark .code-copy:hover    { color: #dfdfe0; border-color: #3a342e; background: #26211D; }
 .code-block--dark .code-copy--copied,
-.code-block--dark .code-copy--copied:hover { color: #fff; background: #16a34a; border-color: #16a34a; opacity: 1; }
+.code-block--dark .code-copy--copied:hover { color: #fff; background: #4C7A2E; border-color: #4C7A2E; opacity: 1; }
 
 /* Token colours */
 .hljs-comment,
@@ -780,7 +788,7 @@ audio { width: 100%; }
 .prose video,
 .prose audio { margin-top: 1.5em; margin-bottom: 1.5em; }
 
-.prose img { box-shadow: 0 4px 20px rgba(0,0,0,0.08); border-radius: 0; }
+.prose img { box-shadow: 0 4px 20px rgba(var(--shadow-rgb), .10); border-radius: 0; }
 
 .prose img:not(.gallery img) {
     max-width: 100%;
@@ -822,19 +830,21 @@ audio { width: 100%; }
     margin: 1.5em 0;
 }
 
+/* Diluting a cold hue into warm paper drains it, so these sit a little more
+   saturated than their fill percentage suggests. */
 .notice {
-    border-color: #3b82f6;
-    background: color-mix(in srgb, #3b82f6 12%, var(--color-bg));
+    border-color: #2E72B0;
+    background: color-mix(in srgb, #2E72B0 13%, var(--color-bg));
 }
 
 .information {
-    border-color: #eab308;
-    background: color-mix(in srgb, #eab308 18%, var(--color-bg));
+    border-color: #C1820B;
+    background: color-mix(in srgb, #C1820B 14%, var(--color-bg));
 }
 
 .warning {
-    border-color: #dc2626;
-    background: color-mix(in srgb, #dc2626 12%, var(--color-bg));
+    border-color: #B3341F;
+    background: color-mix(in srgb, #B3341F 10%, var(--color-bg));
 }
 
 /* ── Button-style link ────────────────────────────────────────────────────── */
@@ -927,6 +937,7 @@ audio { width: 100%; }
 
 .post-card {
     position: relative;
+    background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 6px;
     overflow: hidden;
@@ -945,12 +956,13 @@ audio { width: 100%; }
 
 .post-card:hover {
     border-color: var(--color-border-hover);
-    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    box-shadow: 0 4px 12px rgba(var(--shadow-rgb), .10);
 }
 
 /* Notes are the everyday voice of the site and by far the most common card, so
-   they sit back: a recessed fill and tighter gutters keep a long run of them
-   from shouting, and make a titled post read as an event by contrast. */
+   they sit back: staying flat at page tone while articles lift, plus tighter
+   gutters, keeps a long run of them from shouting and makes a titled post read
+   as an event by contrast. */
 .post-card--note .post-card__inner {
     padding: 1.15rem 1.25rem;
 }
@@ -1578,7 +1590,7 @@ audio { width: 100%; }
     position: fixed;
     inset: 0;
     z-index: 1000;
-    background: rgba(0,0,0,.85);
+    background: rgba(20,15,12,.88);
     align-items: center;
     justify-content: center;
     padding: 1.5rem;
@@ -1634,7 +1646,7 @@ audio { width: 100%; }
     position: relative;
     display: block;
     overflow: hidden;
-    background: #eee;
+    background: var(--color-code-bg);
     cursor: zoom-in;
 }
 
@@ -1727,7 +1739,7 @@ audio { width: 100%; }
     position: fixed;
     inset: 0;
     z-index: 1100;
-    background: rgba(0,0,0,.92);
+    background: rgba(20,15,12,.94);
     align-items: center;
     justify-content: center;
     padding: 1.5rem 4rem;
@@ -1944,13 +1956,7 @@ audio { width: 100%; }
     border-radius: 6px;
 }
 
-.wm-reply:hover { border-color: #d1d5db; }
-
-[data-theme="dark"] .wm-reply:hover { border-color: #4b5563; }
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .wm-reply:hover { border-color: #4b5563; }
-}
+.wm-reply:hover { border-color: var(--color-border-hover); }
 
 .wm-reply__header {
     display: flex;
