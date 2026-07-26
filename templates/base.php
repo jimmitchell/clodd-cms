@@ -190,7 +190,7 @@ if (!function_exists('_e')) {
                 <?php endforeach; ?>
             </nav>
             <?php endif; ?>
-            <a href="<?= _e($siteUrl . '/search/') ?>" class="search-toggle" aria-label="Search">
+            <a href="<?= _e($siteUrl . '/search/') ?>" class="search-toggle" id="search-toggle" aria-label="Search">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="2" stroke-linecap="round"
                      stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -238,6 +238,27 @@ if (!function_exists('_e')) {
         </div>
     </div>
 </footer>
+
+<?php /* Search overlay. The form's action/method do the work on their own —
+         pressing Enter submits a plain GET to /search/?q=…, so search still
+         reaches the results page with JavaScript disabled. The script below
+         only opens it, closes it, and moves focus. */ ?>
+<div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="Search">
+    <form class="search-overlay__panel"
+          action="<?= _e($siteUrl . '/search/') ?>" method="get" role="search">
+        <div class="search-overlay__field">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="search" name="q" id="search-overlay-q"
+                   placeholder="Search posts&hellip;" autocomplete="off"
+                   aria-label="Search posts">
+        </div>
+        <p class="search-overlay__hint">Enter to search <span aria-hidden="true">·</span> Esc to close</p>
+    </form>
+</div>
 
 <script>
 (function () {
@@ -367,6 +388,55 @@ if (!function_exists('_e')) {
         });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') { closeNav(); }
+        });
+    }
+
+    // ── Search overlay ───────────────────────────────────────────────────────
+    // The header magnifier stays an <a href="/search/">; this only intercepts
+    // the click. With JS off the link still works, and the overlay's form
+    // submits natively, so Enter needs no handler here.
+    var searchToggle  = document.getElementById('search-toggle');
+    var searchOverlay = document.getElementById('search-overlay');
+    var searchInput   = document.getElementById('search-overlay-q');
+
+    if (searchToggle && searchOverlay && searchInput) {
+        // Everything outside the dialog goes inert while it is open, which
+        // keeps Tab inside the field without a hand-rolled focus trap.
+        var pageRegions = document.querySelectorAll('.site-header, .site-main, .site-footer');
+
+        function openSearch() {
+            closeNav();
+            // On a results page, start from the query already being viewed.
+            var current = new URLSearchParams(window.location.search).get('q');
+            if (current && !searchInput.value) { searchInput.value = current; }
+
+            searchOverlay.classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+            pageRegions.forEach(function (el) { el.inert = true; });
+            searchInput.focus();
+            searchInput.select();
+        }
+
+        function closeSearch() {
+            if (!searchOverlay.classList.contains('is-open')) { return; }
+            searchOverlay.classList.remove('is-open');
+            document.body.style.overflow = '';
+            pageRegions.forEach(function (el) { el.inert = false; });
+            searchToggle.focus();
+        }
+
+        searchToggle.addEventListener('click', function (e) {
+            e.preventDefault();
+            openSearch();
+        });
+
+        // Clicking the blurred backdrop dismisses; clicking the panel does not.
+        searchOverlay.addEventListener('click', function (e) {
+            if (e.target === searchOverlay) { closeSearch(); }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { closeSearch(); }
         });
     }
 
