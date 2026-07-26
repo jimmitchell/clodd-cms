@@ -9,6 +9,7 @@ use CMS\Post;
 use CMS\Helpers;
 use CMS\Mastodon;
 use CMS\Bluesky;
+use CMS\SyndicationMedia;
 
 $post    = null;
 $isNew   = true;
@@ -247,21 +248,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     : Helpers::truncate($post->content, 280);
             }
 
-            // A note syndicates with no title and no link back, so the text is
-            // all there is. Nothing to say — a photo post with no excerpt —
-            // means there is no post to make; don't publish a blank status.
-            $hasNoteText = !$post->isNote() || $excerpt !== '';
+            // Photos ride along with the text so a photo post looks native on
+            // both networks instead of arriving as a caption with no picture.
+            $images = SyndicationMedia::forPost(
+                $post,
+                $config['paths']['content'] . '/media',
+                rtrim($db->getSetting('site_url', ''), '/')
+            );
 
-            if ($isFirstPublish && $hasNoteText) {
+            // A note syndicates with no title and no link back, so the text and
+            // the photos are all there is. Nothing to say — no excerpt and no
+            // photo — means there is no post to make; don't publish a blank status.
+            $hasNoteContent = !$post->isNote() || $excerpt !== '' || $images !== [];
+
+            if ($isFirstPublish && $hasNoteContent) {
                 $mastodon = new Mastodon($mastodonInstance, $mastodonToken);
-                if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl)) {
+                if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl, $images)) {
                     $post->markTooted($tootUrl);
                 }
             }
 
-            if ($isFirstBluesky && $hasNoteText) {
+            if ($isFirstBluesky && $hasNoteContent) {
                 $bluesky = new Bluesky($blueskyHandle, $blueskyAppPassword);
-                if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl)) {
+                if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl, $images)) {
                     $post->markBluesky($bskyUrl);
                 }
             }

@@ -44,6 +44,7 @@ use CMS\Helpers;
 use CMS\Mastodon;
 use CMS\Page;
 use CMS\Post;
+use CMS\SyndicationMedia;
 use CMS\XmlRpc;
 
 // ── ID space ──────────────────────────────────────────────────────────────────
@@ -428,7 +429,7 @@ function applyStruct(Post $post, array $struct, bool $publish, string $timezone)
  */
 function syndicatePost(Post $post): void
 {
-    global $db, $siteUrl, $timezone, $hasMastodon, $mastodonInstance, $mastodonToken,
+    global $db, $config, $siteUrl, $timezone, $hasMastodon, $mastodonInstance, $mastodonToken,
            $hasBluesky, $blueskyHandle, $blueskyAppPassword;
 
     if ($post->status !== 'published') {
@@ -447,23 +448,31 @@ function syndicatePost(Post $post): void
             : Helpers::truncate($post->content, 280);
     }
 
-    // A note syndicates with no title and no link back, so the text is all there
-    // is. Nothing to say — a photo post with no excerpt — means there is no post
-    // to make; don't publish a blank status.
-    if ($post->isNote() && $excerpt === '') {
+    // Photos ride along with the text so a photo post looks native on both
+    // networks instead of arriving as a caption with no picture.
+    $images = SyndicationMedia::forPost(
+        $post,
+        $config['paths']['content'] . '/media',
+        rtrim($siteUrl, '/')
+    );
+
+    // A note syndicates with no title and no link back, so the text and the
+    // photos are all there is. Nothing to say — no excerpt and no photo — means
+    // there is no post to make; don't publish a blank status.
+    if ($post->isNote() && $excerpt === '' && $images === []) {
         return;
     }
 
     if ($hasMastodon && $post->tooted_at === null && $post->mastodon_skip === 0) {
         $mastodon = new Mastodon($mastodonInstance, $mastodonToken);
-        if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl)) {
+        if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl, $images)) {
             $post->markTooted($tootUrl);
         }
     }
 
     if ($hasBluesky && $post->bluesky_at === null && $post->bluesky_skip === 0) {
         $bluesky = new Bluesky($blueskyHandle, $blueskyAppPassword);
-        if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl)) {
+        if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl, $images)) {
             $post->markBluesky($bskyUrl);
         }
     }

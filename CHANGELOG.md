@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Photo posts now syndicate with their picture.** A photo post published to Mastodon or Bluesky arrived as a caption and a link with no image attached: the syndicators only ever sent text, so the one thing the post was about was the one thing that didn't travel. Both now attach the post's images, with alt text, up to the four each network allows. Pictures come from the `u-photo` rows a Micropub client attaches, falling back to the images in the body — Markdown or `<img>` — which is where a photo post written in the admin or in MarsEdit keeps them. Only files in the site's own media directory are attachable, so a body pointing at somebody else's server syndicates as text rather than turning a publish into an outbound fetch.
+  - Bluesky caps an image blob at slightly under a megabyte, which most photos off a phone exceed, so an oversize image is re-encoded and progressively scaled down until it fits rather than being dropped. Transparency is flattened onto white, since the re-encode is JPEG. Mastodon takes the file as stored.
+  - Uploads that Mastodon reports as still processing are now waited on before the status is posted, instead of being attached to a status the instance would reject.
+  - A photo post with no caption used to be skipped as having nothing to say. It now syndicates on the strength of the picture alone — the check only skips a post with neither words nor images, which still covers a bare like or repost.
+
 ---
 
 ## [1.12.1] — 2026-07-26

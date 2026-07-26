@@ -1015,9 +1015,10 @@ if ($status === 'published') {
 // ── Syndicate to Mastodon / Bluesky on first publish ────────────────────────
 //
 // Content-less interaction posts (a bare like/repost/bookmark) have nothing to
-// say on other networks — skip syndication for those.
+// say on other networks — skip syndication for those. A photo carries the post
+// on its own, so photos count as something to say.
 
-if ($status === 'published' && trim($post->content) !== '') {
+if ($status === 'published' && (trim($post->content) !== '' || $post->photos !== [])) {
     $cfgTz              = $db->getSetting('timezone', '');
     $mastodonInstance   = $db->getSetting('mastodon_instance');
     $mastodonToken      = $db->getSetting('mastodon_token');
@@ -1042,21 +1043,29 @@ if ($status === 'published' && trim($post->content) !== '') {
                 : \CMS\Helpers::truncate($post->content, 280);
         }
 
-        // A note syndicates with no title and no link back, so the text is all
-        // there is. Nothing to say — a photo post with no excerpt — means there
-        // is no post to make; don't publish a blank status.
-        if ($post->isNote() && $excerpt === '') {
-            error_log('[micropub] Skipping syndication for post ' . $post->id . ': note has no text');
+        // Photos ride along with the text so a photo post looks native on both
+        // networks instead of arriving as a caption with no picture.
+        $images = \CMS\SyndicationMedia::forPost(
+            $post,
+            $config['paths']['content'] . '/media',
+            rtrim($db->getSetting('site_url', ''), '/')
+        );
+
+        // A note syndicates with no title and no link back, so the text and the
+        // photos are all there is. Nothing to say — no excerpt and no photo —
+        // means there is no post to make; don't publish a blank status.
+        if ($post->isNote() && $excerpt === '' && $images === []) {
+            error_log('[micropub] Skipping syndication for post ' . $post->id . ': note has no text or photo');
         } else {
             if ($hasMastodon && $post->mastodon_skip === 0 && $post->tooted_at === null) {
                 $mastodon = new \CMS\Mastodon($mastodonInstance, $mastodonToken);
-                if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl)) {
+                if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl, $images)) {
                     $post->markTooted($tootUrl);
                 }
             }
             if ($hasBluesky && $post->bluesky_skip === 0 && $post->bluesky_at === null) {
                 $bluesky = new \CMS\Bluesky($blueskyHandle, $blueskyAppPassword);
-                if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl)) {
+                if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl, $images)) {
                     $post->markBluesky($bskyUrl);
                 }
             }
