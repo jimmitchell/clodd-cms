@@ -176,7 +176,8 @@ audio { width: 100%; }
 }
 */
 .site-header__inner {
-    max-width: 750px;
+    /* max-width: 750px; */
+    max-width: 632px;
     margin: 0 auto;
     display: flex;
     align-items: center;
