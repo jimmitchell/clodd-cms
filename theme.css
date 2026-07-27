@@ -130,7 +130,7 @@ html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
 
 body {
     font-family: 'Figtree', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    line-height: 1.6;
+    line-height: 1.6667;
     color: var(--color-text);
     background: var(--color-bg);
     -webkit-font-smoothing: antialiased;
