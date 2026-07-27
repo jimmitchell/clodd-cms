@@ -40,6 +40,11 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+    /* Tells the browser to paint its own UI — scrollbars on overflowing code
+       blocks, form controls — to match the theme. Without it Chrome draws a
+       light scrollbar under every dark-mode <pre>. */
+    color-scheme: light;
+
     --color-text:       #1E1B18;
     --color-muted:      #736B62;
     --color-border:     #D9CEBB;
@@ -69,6 +74,8 @@
 /* Applied when the system prefers dark AND the user hasn't manually forced light */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
+        color-scheme: dark;
+
         --color-text:       #EDE6DC;
         --color-muted:      #A39A8E;
         --color-border:     #3A332C;
@@ -88,6 +95,8 @@
 
 /* Applied when the user has manually toggled dark mode */
 [data-theme="dark"] {
+    color-scheme: dark;
+
     --color-text:          #EDE6DC;
     --color-muted:         #A39A8E;
     --color-border:        #3A332C;
@@ -1220,6 +1229,54 @@ audio { width: 100%; }
 
 .search-empty { color: var(--color-muted); font-style: italic; }
 
+/* ── Site footer ──────────────────────────────────────────────────────────── */
+/* Critical: on short pages (search results, 404) the footer sits inside the
+   first viewport, and the inline social icons balloon to their intrinsic size
+   until these rules land. */
+.site-footer {
+    /* border-top: 1px solid var(--color-chrome-border); */
+    padding: 1.5rem 0;
+    font-size: .85rem;
+    color: var(--color-muted);
+    background: var(--color-chrome-bg);
+}
+
+.site-footer__inner {
+    max-width: var(--max-content);
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.site-footer__links {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.site-footer__feed,
+.site-footer__mastodon,
+.site-footer__bluesky,
+.site-footer__github {
+    display: flex;
+    align-items: center;
+    color: var(--color-muted);
+    text-decoration: none;
+}
+
+.site-footer__feed svg,
+.site-footer__mastodon svg,
+.site-footer__bluesky svg,
+.site-footer__github svg { width: .9rem; height: .9rem; }
+
+.site-footer__feed:hover     { color: #f26522; }
+.site-footer__mastodon:hover { color: #6364ff; }
+.site-footer__bluesky:hover  { color: #0085ff; }
+.site-footer__github:hover   { color: var(--color-text); }
+
 /* =END CRITICAL= */
 
 /* Everything below is deferred: it renders below the fold, behind an
@@ -1231,6 +1288,9 @@ audio { width: 100%; }
 .prose pre.syntax-hl {
     background: #221E1B;
     color:      #dfdfe0;
+    /* These blocks stay dark in light mode, so they need their own dark
+       scrollbar rather than the one the page theme would give them. */
+    color-scheme: dark;
 }
 
 /* In dark mode the page bg is #1A1715 — bump the code block to be clearly distinct */
@@ -1499,51 +1559,6 @@ audio { width: 100%; }
     .post-nav__next { max-width: 100%; text-align: left; margin-left: 0; }
     .post-nav__next .post-nav__label { text-align: left; }
 }
-
-/* ── Site footer ──────────────────────────────────────────────────────────── */
-.site-footer {
-    /* border-top: 1px solid var(--color-chrome-border); */
-    padding: 1.5rem 0;
-    font-size: .85rem;
-    color: var(--color-muted);
-    background: var(--color-chrome-bg);
-}
-
-.site-footer__inner {
-    max-width: var(--max-content);
-    margin: 0 auto;
-    padding: 0 1.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-}
-
-.site-footer__links {
-    display: flex;
-    align-items: center;
-    gap: .75rem;
-}
-
-.site-footer__feed,
-.site-footer__mastodon,
-.site-footer__bluesky,
-.site-footer__github {
-    display: flex;
-    align-items: center;
-    color: var(--color-muted);
-    text-decoration: none;
-}
-
-.site-footer__feed svg,
-.site-footer__mastodon svg,
-.site-footer__bluesky svg,
-.site-footer__github svg { width: .9rem; height: .9rem; }
-
-.site-footer__feed:hover     { color: #f26522; }
-.site-footer__mastodon:hover { color: #6364ff; }
-.site-footer__bluesky:hover  { color: #0085ff; }
-.site-footer__github:hover   { color: var(--color-text); }
 
 /* ── 404 error page ──────────────────────────────────────────────────────── */
 .error-page {
