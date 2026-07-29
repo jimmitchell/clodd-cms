@@ -40,6 +40,9 @@ composer.phar
 # PHPUnit
 /.phpunit.cache/
 
+# Local deployment notes — working documents, not part of the project
+/DEPLOY-*.md
+
 # Editor temp files
 *.swp
 *.swo
