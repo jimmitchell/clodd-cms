@@ -29,6 +29,11 @@ declare(strict_types=1);
 // Read raw body before any session-starting code consumes it.
 $_mpRawBody = (string) file_get_contents('php://input');
 
+// Never render a PHP notice or fatal into the response: it would leak absolute
+// filesystem paths, and on the JSON endpoints it also corrupts the body. Errors
+// still reach the server log.
+ini_set('display_errors', '0');
+
 define('CMS_ROOT', __DIR__);
 require CMS_ROOT . '/vendor/autoload.php';
 

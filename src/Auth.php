@@ -80,6 +80,7 @@ class Auth
                 $_SESSION['csrf_token']        = $this->generateToken();
             } else {
                 $_SESSION['authenticated'] = true;
+                $_SESSION['last_seen']     = time();
                 $_SESSION['user']          = $username;
                 $_SESSION['csrf_token']    = $this->generateToken();
             }
@@ -119,6 +120,18 @@ class Auth
             header('Location: /admin/');
             exit;
         }
+
+        // Server-side idle timeout. The session cookie's lifetime is only a hint
+        // the browser may ignore, and PHP's own gc_maxlifetime is a global
+        // best-effort sweep — neither is an enforcement point we control.
+        $lifetime = (int) ($this->config['admin']['session_lifetime'] ?? 3600);
+        $lastSeen = (int) ($_SESSION['last_seen'] ?? 0);
+
+        if ($lifetime > 0 && $lastSeen > 0 && (time() - $lastSeen) > $lifetime) {
+            $this->logout();  // destroys the session and redirects to /admin/
+        }
+
+        $_SESSION['last_seen'] = time();
     }
 
     /** Returns true if the current session is authenticated. */
@@ -251,6 +264,7 @@ class Auth
         $user = $_SESSION['totp_pending_user'] ?? '';
         unset($_SESSION['totp_pending'], $_SESSION['totp_pending_user'], $_SESSION['totp_pending_at']);
         $_SESSION['authenticated'] = true;
+        $_SESSION['last_seen']     = time();
         $_SESSION['user']          = $user;
         $_SESSION['csrf_token']    = $this->generateToken();
     }
@@ -502,6 +516,7 @@ class Auth
         // Complete the login session.
         session_regenerate_id(true);
         $_SESSION['authenticated'] = true;
+        $_SESSION['last_seen']     = time();
         $_SESSION['user']          = $this->config['admin']['username'] ?? 'admin';
         $_SESSION['csrf_token']    = $this->generateToken();
 

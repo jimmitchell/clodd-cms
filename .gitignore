@@ -1,8 +1,12 @@
 # Composer
+# NOTE: gitignore has no inline-comment syntax — a trailing "# ..." becomes part
+# of the pattern and matches nothing. Keep comments on their own lines.
 /vendor/
 composer.phar
-/composer        # local composer binary
-/composer-setup.php  # installer script — not web-safe, delete after use
+# local composer binary
+/composer
+# installer script — not web-safe, delete after use
+/composer-setup.php
 
 # Runtime config — contains credentials; never commit
 /config.php

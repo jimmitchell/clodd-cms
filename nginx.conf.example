@@ -61,11 +61,30 @@ server {
     error_page 404 /404.html;
 
     # ── Block sensitive directories ───────────────────────────────────────────
-    location ~* ^/(src|data|content|templates|vendor|bin)(/|$) {
+    location ~* ^/(src|data|content|templates|vendor|bin|docker)(/|$) {
         deny all;
         return 403;
     }
     location = /config.php {
+        deny all;
+        return 403;
+    }
+
+    # ── Block repo metadata at the document root ──────────────────────────────
+    # The web root is the project root, so anything not matched by a rule above
+    # is served by "location /" as a static file. Without this, the composer
+    # PHAR, the dependency lockfile, the exact CMS version, and the server's own
+    # nginx config are all downloadable. Anchored to the root and to whole
+    # filenames so nested content (apps/, docs/, post URLs) is unaffected.
+    location ~* ^/(composer(\.(json|lock))?|VERSION|Dockerfile|docker-compose\.yml|nginx\.conf\.example|[^/]+\.md|[^/]+\.nginx\.conf)$ {
+        deny all;
+        return 403;
+    }
+
+    # Admin partials are includes, not entry points: they expect bootstrap.php
+    # to have already defined $auth/$db. "^~" beats the regex .php location
+    # nested under /admin/, so they are never handed to FastCGI.
+    location ^~ /admin/partials/ {
         deny all;
         return 403;
     }

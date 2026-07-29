@@ -60,6 +60,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($tmp !== false && file_exists($tmp)) { unlink($tmp); }
                         $errors[] = 'Could not write config.php — check file permissions.';
                     } else {
+                        // Rotate the session identifier and CSRF token so a
+                        // session captured before the change cannot be replayed
+                        // with it. `true` drops the old session file, which also
+                        // invalidates any other browser still holding that id.
+                        session_regenerate_id(true);
+                        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                        $_SESSION['last_seen']  = time();
+
                         $activityLog->log('password', 'account');
                         $auth->flash('Password changed successfully.');
                         header('Location: /admin/settings.php?tab=account');

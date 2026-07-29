@@ -7,6 +7,11 @@ declare(strict_types=1);
  * https://indieauth.spec.indieweb.org/#indieauth-server-metadata
  */
 
+// Never render a PHP notice or fatal into the response: it would leak absolute
+// filesystem paths, and on the JSON endpoints it also corrupts the body. Errors
+// still reach the server log.
+ini_set('display_errors', '0');
+
 define('CMS_ROOT', __DIR__);
 require CMS_ROOT . '/vendor/autoload.php';
 

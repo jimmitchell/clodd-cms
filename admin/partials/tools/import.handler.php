@@ -44,7 +44,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     libxml_use_internal_errors(true);
-    $xml = simplexml_load_string($xmlBody, \SimpleXMLElement::class, LIBXML_NOCDATA);
+    // LIBXML_NONET: never resolve an external entity over the network. Entity
+    // substitution is already off (no LIBXML_NOENT), but an uploaded WXR file is
+    // untrusted input, so pin the network behaviour explicitly too.
+    $xml = simplexml_load_string($xmlBody, \SimpleXMLElement::class, LIBXML_NOCDATA | LIBXML_NONET);
     if ($xml === false) {
         $errs = array_map(fn($e) => trim($e->message), libxml_get_errors());
         libxml_clear_errors();

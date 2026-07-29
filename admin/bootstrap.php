@@ -9,6 +9,12 @@ declare(strict_types=1);
  * and starts the session.
  */
 
+// A PHP notice or fatal rendered into the page leaks absolute filesystem paths
+// and sometimes query fragments. Errors still reach the server log; they just
+// never reach the browser. Individual JSON endpoints set this too, because they
+// are reached without this bootstrap.
+ini_set('display_errors', '0');
+
 define('CMS_ROOT', dirname(__DIR__));
 define('CMS_VERSION', trim(file_get_contents(CMS_ROOT . '/VERSION')));
 
