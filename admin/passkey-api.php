@@ -134,7 +134,11 @@ if ($action === 'passkey_auth' && $method === 'POST') {
     }
 
     $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-    $db->insert('login_attempts', ['ip' => $ip, 'success' => $ok ? 1 : 0]);
+    $db->insert('login_attempts', [
+        'ip'      => $ip,
+        'scope'   => \CMS\Auth::SCOPE_PASSKEY,
+        'success' => $ok ? 1 : 0,
+    ]);
 
     if ($ok) {
         $activityLog->log('passkey_login', 'security', null, 'Authenticated via passkey');

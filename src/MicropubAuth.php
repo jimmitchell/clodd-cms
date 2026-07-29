@@ -75,20 +75,11 @@ class MicropubAuth
      */
     public static function authenticate(Database $db, array $config): array
     {
-        $ip  = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-        $max = (int) ($config['security']['max_login_attempts'] ?? 5);
-        $win = (int) ($config['security']['lockout_minutes'] ?? 15);
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        $row = $db->selectOne(
-            "SELECT COUNT(*) AS cnt
-               FROM login_attempts
-              WHERE ip      = :ip
-                AND success = 0
-                AND attempted_at >= datetime('now', :w)",
-            ['ip' => $ip, 'w' => "-{$win} minutes"]
-        );
-
-        if (($row['cnt'] ?? 0) >= $max) {
+        // Scoped to 'micropub' so a client looping on a stale bearer token
+        // cannot lock the owner out of the admin login from the same IP.
+        if (Auth::isLockedOutIn($db, $config, $ip, Auth::SCOPE_MICROPUB)) {
             self::error('rate_limited', 'Too many failed attempts. Try again later.', 429);
         }
 
@@ -117,7 +108,7 @@ class MicropubAuth
             ];
         }
 
-        $db->insert('login_attempts', ['ip' => $ip, 'success' => 0]);
+        Auth::recordFailureIn($db, $ip, Auth::SCOPE_MICROPUB);
         header('WWW-Authenticate: Bearer realm="Micropub", error="invalid_token"');
         self::error('unauthorized', 'Invalid access token', 401);
     }

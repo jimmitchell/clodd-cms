@@ -146,25 +146,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $post->mastodon_skip = 1;
                 $post->bluesky_skip  = 1;
 
-                if ($kind === 'aside') {
-                    $base = $wpPostName !== '' ? $wpPostName : Post::slugFromContent($contentEnc);
+                // <wp:post_name> is untrusted: it ends up in posts.slug, which
+                // Post::datePath() splices into the on-disk output path. Slugify
+                // it before anything else so a value like "../../../etc" can't
+                // walk out of the output root.
+                $base = $wpPostName !== '' ? Helpers::slugify($wpPostName) : '';
+                if ($base === 'untitled') {
+                    $base = '';
+                }
+
+                if ($base === '') {
+                    $base = $kind === 'aside'
+                        ? Post::slugFromContent($contentEnc)
+                        : Helpers::slugify($title);
+                }
+                if ($base === '' || $base === 'untitled') {
                     // A titleless, bodyless item has nothing to slug from. Fall back
                     // to the WXR post id: posts.slug is UNIQUE NOT NULL, so a batch
                     // loop can't leave it empty the way a single insert can.
-                    if ($base === '') {
-                        $base = 'imported-' . (string) ((int) ($wp->post_id ?? 0) ?: time());
-                    }
-                } else {
-                    $base = $wpPostName !== '' ? $wpPostName : Helpers::slugify($title);
-                    if ($base === '' || $base === 'untitled') {
-                        // Forced-standard on titleless WXR item; derive a stable fallback.
-                        $base = 'imported-' . (string) ((int) ($wp->post_id ?? 0) ?: time());
-                    }
+                    $base = 'imported-' . (string) ((int) ($wp->post_id ?? 0) ?: time());
                 }
-                if (ctype_digit($base)) {
-                    $base .= '-post';  // digit-only slugs belong to legacy asides
-                }
-                $post->slug = importUniqueSlug($db, $base);
+
+                // resolveUniqueSlug() slugifies again, applies the digit-only
+                // guard (legacy asides own the bare-id URLs), and dedupes.
+                $post->slug = Post::resolveUniqueSlug($db, $base);
 
                 $post->save();
 
@@ -298,21 +303,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $auth->flash($flashMsg, $flashType);
     header('Location: /admin/tools.php?tab=import');
     exit;
-}
-
-/**
- * Find a unique post slug starting from $base, appending -2, -3, … on collision.
- */
-function importUniqueSlug(\CMS\Database $db, string $base): string
-{
-    if ($db->selectOne("SELECT 1 FROM posts WHERE slug = :s", ['s' => $base]) === null) {
-        return $base;
-    }
-    $i = 2;
-    while ($db->selectOne("SELECT 1 FROM posts WHERE slug = :s", ['s' => "{$base}-{$i}"]) !== null) {
-        $i++;
-    }
-    return "{$base}-{$i}";
 }
 
 // ── GET-side data prep ─────────────────────────────────────────────────────

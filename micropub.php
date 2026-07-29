@@ -59,12 +59,30 @@ function mp_error(string $code, string $description = '', int $status = 400): ne
  * Accepts URLs like https://example.com/2026/04/28/my-slug/ — the slug is the
  * final non-empty path segment. Slugs are unique across posts, so the date
  * portion is informational only.
+ *
+ * The URL must belong to this site: an absolute URL on another origin is
+ * rejected rather than being matched on its last path segment, which would let
+ * a caller address our posts through someone else's domain.
  */
 function mp_resolve_post_by_url(\CMS\Database $db, string $url): ?\CMS\Post
 {
     $url = trim($url);
     if ($url === '') return null;
-    $path = parse_url($url, PHP_URL_PATH);
+
+    $parts = parse_url($url);
+    if ($parts === false) return null;
+
+    // A host means an absolute URL — it has to be ours. Relative URLs (no host)
+    // are accepted as-is; they can only ever refer to this site.
+    if (isset($parts['host'])) {
+        $siteUrl  = rtrim($db->getSetting('site_url', ''), '/');
+        $siteHost = $siteUrl !== '' ? (string) (parse_url($siteUrl, PHP_URL_HOST) ?: '') : '';
+        if ($siteHost === '' || strcasecmp((string) $parts['host'], $siteHost) !== 0) {
+            return null;
+        }
+    }
+
+    $path = $parts['path'] ?? null;
     if (!is_string($path)) return null;
     $segments = array_values(array_filter(explode('/', $path), fn($s) => $s !== ''));
     if (empty($segments)) return null;

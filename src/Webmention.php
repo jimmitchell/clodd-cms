@@ -98,23 +98,21 @@ class Webmention
      */
     public static function sendPing(string $source, string $target, string $endpoint, int $timeout = 5): bool
     {
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $endpoint,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => http_build_query(['source' => $source, 'target' => $target]),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => $timeout,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS      => 5,
-            CURLOPT_USERAGENT      => 'clodd-cms/' . (defined('CMS_VERSION') ? CMS_VERSION : '1.0.0') . ' webmention-sender',
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
-        ]);
-        curl_exec($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        // The endpoint comes from the *target's* Link header or rel=webmention,
+        // so it is fully attacker-controlled. SafeHttp is what stops a hostile
+        // page from pointing this POST at an internal service.
+        $resp = SafeHttp::request(
+            $endpoint,
+            [
+                CURLOPT_POST       => true,
+                CURLOPT_POSTFIELDS => http_build_query(['source' => $source, 'target' => $target]),
+                CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+            ],
+            5,
+            $timeout
+        );
 
-        return $code >= 200 && $code < 300;
+        return $resp !== null && $resp['status'] >= 200 && $resp['status'] < 300;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -122,41 +120,17 @@ class Webmention
     /** Perform a HEAD request and return the raw response headers string, or null on error. */
     private static function fetchHeaders(string $url, int $timeout): ?string
     {
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $url,
-            CURLOPT_NOBODY         => true,
-            CURLOPT_HEADER         => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => $timeout,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS      => 5,
-            CURLOPT_USERAGENT      => 'clodd-cms/' . (defined('CMS_VERSION') ? CMS_VERSION : '1.0.0') . ' webmention-discovery',
-        ]);
-        $result = curl_exec($ch);
-        $error  = curl_errno($ch);
-        curl_close($ch);
+        $resp = SafeHttp::request($url, [CURLOPT_NOBODY => true], 5, $timeout);
 
-        return ($error === 0 && is_string($result)) ? $result : null;
+        return $resp['headers'] ?? null;
     }
 
     /** Perform a GET request and return the response body, or null on error. */
     private static function fetchBody(string $url, int $timeout): ?string
     {
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => $timeout,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS      => 5,
-            CURLOPT_USERAGENT      => 'clodd-cms/' . (defined('CMS_VERSION') ? CMS_VERSION : '1.0.0') . ' webmention-discovery',
-        ]);
-        $result = curl_exec($ch);
-        $error  = curl_errno($ch);
-        curl_close($ch);
+        $resp = SafeHttp::request($url, [CURLOPT_MAXFILESIZE => 2_097_152], 5, $timeout);
 
-        return ($error === 0 && is_string($result)) ? $result : null;
+        return $resp['body'] ?? null;
     }
 
     /**

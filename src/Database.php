@@ -17,7 +17,7 @@ class Database
     private static array $settingsCache = [];
 
     // Increment this whenever the schema changes.
-    private const SCHEMA_VERSION = 23;
+    private const SCHEMA_VERSION = 24;
 
     public function __construct(string $dbPath)
     {
@@ -521,6 +521,30 @@ class Database
             )
         SQL);
         $this->run("CREATE INDEX IF NOT EXISTS idx_post_contexts_post_id ON post_contexts(post_id)");
+    }
+
+    private function applySchemaV24(): void
+    {
+        // login_attempts.scope: which authentication surface recorded the
+        // attempt. Previously every surface (admin form, TOTP step, passkey,
+        // Micropub bearer, REST Basic auth, XML-RPC) counted into one row keyed
+        // only on IP, so a misconfigured Micropub client could lock the human
+        // out of /admin/. Each surface now rate-limits independently.
+        //
+        // Existing rows default to 'admin', which is the conservative reading:
+        // they keep gating the admin login exactly as they did before.
+        $this->run("ALTER TABLE login_attempts ADD COLUMN scope TEXT NOT NULL DEFAULT 'admin'");
+        $this->run(
+            "CREATE INDEX IF NOT EXISTS idx_login_attempts_scope_ip_time
+             ON login_attempts(scope, ip, attempted_at)"
+        );
+
+        // Fold the old string-prefix convention into the new column so there is
+        // one mechanism rather than two. 'user:' rows are dropped outright: the
+        // username-keyed counter let anyone lock the account out from every IP
+        // at once, and is no longer consulted.
+        $this->run("UPDATE login_attempts SET scope = 'totp', ip = substr(ip, 6) WHERE ip LIKE 'totp:%'");
+        $this->run("DELETE FROM login_attempts WHERE ip LIKE 'user:%'");
     }
 
     /** Insert or update a single settings row. */

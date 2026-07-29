@@ -108,7 +108,8 @@ xmlrpc_debug("→ $method (" . count($params) . " params)");
 
 /**
  * Authenticate username + password from XML-RPC params.
- * Records the attempt in login_attempts for rate-limit purposes.
+ * Records the attempt in login_attempts under the 'xmlrpc' scope for rate-limit
+ * purposes, kept separate from the admin login's counter.
  */
 function xmlrpc_auth(array $params, int $userIdx, int $passIdx): void
 {
@@ -116,7 +117,9 @@ function xmlrpc_auth(array $params, int $userIdx, int $passIdx): void
 
     $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-    if ($auth->isLockedOut($ip)) {
+    // Scoped to 'xmlrpc' so a misconfigured MarsEdit account cannot lock the
+    // owner out of the admin login from the same IP.
+    if ($auth->isLockedOut($ip, \CMS\Auth::SCOPE_XMLRPC)) {
         xmlrpc_fault(429, 'Too many failed login attempts. Try again later.');
     }
 
@@ -131,6 +134,7 @@ function xmlrpc_auth(array $params, int $userIdx, int $passIdx): void
     if (!$ok) {
         $db->insert('login_attempts', [
             'ip'           => $ip,
+            'scope'        => \CMS\Auth::SCOPE_XMLRPC,
             'success'      => 0,
             'attempted_at' => date('Y-m-d H:i:s'),
         ]);
