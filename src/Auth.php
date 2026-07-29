@@ -152,10 +152,12 @@ class Auth
     }
 
     /**
-     * Verify the CSRF token from a POST request.
-     * Terminates with 403 if invalid.
+     * Whether a submitted CSRF token matches the one held in the session.
+     *
+     * Split out from verifyCsrf() so the decision can be tested directly —
+     * verifyCsrf() exits, which a test cannot observe in-process.
      */
-    public function verifyCsrf(string $token): void
+    public function isCsrfValid(string $token): bool
     {
         $expected = $_SESSION['csrf_token'] ?? '';
 
@@ -163,7 +165,20 @@ class Auth
         // be satisfied by an absent submitted token — which is exactly the state
         // a cross-site POST arrives in on the login form, before any token has
         // been issued. Require both sides to be present.
-        if ($expected === '' || $token === '' || !hash_equals($expected, $token)) {
+        if ($expected === '' || $token === '') {
+            return false;
+        }
+
+        return hash_equals($expected, $token);
+    }
+
+    /**
+     * Verify the CSRF token from a POST request.
+     * Terminates with 403 if invalid.
+     */
+    public function verifyCsrf(string $token): void
+    {
+        if (!$this->isCsrfValid($token)) {
             http_response_code(403);
             exit('CSRF token mismatch.');
         }

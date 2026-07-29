@@ -37,6 +37,9 @@ composer.phar
 /fonts/ProximaNova*
 /fonts/og/ProximaNova*
 
+# PHPUnit
+/.phpunit.cache/
+
 # Editor temp files
 *.swp
 *.swo

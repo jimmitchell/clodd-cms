@@ -423,23 +423,13 @@ if ($contentType === 'application/json') {
 } else {
     // Media-endpoint upload: multipart request with a `file` field, no h-entry,
     // no action. Stores the file and returns 201 Created + Location.
-    if (
-        empty($_POST['action'])
-        && empty($_POST['h'])
-        && !empty($_FILES['file'])
-        && (!is_array($_FILES['file']['name']) || $_FILES['file']['name'] !== [])
-    ) {
-        $f = $_FILES['file'];
-        if (is_array($f['name'])) {
-            // Take the first file if a client sends file[].
-            $f = [
-                'name'     => $f['name'][0]     ?? '',
-                'tmp_name' => $f['tmp_name'][0] ?? '',
-                'size'     => (int) ($f['size'][0]  ?? 0),
-                'error'    => (int) ($f['error'][0] ?? UPLOAD_ERR_NO_FILE),
-            ];
-        }
-        if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    $mpBareFile = (empty($_POST['action']) && empty($_POST['h']))
+        ? \CMS\MicropubAuth::firstUploadedFile($_FILES['file'] ?? null)
+        : null;
+
+    if ($mpBareFile !== null) {
+        $f = $mpBareFile;
+        if ($f['error'] !== UPLOAD_ERR_OK) {
             mp_error('invalid_request', 'file upload error');
         }
         \CMS\MicropubAuth::requireScope($mpAuthz, 'media', 'create');

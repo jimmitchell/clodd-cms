@@ -41,21 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $authz = MicropubAuth::authenticate($db, $config);
 MicropubAuth::requireScope($authz, 'media', 'create');
 
-if (empty($_FILES['file'])) {
+$f = MicropubAuth::firstUploadedFile($_FILES['file'] ?? null);
+if ($f === null) {
     MicropubAuth::error('invalid_request', 'multipart request with a file part is required');
 }
-
-$f = $_FILES['file'];
-if (is_array($f['name'])) {
-    // Take the first file if a client sends file[].
-    $f = [
-        'name'     => $f['name'][0]     ?? '',
-        'tmp_name' => $f['tmp_name'][0] ?? '',
-        'size'     => (int) ($f['size'][0]  ?? 0),
-        'error'    => (int) ($f['error'][0] ?? UPLOAD_ERR_NO_FILE),
-    ];
-}
-if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+if ($f['error'] !== UPLOAD_ERR_OK) {
     MicropubAuth::error('invalid_request', 'file upload error');
 }
 

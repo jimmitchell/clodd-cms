@@ -114,6 +114,44 @@ class MicropubAuth
     }
 
     /**
+     * Normalise a $_FILES entry to a single file.
+     *
+     * Micropub clients send the upload as either `file` or `file[]`; PHP shapes
+     * those two very differently (scalar fields vs. parallel arrays). Returns
+     * the first file in the canonical scalar shape, or null when nothing usable
+     * was sent. The caller still checks ['error'].
+     *
+     * @param  array<string,mixed>|null $entry  a single $_FILES[...] entry
+     * @return array{name:string,tmp_name:string,size:int,error:int}|null
+     */
+    public static function firstUploadedFile(?array $entry): ?array
+    {
+        if ($entry === null || $entry === []) {
+            return null;
+        }
+
+        if (!is_array($entry['name'] ?? null)) {
+            return [
+                'name'     => (string) ($entry['name'] ?? ''),
+                'tmp_name' => (string) ($entry['tmp_name'] ?? ''),
+                'size'     => (int) ($entry['size'] ?? 0),
+                'error'    => (int) ($entry['error'] ?? UPLOAD_ERR_NO_FILE),
+            ];
+        }
+
+        if ($entry['name'] === []) {
+            return null;
+        }
+
+        return [
+            'name'     => (string) ($entry['name'][0]     ?? ''),
+            'tmp_name' => (string) ($entry['tmp_name'][0] ?? ''),
+            'size'     => (int) ($entry['size'][0]  ?? 0),
+            'error'    => (int) ($entry['error'][0] ?? UPLOAD_ERR_NO_FILE),
+        ];
+    }
+
+    /**
      * Require at least one of the given scopes; responds 403 insufficient_scope
      * otherwise.
      *

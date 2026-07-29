@@ -923,17 +923,7 @@ function applyWpPageStruct(Page $page, array $struct): void
         $rawSlug = $page->title;
     }
     if ($rawSlug !== '') {
-        $base      = Helpers::slugify($rawSlug);
-        $candidate = $base;
-        $suffix    = 2;
-        while (true) {
-            $existing = Page::findBySlug($db, $candidate);
-            if ($existing === null || $existing->id === $page->id) {
-                break;
-            }
-            $candidate = $base . '-' . $suffix++;
-        }
-        $page->slug = $candidate;
+        $page->slug = Page::resolveUniqueSlug($db, $rawSlug, $page->id);
     }
 
     // Status ('publish' → published, anything else → draft; no scheduling for pages)
