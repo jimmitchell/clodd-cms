@@ -66,7 +66,7 @@ class Builder
         $path = $dir . '/index.html';
 
         if ($post->status !== 'published' || $post->deleted_at !== null) {
-            $this->removeFile($path);
+            $this->removePostOutput($dir);
             // Rebuild any archives this post was in so it no longer appears there.
             foreach ($post->categories as $cat) {
                 $this->buildCategoryArchive((int) $cat['id']);
@@ -111,6 +111,25 @@ class Builder
         foreach ($post->tags as $tag) {
             $this->buildTagArchive((int) $tag['id']);
         }
+    }
+
+    /**
+     * Remove every generated file in a post's output directory, then prune the
+     * directory itself.
+     *
+     * Both leftovers have to go in one pass: buildOgImage() writes og.png
+     * alongside index.html, and removeFile()'s rmdir only fires on an empty
+     * directory — so unlinking index.html on its own orphans the og.png *and*
+     * strands the directory holding it.
+     *
+     * Public because a rename cleans up the pre-rename directory, whose path
+     * can no longer be derived from the post. Any path is safe to pass:
+     * removeFile() refuses to touch anything outside the output root.
+     */
+    public function removePostOutput(string $dir): void
+    {
+        $this->removeFile($dir . '/og.png');
+        $this->removeFile($dir . '/index.html');
     }
 
     /**
@@ -810,8 +829,7 @@ class Builder
             // exists — an earlier build may have removed index.html but left an
             // orphaned og.png, which would otherwise strand the flat dir forever.
             if (file_exists($oldDir . '/index.html') || file_exists($oldDir . '/og.png')) {
-                $this->removeFile($oldDir . '/index.html');
-                $this->removeFile($oldDir . '/og.png');
+                $this->removePostOutput($oldDir);
                 $migrated = true;
             }
         }

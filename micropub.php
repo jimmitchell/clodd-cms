@@ -806,9 +806,7 @@ if ($action === 'update') {
             ? rtrim($config['paths']['output'], '/\\') . '/posts/' . \CMS\Post::datePath($post->published_at, $post->slug, $db->getSetting('timezone', ''))
             : null;
         if ($newDir !== $oldDir) {
-            $oldFile = $oldDir . '/index.html';
-            if (is_file($oldFile)) @unlink($oldFile);
-            if (is_dir($oldDir))   @rmdir($oldDir);
+            $builder->removePostOutput($oldDir);
         }
     }
 
