@@ -53,7 +53,12 @@ class Auth
     {
         $ip = $this->clientIp();
 
-        if ($this->isLockedOut($ip) || $this->isLockedOut('user:' . $username)) {
+        // Deliberately IP-scoped only. A username-keyed counter used to gate this
+        // too, which meant anyone who knew the admin username could lock the
+        // account out from every IP at once with a handful of requests. Per-IP
+        // lockout plus 2FA is the actual control; failed logins are still
+        // recorded in the activity log for audit.
+        if ($this->isLockedOut($ip, self::SCOPE_ADMIN)) {
             return false;
         }
 
@@ -64,7 +69,7 @@ class Auth
             && $hash !== ''
             && password_verify($password, $hash);
 
-        $this->recordAttempt($ip, $ok, $username);
+        $this->recordAttempt($ip, $ok);
 
         if ($ok) {
             session_regenerate_id(true);
@@ -75,6 +80,7 @@ class Auth
                 $_SESSION['csrf_token']        = $this->generateToken();
             } else {
                 $_SESSION['authenticated'] = true;
+                $_SESSION['last_seen']     = time();
                 $_SESSION['user']          = $username;
                 $_SESSION['csrf_token']    = $this->generateToken();
             }
@@ -114,6 +120,18 @@ class Auth
             header('Location: /admin/');
             exit;
         }
+
+        // Server-side idle timeout. The session cookie's lifetime is only a hint
+        // the browser may ignore, and PHP's own gc_maxlifetime is a global
+        // best-effort sweep — neither is an enforcement point we control.
+        $lifetime = (int) ($this->config['admin']['session_lifetime'] ?? 3600);
+        $lastSeen = (int) ($_SESSION['last_seen'] ?? 0);
+
+        if ($lifetime > 0 && $lastSeen > 0 && (time() - $lastSeen) > $lifetime) {
+            $this->logout();  // destroys the session and redirects to /admin/
+        }
+
+        $_SESSION['last_seen'] = time();
     }
 
     /** Returns true if the current session is authenticated. */
@@ -134,13 +152,33 @@ class Auth
     }
 
     /**
+     * Whether a submitted CSRF token matches the one held in the session.
+     *
+     * Split out from verifyCsrf() so the decision can be tested directly —
+     * verifyCsrf() exits, which a test cannot observe in-process.
+     */
+    public function isCsrfValid(string $token): bool
+    {
+        $expected = $_SESSION['csrf_token'] ?? '';
+
+        // hash_equals('', '') is true, so an absent session token would otherwise
+        // be satisfied by an absent submitted token — which is exactly the state
+        // a cross-site POST arrives in on the login form, before any token has
+        // been issued. Require both sides to be present.
+        if ($expected === '' || $token === '') {
+            return false;
+        }
+
+        return hash_equals($expected, $token);
+    }
+
+    /**
      * Verify the CSRF token from a POST request.
      * Terminates with 403 if invalid.
      */
     public function verifyCsrf(string $token): void
     {
-        $expected = $_SESSION['csrf_token'] ?? '';
-        if (!hash_equals($expected, $token)) {
+        if (!$this->isCsrfValid($token)) {
             http_response_code(403);
             exit('CSRF token mismatch.');
         }
@@ -148,26 +186,54 @@ class Auth
 
     // ── Rate limiting ─────────────────────────────────────────────────────────
 
-    /** Returns true if the IP is currently locked out. */
-    public function isLockedOut(string $ip): bool
-    {
-        $maxAttempts    = (int) ($this->config['security']['max_login_attempts'] ?? 5);
-        $lockoutMinutes = (int) ($this->config['security']['lockout_minutes'] ?? 15);
+    /**
+     * Every authentication surface that shares the login_attempts table.
+     * Each rate-limits independently — a Micropub client burning through bad
+     * bearer tokens must not lock the human out of the admin UI.
+     */
+    public const SCOPE_ADMIN    = 'admin';
+    public const SCOPE_TOTP     = 'totp';
+    public const SCOPE_PASSKEY  = 'passkey';
+    public const SCOPE_MICROPUB = 'micropub';
+    public const SCOPE_API      = 'api';
+    public const SCOPE_XMLRPC   = 'xmlrpc';
 
-        $row = $this->db->selectOne(
+    /** Returns true if the IP is currently locked out for the given scope. */
+    public function isLockedOut(string $ip, string $scope = self::SCOPE_ADMIN): bool
+    {
+        return self::isLockedOutIn($this->db, $this->config, $ip, $scope);
+    }
+
+    /**
+     * Scope-aware lockout check usable without an Auth instance — the Micropub,
+     * REST and XML-RPC endpoints authenticate per-request and have no session.
+     */
+    public static function isLockedOutIn(Database $db, array $config, string $ip, string $scope): bool
+    {
+        $maxAttempts    = (int) ($config['security']['max_login_attempts'] ?? 5);
+        $lockoutMinutes = (int) ($config['security']['lockout_minutes'] ?? 15);
+
+        $row = $db->selectOne(
             "SELECT COUNT(*) AS cnt
                FROM login_attempts
               WHERE ip = :ip
+                AND scope = :scope
                 AND success = 0
                 AND attempted_at >= datetime('now', :window)",
-            ['ip' => $ip, 'window' => "-{$lockoutMinutes} minutes"]
+            ['ip' => $ip, 'scope' => $scope, 'window' => "-{$lockoutMinutes} minutes"]
         );
 
         return ($row['cnt'] ?? 0) >= $maxAttempts;
     }
 
+    /** Record a failed attempt against a scope. Usable without an Auth instance. */
+    public static function recordFailureIn(Database $db, string $ip, string $scope): void
+    {
+        $db->insert('login_attempts', ['ip' => $ip, 'scope' => $scope, 'success' => 0]);
+    }
+
     /** Return the number of seconds remaining in a lockout (0 if not locked). */
-    public function lockoutSecondsRemaining(string $ip): int
+    public function lockoutSecondsRemaining(string $ip, string $scope = self::SCOPE_ADMIN): int
     {
         $maxAttempts    = (int) ($this->config['security']['max_login_attempts'] ?? 5);
         $lockoutMinutes = (int) ($this->config['security']['lockout_minutes'] ?? 15);
@@ -175,11 +241,16 @@ class Auth
         $row = $this->db->selectOne(
             "SELECT attempted_at
                FROM login_attempts
-              WHERE ip = :ip AND success = 0
+              WHERE ip = :ip AND scope = :scope AND success = 0
                 AND attempted_at >= datetime('now', :window)
               ORDER BY attempted_at DESC
               LIMIT 1 OFFSET :offset",
-            ['ip' => $ip, 'window' => "-{$lockoutMinutes} minutes", 'offset' => $maxAttempts - 1]
+            [
+                'ip'     => $ip,
+                'scope'  => $scope,
+                'window' => "-{$lockoutMinutes} minutes",
+                'offset' => $maxAttempts - 1,
+            ]
         );
 
         if (!$row) {
@@ -208,6 +279,7 @@ class Auth
         $user = $_SESSION['totp_pending_user'] ?? '';
         unset($_SESSION['totp_pending'], $_SESSION['totp_pending_user'], $_SESSION['totp_pending_at']);
         $_SESSION['authenticated'] = true;
+        $_SESSION['last_seen']     = time();
         $_SESSION['user']          = $user;
         $_SESSION['csrf_token']    = $this->generateToken();
     }
@@ -281,29 +353,25 @@ class Auth
 
     public function isTotpLockedOut(string $ip): bool
     {
-        return $this->isLockedOut('totp:' . $ip);
+        return $this->isLockedOut($ip, self::SCOPE_TOTP);
     }
 
     public function recordTotpAttempt(string $ip, bool $success): void
     {
         $this->db->insert('login_attempts', [
-            'ip'      => 'totp:' . $ip,
+            'ip'      => $ip,
+            'scope'   => self::SCOPE_TOTP,
             'success' => $success ? 1 : 0,
         ]);
     }
 
-    private function recordAttempt(string $ip, bool $success, string $username = ''): void
+    private function recordAttempt(string $ip, bool $success): void
     {
         $this->db->insert('login_attempts', [
             'ip'      => $ip,
+            'scope'   => self::SCOPE_ADMIN,
             'success' => $success ? 1 : 0,
         ]);
-        if (!$success && $username !== '') {
-            $this->db->insert('login_attempts', [
-                'ip'      => 'user:' . $username,
-                'success' => 0,
-            ]);
-        }
     }
 
     // ── Passkeys (WebAuthn) ───────────────────────────────────────────────────
@@ -463,6 +531,7 @@ class Auth
         // Complete the login session.
         session_regenerate_id(true);
         $_SESSION['authenticated'] = true;
+        $_SESSION['last_seen']     = time();
         $_SESSION['user']          = $this->config['admin']['username'] ?? 'admin';
         $_SESSION['csrf_token']    = $this->generateToken();
 

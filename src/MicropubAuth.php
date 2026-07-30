@@ -75,20 +75,11 @@ class MicropubAuth
      */
     public static function authenticate(Database $db, array $config): array
     {
-        $ip  = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-        $max = (int) ($config['security']['max_login_attempts'] ?? 5);
-        $win = (int) ($config['security']['lockout_minutes'] ?? 15);
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        $row = $db->selectOne(
-            "SELECT COUNT(*) AS cnt
-               FROM login_attempts
-              WHERE ip      = :ip
-                AND success = 0
-                AND attempted_at >= datetime('now', :w)",
-            ['ip' => $ip, 'w' => "-{$win} minutes"]
-        );
-
-        if (($row['cnt'] ?? 0) >= $max) {
+        // Scoped to 'micropub' so a client looping on a stale bearer token
+        // cannot lock the owner out of the admin login from the same IP.
+        if (Auth::isLockedOutIn($db, $config, $ip, Auth::SCOPE_MICROPUB)) {
             self::error('rate_limited', 'Too many failed attempts. Try again later.', 429);
         }
 
@@ -117,9 +108,47 @@ class MicropubAuth
             ];
         }
 
-        $db->insert('login_attempts', ['ip' => $ip, 'success' => 0]);
+        Auth::recordFailureIn($db, $ip, Auth::SCOPE_MICROPUB);
         header('WWW-Authenticate: Bearer realm="Micropub", error="invalid_token"');
         self::error('unauthorized', 'Invalid access token', 401);
+    }
+
+    /**
+     * Normalise a $_FILES entry to a single file.
+     *
+     * Micropub clients send the upload as either `file` or `file[]`; PHP shapes
+     * those two very differently (scalar fields vs. parallel arrays). Returns
+     * the first file in the canonical scalar shape, or null when nothing usable
+     * was sent. The caller still checks ['error'].
+     *
+     * @param  array<string,mixed>|null $entry  a single $_FILES[...] entry
+     * @return array{name:string,tmp_name:string,size:int,error:int}|null
+     */
+    public static function firstUploadedFile(?array $entry): ?array
+    {
+        if ($entry === null || $entry === []) {
+            return null;
+        }
+
+        if (!is_array($entry['name'] ?? null)) {
+            return [
+                'name'     => (string) ($entry['name'] ?? ''),
+                'tmp_name' => (string) ($entry['tmp_name'] ?? ''),
+                'size'     => (int) ($entry['size'] ?? 0),
+                'error'    => (int) ($entry['error'] ?? UPLOAD_ERR_NO_FILE),
+            ];
+        }
+
+        if ($entry['name'] === []) {
+            return null;
+        }
+
+        return [
+            'name'     => (string) ($entry['name'][0]     ?? ''),
+            'tmp_name' => (string) ($entry['tmp_name'][0] ?? ''),
+            'size'     => (int) ($entry['size'][0]  ?? 0),
+            'error'    => (int) ($entry['error'][0] ?? UPLOAD_ERR_NO_FILE),
+        ];
     }
 
     /**

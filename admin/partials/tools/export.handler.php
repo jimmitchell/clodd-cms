@@ -2,6 +2,7 @@
 // POST handler + GET-side data prep for the Export tab.
 // Included from admin/tools.php after auth check. On POST, streams XML and exits.
 
+use CMS\Helpers;
 use CMS\Post;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -96,9 +97,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <wp:author>
         <wp:author_id>1</wp:author_id>
-        <wp:author_login><![CDATA[<?= htmlspecialchars($username) ?>]]></wp:author_login>
+        <wp:author_login><?= Helpers::cdata($username) ?></wp:author_login>
         <wp:author_email><![CDATA[]]></wp:author_email>
-        <wp:author_display_name><![CDATA[<?= htmlspecialchars($authorName !== '' ? $authorName : $username) ?>]]></wp:author_display_name>
+        <wp:author_display_name><?= Helpers::cdata($authorName !== '' ? $authorName : $username) ?></wp:author_display_name>
         <wp:author_first_name><![CDATA[]]></wp:author_first_name>
         <wp:author_last_name><![CDATA[]]></wp:author_last_name>
     </wp:author>
@@ -108,9 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <wp:term_id><?= (int) $cat['id'] ?></wp:term_id>
         <wp:category_nicename><?= htmlspecialchars($cat['slug'], ENT_XML1) ?></wp:category_nicename>
         <wp:category_parent></wp:category_parent>
-        <wp:cat_name><![CDATA[<?= htmlspecialchars($cat['name']) ?>]]></wp:cat_name>
+        <wp:cat_name><?= Helpers::cdata($cat['name']) ?></wp:cat_name>
 <?php   if ($cat['description'] !== ''): ?>
-        <wp:category_description><![CDATA[<?= htmlspecialchars($cat['description']) ?>]]></wp:category_description>
+        <wp:category_description><?= Helpers::cdata($cat['description']) ?></wp:category_description>
 <?php   endif; ?>
     </wp:category>
 
@@ -119,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <wp:tag>
         <wp:term_id><?= 10000 + (int) $tag['id'] ?></wp:term_id>
         <wp:tag_slug><?= htmlspecialchars($tag['slug'], ENT_XML1) ?></wp:tag_slug>
-        <wp:tag_name><![CDATA[<?= htmlspecialchars($tag['name']) ?>]]></wp:tag_name>
+        <wp:tag_name><?= Helpers::cdata($tag['name']) ?></wp:tag_name>
     </wp:tag>
 
 <?php endforeach; ?>
@@ -138,31 +139,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postTags  = $tagMap[$postId] ?? [];
 ?>
     <item>
-        <title><![CDATA[<?= htmlspecialchars($post['title']) ?>]]></title>
+        <title><?= Helpers::cdata($post['title']) ?></title>
         <link><?= htmlspecialchars($permalink, ENT_XML1) ?></link>
         <pubDate><?= $pubDate ?></pubDate>
-        <dc:creator><![CDATA[<?= htmlspecialchars($username) ?>]]></dc:creator>
+        <dc:creator><?= Helpers::cdata($username) ?></dc:creator>
         <guid isPermaLink="false"><?= htmlspecialchars($siteUrl . '/?p=' . $postId, ENT_XML1) ?></guid>
         <description></description>
-        <content:encoded><![CDATA[<?= $html ?>]]></content:encoded>
-        <excerpt:encoded><![CDATA[<?= htmlspecialchars($excerpt) ?>]]></excerpt:encoded>
+        <content:encoded><?= Helpers::cdata($html) ?></content:encoded>
+        <excerpt:encoded><?= Helpers::cdata($excerpt) ?></excerpt:encoded>
         <wp:post_id><?= $postId ?></wp:post_id>
-        <wp:post_date><![CDATA[<?= $postDate ?>]]></wp:post_date>
-        <wp:post_date_gmt><![CDATA[<?= $postDate ?>]]></wp:post_date_gmt>
+        <wp:post_date><?= Helpers::cdata($postDate) ?></wp:post_date>
+        <wp:post_date_gmt><?= Helpers::cdata($postDate) ?></wp:post_date_gmt>
         <wp:comment_status><![CDATA[closed]]></wp:comment_status>
         <wp:ping_status><![CDATA[closed]]></wp:ping_status>
-        <wp:post_name><![CDATA[<?= htmlspecialchars($post['slug']) ?>]]></wp:post_name>
-        <wp:status><![CDATA[<?= $status ?>]]></wp:status>
+        <wp:post_name><?= Helpers::cdata($post['slug']) ?></wp:post_name>
+        <wp:status><?= Helpers::cdata($status) ?></wp:status>
         <wp:post_parent>0</wp:post_parent>
         <wp:menu_order>0</wp:menu_order>
         <wp:post_type><![CDATA[post]]></wp:post_type>
         <wp:post_password></wp:post_password>
         <wp:is_sticky>0</wp:is_sticky>
 <?php   foreach ($postCats as $cat): ?>
-        <category domain="category" nicename="<?= htmlspecialchars($cat['slug'], ENT_XML1) ?>"><![CDATA[<?= htmlspecialchars($cat['name']) ?>]]></category>
+        <category domain="category" nicename="<?= htmlspecialchars($cat['slug'], ENT_XML1) ?>"><?= Helpers::cdata($cat['name']) ?></category>
 <?php   endforeach; ?>
 <?php   foreach ($postTags as $tag): ?>
-        <category domain="post_tag" nicename="<?= htmlspecialchars($tag['slug'], ENT_XML1) ?>"><![CDATA[<?= htmlspecialchars($tag['name']) ?>]]></category>
+        <category domain="post_tag" nicename="<?= htmlspecialchars($tag['slug'], ENT_XML1) ?>"><?= Helpers::cdata($tag['name']) ?></category>
 <?php   endforeach; ?>
     </item>
 
@@ -179,21 +180,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $html      = $builder->markdownToHtml($page['content']);
 ?>
     <item>
-        <title><![CDATA[<?= htmlspecialchars($page['title']) ?>]]></title>
+        <title><?= Helpers::cdata($page['title']) ?></title>
         <link><?= htmlspecialchars($permalink, ENT_XML1) ?></link>
         <pubDate><?= $pubDate ?></pubDate>
-        <dc:creator><![CDATA[<?= htmlspecialchars($username) ?>]]></dc:creator>
+        <dc:creator><?= Helpers::cdata($username) ?></dc:creator>
         <guid isPermaLink="false"><?= htmlspecialchars($siteUrl . '/?page_id=' . $pageWpId, ENT_XML1) ?></guid>
         <description></description>
-        <content:encoded><![CDATA[<?= $html ?>]]></content:encoded>
+        <content:encoded><?= Helpers::cdata($html) ?></content:encoded>
         <excerpt:encoded><![CDATA[]]></excerpt:encoded>
         <wp:post_id><?= $pageWpId ?></wp:post_id>
-        <wp:post_date><![CDATA[<?= $postDate ?>]]></wp:post_date>
-        <wp:post_date_gmt><![CDATA[<?= $postDate ?>]]></wp:post_date_gmt>
+        <wp:post_date><?= Helpers::cdata($postDate) ?></wp:post_date>
+        <wp:post_date_gmt><?= Helpers::cdata($postDate) ?></wp:post_date_gmt>
         <wp:comment_status><![CDATA[closed]]></wp:comment_status>
         <wp:ping_status><![CDATA[closed]]></wp:ping_status>
-        <wp:post_name><![CDATA[<?= htmlspecialchars($page['slug']) ?>]]></wp:post_name>
-        <wp:status><![CDATA[<?= $status ?>]]></wp:status>
+        <wp:post_name><?= Helpers::cdata($page['slug']) ?></wp:post_name>
+        <wp:status><?= Helpers::cdata($status) ?></wp:status>
         <wp:post_parent>0</wp:post_parent>
         <wp:menu_order><?= (int) $page['nav_order'] ?></wp:menu_order>
         <wp:post_type><![CDATA[page]]></wp:post_type>

@@ -92,8 +92,12 @@ class Helpers
      */
     public static function readingTime(string $html, int $wpm = 200): int
     {
-        $words = str_word_count(strip_tags($html));
-        return max(1, (int) ceil($words / $wpm));
+        // Not str_word_count(): it is byte-oriented and locale-dependent, so it
+        // undercounts any non-ASCII text (accented words split, CJK ignored).
+        $text  = trim((string) preg_replace('/\s+/u', ' ', strip_tags($html)));
+        $words = $text === '' ? 0 : count(preg_split('/\s+/u', $text) ?: []);
+
+        return max(1, (int) ceil($words / max(1, $wpm)));
     }
 
     /**
@@ -102,6 +106,28 @@ class Helpers
     public static function e(string $value): string
     {
         return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    /**
+     * Wrap a value in a CDATA section, safely.
+     *
+     * CDATA has exactly one escape concern: the section ends at the first `]]>`,
+     * so content containing that sequence — a post about CDATA, or any code
+     * block with `]]>` in it — would terminate the section early and leave the
+     * remainder as markup. The fix is to split across two sections at that point.
+     *
+     * Content inside CDATA must NOT be HTML-escaped: `&` and `<` are already
+     * literal there, so escaping would round-trip `&` back as `&amp;`.
+     *
+     * Also strips characters that are illegal in XML 1.0 (control characters
+     * other than tab/LF/CR), which no amount of escaping can represent.
+     */
+    public static function cdata(?string $value): string
+    {
+        $value = (string) $value;
+        $value = (string) preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', '', $value);
+
+        return '<![CDATA[' . str_replace(']]>', ']]]]><![CDATA[>', $value) . ']]>';
     }
 
     /**

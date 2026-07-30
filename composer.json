@@ -16,7 +16,18 @@
             "CMS\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "CMS\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
     "config": {
         "optimize-autoloader": true
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10"
     }
 }

@@ -57,6 +57,33 @@ class Page
     }
 
     /**
+     * Slugify $base and return a page slug that is not already taken,
+     * appending -2, -3, … on collision. Mirrors Post::resolveUniqueSlug().
+     *
+     * Always slugifies: page slugs become filesystem paths under /pages/, so
+     * unsanitised input here is a path-traversal vector.
+     *
+     * Pass the id of the page being saved as $excludeId so it doesn't collide
+     * with itself.
+     */
+    public static function resolveUniqueSlug(Database $db, string $base, ?int $excludeId = null): string
+    {
+        // Check before slugifying: Helpers::slugify() renders empty input as the
+        // literal 'untitled', which admin validation rejects as a slug.
+        $base = trim($base) === '' ? 'page' : Helpers::slugify($base);
+
+        $candidate = $base;
+        $suffix    = 2;
+        while (true) {
+            $existing = self::findBySlug($db, $candidate);
+            if ($existing === null || $existing->id === $excludeId) {
+                return $candidate;
+            }
+            $candidate = $base . '-' . $suffix++;
+        }
+    }
+
+    /**
      * Children of $parentId, optionally filtered by status. Same ordering as findAll.
      *
      * @return self[]

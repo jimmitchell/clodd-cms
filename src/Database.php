@@ -13,11 +13,23 @@ class Database
 {
     private PDO $pdo;
 
-    /** @var array<string,string> In-process cache for settings rows. */
-    private static array $settingsCache = [];
+    /**
+     * Per-instance cache for settings rows.
+     *
+     * Deliberately not static: a static cache is shared by every Database in the
+     * process, so a write through one instance is invisible to another. That is
+     * harmless under PHP-FPM (one request, one instance) but wrong for
+     * bin/build.php and anything long-running.
+     *
+     * Misses are not cached either — storing the caller's $default would pin it
+     * for the rest of the request even after the row is created.
+     *
+     * @var array<string,string>
+     */
+    private array $settingsCache = [];
 
     // Increment this whenever the schema changes.
-    private const SCHEMA_VERSION = 23;
+    private const SCHEMA_VERSION = 24;
 
     public function __construct(string $dbPath)
     {
@@ -523,6 +535,30 @@ class Database
         $this->run("CREATE INDEX IF NOT EXISTS idx_post_contexts_post_id ON post_contexts(post_id)");
     }
 
+    private function applySchemaV24(): void
+    {
+        // login_attempts.scope: which authentication surface recorded the
+        // attempt. Previously every surface (admin form, TOTP step, passkey,
+        // Micropub bearer, REST Basic auth, XML-RPC) counted into one row keyed
+        // only on IP, so a misconfigured Micropub client could lock the human
+        // out of /admin/. Each surface now rate-limits independently.
+        //
+        // Existing rows default to 'admin', which is the conservative reading:
+        // they keep gating the admin login exactly as they did before.
+        $this->run("ALTER TABLE login_attempts ADD COLUMN scope TEXT NOT NULL DEFAULT 'admin'");
+        $this->run(
+            "CREATE INDEX IF NOT EXISTS idx_login_attempts_scope_ip_time
+             ON login_attempts(scope, ip, attempted_at)"
+        );
+
+        // Fold the old string-prefix convention into the new column so there is
+        // one mechanism rather than two. 'user:' rows are dropped outright: the
+        // username-keyed counter let anyone lock the account out from every IP
+        // at once, and is no longer consulted.
+        $this->run("UPDATE login_attempts SET scope = 'totp', ip = substr(ip, 6) WHERE ip LIKE 'totp:%'");
+        $this->run("DELETE FROM login_attempts WHERE ip LIKE 'user:%'");
+    }
+
     /** Insert or update a single settings row. */
     public function upsertSetting(string $key, string $value): void
     {
@@ -532,24 +568,31 @@ class Database
              ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
             ['key' => $key, 'value' => $value]
         );
-        self::$settingsCache[$key] = $value;
+        $this->settingsCache[$key] = $value;
     }
 
     /** Retrieve a single setting value (or $default if not found). */
     public function getSetting(string $key, string $default = ''): string
     {
-        if (!array_key_exists($key, self::$settingsCache)) {
-            $row = $this->selectOne("SELECT value FROM settings WHERE key = :key", ['key' => $key]);
-            self::$settingsCache[$key] = $row ? $row['value'] : $default;
+        if (array_key_exists($key, $this->settingsCache)) {
+            return $this->settingsCache[$key];
         }
-        return self::$settingsCache[$key];
+
+        $row = $this->selectOne("SELECT value FROM settings WHERE key = :key", ['key' => $key]);
+        if ($row === null) {
+            // Absent row: return the caller's default without caching it, so a
+            // later upsert of this key is picked up rather than shadowed.
+            return $default;
+        }
+
+        return $this->settingsCache[$key] = (string) $row['value'];
     }
 
     /** Retrieve all settings as key => value array. */
     public function getAllSettings(): array
     {
         $rows = array_column($this->select("SELECT key, value FROM settings"), 'value', 'key');
-        self::$settingsCache = array_merge(self::$settingsCache, $rows);
+        $this->settingsCache = array_merge($this->settingsCache, $rows);
         return $rows;
     }
 }

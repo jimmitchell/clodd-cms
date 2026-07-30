@@ -29,7 +29,8 @@ declare(strict_types=1);
  *   GET    /admin/api/settings           site settings (read-only)
  *
  * Auth: HTTP Basic — same username/password as the admin panel.
- * Rate-limiting reuses the login_attempts table (same lockout rules as the UI).
+ * Rate-limiting uses the login_attempts table under its own 'api' scope, so a
+ * broken API client cannot lock the owner out of the admin login.
  */
 
 // Read the request body BEFORE any require that might start a session,
@@ -134,25 +135,16 @@ function page_to_array(\CMS\Page $page): array
 }
 
 // ── Basic Auth ───────────────────────────────────────────────────────────────
-// Verifies credentials against config.php and applies the same rate-limiting
-// as the admin login form (reuses the login_attempts table).
+// Verifies credentials against config.php and applies the same lockout rules as
+// the admin login form, counted separately under the 'api' scope.
 
 function api_authenticate(array $config, \CMS\Database $db): void
 {
-    $ip  = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-    $max = (int) ($config['security']['max_login_attempts'] ?? 5);
-    $win = (int) ($config['security']['lockout_minutes'] ?? 15);
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-    $row = $db->selectOne(
-        "SELECT COUNT(*) AS cnt
-           FROM login_attempts
-          WHERE ip      = :ip
-            AND success = 0
-            AND attempted_at >= datetime('now', :w)",
-        ['ip' => $ip, 'w' => "-{$win} minutes"]
-    );
-
-    if (($row['cnt'] ?? 0) >= $max) {
+    // Scoped to 'api' so a broken API client cannot lock the owner out of the
+    // admin login from the same IP.
+    if (\CMS\Auth::isLockedOutIn($db, $config, $ip, \CMS\Auth::SCOPE_API)) {
         api_error('Too many failed attempts. Try again later.', 429);
     }
 
@@ -167,7 +159,7 @@ function api_authenticate(array $config, \CMS\Database $db): void
         && password_verify($pass, $hash);
 
     if (!$ok) {
-        $db->insert('login_attempts', ['ip' => $ip, 'success' => 0]);
+        \CMS\Auth::recordFailureIn($db, $ip, \CMS\Auth::SCOPE_API);
         header('WWW-Authenticate: Basic realm="CMS API"');
         api_error('Unauthorized', 401);
     }

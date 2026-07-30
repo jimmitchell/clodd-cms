@@ -878,6 +878,11 @@ class Builder
 
     private function writeFile(string $path, string $content): bool
     {
+        if (!$this->isInsideOutputDir($path)) {
+            error_log('[Builder] Refusing to write outside the output root: ' . $path);
+            return false;
+        }
+
         $dir = dirname($path);
         if (!is_dir($dir)) {
             mkdir($dir, 0775, true);
@@ -886,6 +891,52 @@ class Builder
             $content = $this->minifyHtml($content);
         }
         return file_put_contents($path, $content) !== false;
+    }
+
+    /**
+     * True when $path resolves inside the configured output root.
+     *
+     * Slugs reach the output path through Post::datePath() / Page slugs, so a
+     * slug that ever escaped sanitisation would otherwise let a build write
+     * anywhere the PHP user can reach. Resolution is lexical because the target
+     * usually does not exist yet (realpath() would return false).
+     */
+    private function isInsideOutputDir(string $path): bool
+    {
+        $root = realpath($this->outputDir);
+        if ($root === false) {
+            return false;
+        }
+
+        $root     = self::normalizePath($root);
+        $resolved = self::normalizePath($path);
+
+        return $resolved === $root || str_starts_with($resolved, $root . '/');
+    }
+
+    /**
+     * Collapse ".", "..", and repeated separators in an absolute path without
+     * touching the filesystem. A leading ".." is dropped rather than climbing
+     * above the root, so the result can never escape by underflow.
+     */
+    private static function normalizePath(string $path): string
+    {
+        $path       = str_replace('\\', '/', $path);
+        $isAbsolute = str_starts_with($path, '/');
+
+        $out = [];
+        foreach (explode('/', $path) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+            if ($segment === '..') {
+                array_pop($out);
+                continue;
+            }
+            $out[] = $segment;
+        }
+
+        return ($isAbsolute ? '/' : '') . implode('/', $out);
     }
 
     /**
@@ -959,6 +1010,13 @@ class Builder
 
     private function removeFile(string $path): void
     {
+        // Unpublishing routes a slug-derived path here, so the same containment
+        // check writeFile() applies guards the delete side too.
+        if (!$this->isInsideOutputDir($path)) {
+            error_log('[Builder] Refusing to delete outside the output root: ' . $path);
+            return;
+        }
+
         if (file_exists($path)) {
             unlink($path);
             // Remove parent directory if now empty.

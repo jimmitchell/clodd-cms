@@ -29,6 +29,11 @@ declare(strict_types=1);
 // Read raw body before any session-starting code consumes it.
 $_mpRawBody = (string) file_get_contents('php://input');
 
+// Never render a PHP notice or fatal into the response: it would leak absolute
+// filesystem paths, and on the JSON endpoints it also corrupts the body. Errors
+// still reach the server log.
+ini_set('display_errors', '0');
+
 define('CMS_ROOT', __DIR__);
 require CMS_ROOT . '/vendor/autoload.php';
 
@@ -59,12 +64,30 @@ function mp_error(string $code, string $description = '', int $status = 400): ne
  * Accepts URLs like https://example.com/2026/04/28/my-slug/ — the slug is the
  * final non-empty path segment. Slugs are unique across posts, so the date
  * portion is informational only.
+ *
+ * The URL must belong to this site: an absolute URL on another origin is
+ * rejected rather than being matched on its last path segment, which would let
+ * a caller address our posts through someone else's domain.
  */
 function mp_resolve_post_by_url(\CMS\Database $db, string $url): ?\CMS\Post
 {
     $url = trim($url);
     if ($url === '') return null;
-    $path = parse_url($url, PHP_URL_PATH);
+
+    $parts = parse_url($url);
+    if ($parts === false) return null;
+
+    // A host means an absolute URL — it has to be ours. Relative URLs (no host)
+    // are accepted as-is; they can only ever refer to this site.
+    if (isset($parts['host'])) {
+        $siteUrl  = rtrim($db->getSetting('site_url', ''), '/');
+        $siteHost = $siteUrl !== '' ? (string) (parse_url($siteUrl, PHP_URL_HOST) ?: '') : '';
+        if ($siteHost === '' || strcasecmp((string) $parts['host'], $siteHost) !== 0) {
+            return null;
+        }
+    }
+
+    $path = $parts['path'] ?? null;
     if (!is_string($path)) return null;
     $segments = array_values(array_filter(explode('/', $path), fn($s) => $s !== ''));
     if (empty($segments)) return null;
@@ -400,23 +423,13 @@ if ($contentType === 'application/json') {
 } else {
     // Media-endpoint upload: multipart request with a `file` field, no h-entry,
     // no action. Stores the file and returns 201 Created + Location.
-    if (
-        empty($_POST['action'])
-        && empty($_POST['h'])
-        && !empty($_FILES['file'])
-        && (!is_array($_FILES['file']['name']) || $_FILES['file']['name'] !== [])
-    ) {
-        $f = $_FILES['file'];
-        if (is_array($f['name'])) {
-            // Take the first file if a client sends file[].
-            $f = [
-                'name'     => $f['name'][0]     ?? '',
-                'tmp_name' => $f['tmp_name'][0] ?? '',
-                'size'     => (int) ($f['size'][0]  ?? 0),
-                'error'    => (int) ($f['error'][0] ?? UPLOAD_ERR_NO_FILE),
-            ];
-        }
-        if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    $mpBareFile = (empty($_POST['action']) && empty($_POST['h']))
+        ? \CMS\MicropubAuth::firstUploadedFile($_FILES['file'] ?? null)
+        : null;
+
+    if ($mpBareFile !== null) {
+        $f = $mpBareFile;
+        if ($f['error'] !== UPLOAD_ERR_OK) {
             mp_error('invalid_request', 'file upload error');
         }
         \CMS\MicropubAuth::requireScope($mpAuthz, 'media', 'create');

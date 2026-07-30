@@ -196,66 +196,15 @@ class IndieAuth
     public static function fetchClientInfo(string $clientId, int $timeout = 5): array
     {
         $info = ['name' => '', 'redirect_uris' => []];
-        $url  = $clientId;
 
-        // SSRF guard: redirects are followed manually so every hop is
-        // re-validated, and each request pins the DNS answer we validated via
-        // CURLOPT_RESOLVE so a rebinding race cannot swap the target.
-        for ($hop = 0; $hop < 4; $hop++) {
-            $parts  = parse_url($url);
-            $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-            $host   = strtolower((string) ($parts['host'] ?? ''));
-            if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
-                return $info;
-            }
-            $ip = self::resolvePublicIp($host);
-            if ($ip === null) {
-                return $info;
-            }
-            $port = (int) ($parts['port'] ?? ($scheme === 'https' ? 443 : 80));
-
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_FOLLOWLOCATION => false,
-                CURLOPT_TIMEOUT        => $timeout,
-                CURLOPT_HEADER         => true,
-                CURLOPT_MAXFILESIZE    => 1_048_576,
-                CURLOPT_PROTOCOLS      => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-                CURLOPT_RESOLVE        => ["{$host}:{$port}:{$ip}"],
-                CURLOPT_USERAGENT      => 'Clodd-CMS IndieAuth (+https://github.com/jimmitchell/clodd-cms)',
-            ]);
-            $resp = curl_exec($ch);
-            if (!is_string($resp)) {
-                curl_close($ch);
-                return $info;
-            }
-            $status      = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            $headerSize  = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-            $contentType = strtolower((string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE));
-            curl_close($ch);
-
-            $headers = substr($resp, 0, $headerSize);
-            $body    = substr($resp, $headerSize);
-
-            if ($status >= 300 && $status < 400) {
-                if (!preg_match('/^Location:\s*(\S+)/mi', $headers, $m)) {
-                    return $info;
-                }
-                $next = trim($m[1]);
-                // Resolve a relative redirect against the current URL's origin.
-                if (str_starts_with($next, '/')) {
-                    $origin = $scheme . '://' . $host . (isset($parts['port']) ? ':' . $parts['port'] : '');
-                    $next   = $origin . $next;
-                }
-                $url = $next;
-                continue;
-            }
-
-            return self::parseClientResponse($headers, $body, $contentType);
+        // SafeHttp enforces the SSRF guard: http(s) only, public addresses only,
+        // every redirect hop re-validated against a pinned DNS answer.
+        $resp = SafeHttp::request($clientId, [CURLOPT_MAXFILESIZE => 1_048_576], 4, $timeout);
+        if ($resp === null) {
+            return $info;
         }
 
-        return $info;
+        return self::parseClientResponse($resp['headers'], $resp['body'], $resp['content_type']);
     }
 
     /** @return array{name: string, redirect_uris: string[]} */
@@ -336,54 +285,6 @@ class IndieAuth
         }
 
         return trim(html_entity_decode(strip_tags($scope), ENT_QUOTES, 'UTF-8'));
-    }
-
-    /**
-     * Resolve a hostname and return one validated public IP to pin the
-     * connection to, or null when the host is a literal/resolved loopback,
-     * private, link-local, multicast, or reserved address (SSRF guard).
-     * Every DNS answer must be public — one bad record rejects the host.
-     */
-    private static function resolvePublicIp(string $host): ?string
-    {
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-            return self::isPublicIp($host) ? $host : null;
-        }
-        if ($host === 'localhost' || str_ends_with($host, '.local') || str_ends_with($host, '.internal')) {
-            return null;
-        }
-
-        $ips = [];
-        foreach ((array) @dns_get_record($host, DNS_A) as $r) {
-            if (!empty($r['ip'])) $ips[] = (string) $r['ip'];
-        }
-        foreach ((array) @dns_get_record($host, DNS_AAAA) as $r) {
-            if (!empty($r['ipv6'])) $ips[] = (string) $r['ipv6'];
-        }
-        if ($ips === []) {
-            return null;
-        }
-        foreach ($ips as $ip) {
-            if (!self::isPublicIp($ip)) {
-                return null;
-            }
-        }
-        return $ips[0];
-    }
-
-    private static function isPublicIp(string $ip): bool
-    {
-        // NO_PRIV_RANGE: RFC1918 + IPv6 ULA. NO_RES_RANGE: loopback,
-        // link-local, 0.0.0.0/8, 240.0.0.0/4, and IPv6 reserved blocks.
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-            return false;
-        }
-        // Multicast is not covered by either flag.
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
-            $first = (int) explode('.', $ip)[0];
-            return $first < 224;
-        }
-        return stripos($ip, 'ff') !== 0;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

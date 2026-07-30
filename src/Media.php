@@ -144,30 +144,25 @@ class Media
             throw new RuntimeException('Could not open temp file for writing.');
         }
 
-        $version = defined('CMS_VERSION') ? (string) CMS_VERSION : 'dev';
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $url,
-            CURLOPT_FILE           => $fp,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS      => 5,
-            CURLOPT_TIMEOUT        => $timeout,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_USERAGENT      => 'clodd-cms/' . $version,
+        // SafeHttp enforces the SSRF guard: http(s) only, public addresses only,
+        // every redirect hop re-validated against a pinned DNS answer. Without it
+        // a post's <img src> — which can arrive from a WXR import or a Micropub
+        // client — would let a caller aim the server at internal services.
+        $http = SafeHttp::download(
+            $url,
+            $fp,
             // Aborts early when the server sends Content-Length larger than the cap.
-            CURLOPT_MAXFILESIZE    => $this->maxBytes,
-        ]);
-
-        $ok      = curl_exec($ch);
-        $errCode = curl_errno($ch);
-        $errMsg  = curl_error($ch);
-        $http    = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            [CURLOPT_MAXFILESIZE => $this->maxBytes],
+            5,
+            $timeout
+        );
         fclose($fp);
 
-        if ($errCode !== 0 || $ok === false) {
+        if ($http === null) {
             @unlink($tmp);
-            throw new RuntimeException("Fetch failed (curl {$errCode}: {$errMsg}) for {$url}");
+            throw new RuntimeException(
+                "Fetch failed or blocked for {$url} (non-public address, disallowed scheme, or transport error)"
+            );
         }
         if ($http >= 400) {
             @unlink($tmp);

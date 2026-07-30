@@ -12,8 +12,18 @@ declare(strict_types=1);
  *
  * Request:  POST multipart/form-data with a `file` part
  * Response: 201 Created + Location: <file URL> + JSON {"url": "<file URL>"}
- *           400 / 401 / 403 / 422 / 429 + JSON {error, error_description}
+ *           400 / 401 / 403 / 422 + JSON {error, error_description}
+ *
+ * There is no upload-rate limit here. The only throttling is the failed-token
+ * counter in MicropubAuth::authenticate() (429, 'micropub' scope), which bounds
+ * token guessing but not upload volume from a valid token. Request-rate limiting
+ * is nginx's job — see the `limit_req` zone in nginx.conf.example.
  */
+
+// Never render a PHP notice or fatal into the response: it would leak absolute
+// filesystem paths, and on the JSON endpoints it also corrupts the body. Errors
+// still reach the server log.
+ini_set('display_errors', '0');
 
 define('CMS_ROOT', __DIR__);
 require CMS_ROOT . '/vendor/autoload.php';
@@ -31,21 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $authz = MicropubAuth::authenticate($db, $config);
 MicropubAuth::requireScope($authz, 'media', 'create');
 
-if (empty($_FILES['file'])) {
+$f = MicropubAuth::firstUploadedFile($_FILES['file'] ?? null);
+if ($f === null) {
     MicropubAuth::error('invalid_request', 'multipart request with a file part is required');
 }
-
-$f = $_FILES['file'];
-if (is_array($f['name'])) {
-    // Take the first file if a client sends file[].
-    $f = [
-        'name'     => $f['name'][0]     ?? '',
-        'tmp_name' => $f['tmp_name'][0] ?? '',
-        'size'     => (int) ($f['size'][0]  ?? 0),
-        'error'    => (int) ($f['error'][0] ?? UPLOAD_ERR_NO_FILE),
-    ];
-}
-if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+if ($f['error'] !== UPLOAD_ERR_OK) {
     MicropubAuth::error('invalid_request', 'file upload error');
 }
 

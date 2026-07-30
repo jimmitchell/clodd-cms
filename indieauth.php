@@ -15,6 +15,11 @@ declare(strict_types=1);
  *          access token redeem at /token.php.
  */
 
+// Never render a PHP notice or fatal into the response: it would leak absolute
+// filesystem paths, and on the JSON endpoints it also corrupts the body. Errors
+// still reach the server log.
+ini_set('display_errors', '0');
+
 define('CMS_ROOT', __DIR__);
 require CMS_ROOT . '/vendor/autoload.php';
 
@@ -30,6 +35,77 @@ $siteUrl = rtrim($db->getSetting('site_url', ''), '/');
 $me      = $siteUrl . '/';
 
 $indie->purgeExpiredCodes();
+
+/**
+ * Syntactic validation of a client_id / redirect_uri pair. Costs no outbound
+ * request, so it is safe to run before the login gate.
+ *
+ * Terminates with an error page when the pair is unacceptable.
+ *
+ * @return array{cid: array, sameOrigin: bool}
+ */
+function ia_validate_syntax(string $clientId, string $redirectUri): array
+{
+    // client_id: absolute http(s) URL without a fragment.
+    $cid = parse_url($clientId);
+    if (
+        $clientId === ''
+        || $cid === false
+        || filter_var($clientId, FILTER_VALIDATE_URL) === false
+        || !in_array(strtolower($cid['scheme'] ?? ''), ['http', 'https'], true)
+        || isset($cid['fragment'])
+    ) {
+        ia_error_page('client_id must be an absolute http(s) URL without a fragment.');
+    }
+
+    // redirect_uri: an absolute URL. Native apps are allowed an application-
+    // specific scheme (e.g. org.example.app://callback) per IndieAuth §5.2.1;
+    // those can never be same-origin with an http(s) client_id, so they always
+    // fall through to the registration check. A few schemes are refused
+    // outright because they would turn the Location header into script or a
+    // local file read.
+    $ru       = parse_url($redirectUri);
+    $ruScheme = strtolower($ru['scheme'] ?? '');
+    if (
+        $redirectUri === ''
+        || $ru === false
+        || filter_var($redirectUri, FILTER_VALIDATE_URL) === false
+        || $ruScheme === ''
+        || in_array($ruScheme, ['javascript', 'data', 'vbscript', 'file'], true)
+    ) {
+        ia_error_page('redirect_uri must be an absolute URL with a safe scheme.');
+    }
+
+    // Same origin as client_id is auto-trusted; anything else must be declared
+    // by the client, which is what ia_validate_registration() checks.
+    $sameOrigin =
+        strtolower($cid['scheme'] ?? '') === $ruScheme
+        && strtolower($cid['host'] ?? '') === strtolower($ru['host'] ?? '')
+        && ($cid['port'] ?? null) === ($ru['port'] ?? null);
+
+    return ['cid' => $cid, 'sameOrigin' => $sameOrigin];
+}
+
+/**
+ * Fetch the client's metadata and confirm the redirect_uri is one it declared.
+ * Never redirect to an unverified URI.
+ *
+ * Both the GET (consent screen) and POST (consent approval) paths run this. The
+ * approval POST carries client_id and redirect_uri in hidden fields, so trusting
+ * them would let a crafted form redirect an authorization code anywhere.
+ *
+ * @return array{name: string, redirect_uris: string[]}
+ */
+function ia_validate_registration(string $clientId, string $redirectUri, bool $sameOrigin): array
+{
+    $info = IndieAuth::fetchClientInfo($clientId);
+
+    if (!$sameOrigin && !in_array($redirectUri, $info['redirect_uris'], true)) {
+        ia_error_page('redirect_uri is not registered for this client.');
+    }
+
+    return $info;
+}
 
 /** Render a terminal HTML error page (used when redirecting back is unsafe). */
 function ia_error_page(string $message, int $status = 400): never
@@ -77,15 +153,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $auth->verifyCsrf($_POST['csrf_token'] ?? '');
 
-    $clientId    = (string) ($_POST['client_id'] ?? '');
-    $clientName  = (string) ($_POST['client_name'] ?? '');
-    $redirectUri = (string) ($_POST['redirect_uri'] ?? '');
+    $clientId    = trim((string) ($_POST['client_id'] ?? ''));
+    $redirectUri = trim((string) ($_POST['redirect_uri'] ?? ''));
     $state       = (string) ($_POST['state'] ?? '');
     $challenge   = (string) ($_POST['code_challenge'] ?? '');
-    $method      = (string) ($_POST['code_challenge_method'] ?? '');
+    $method      = strtoupper((string) ($_POST['code_challenge_method'] ?? ''));
 
-    if ($clientId === '' || $redirectUri === '') {
-        ia_error_page('Missing client_id or redirect_uri.');
+    // Re-validate rather than trusting the hidden fields. Without this, a form
+    // submitted with a rewritten redirect_uri would send the authorization code
+    // to an address the client never registered.
+    $syntax = ia_validate_syntax($clientId, $redirectUri);
+    $info   = ia_validate_registration($clientId, $redirectUri, $syntax['sameOrigin']);
+
+    // Take the display name from discovery too — the posted one is cosmetic and
+    // spoofable, and it is what the admin token list shows.
+    $clientName = $info['name'];
+
+    if ($challenge !== '' && $method !== 'S256') {
+        ia_error_page('code_challenge_method must be S256.');
     }
 
     $sep = str_contains($redirectUri, '?') ? '&' : '?';
@@ -129,46 +214,25 @@ $challenge    = (string) ($_GET['code_challenge'] ?? '');
 $method       = strtoupper((string) ($_GET['code_challenge_method'] ?? ''));
 $scopeParam   = (string) ($_GET['scope'] ?? '');
 
-// client_id: absolute http(s) URL without a fragment.
-$cid = parse_url($clientId);
-if (
-    $clientId === ''
-    || filter_var($clientId, FILTER_VALIDATE_URL) === false
-    || !in_array(strtolower($cid['scheme'] ?? ''), ['http', 'https'], true)
-    || isset($cid['fragment'])
-) {
-    ia_error_page('client_id must be an absolute http(s) URL without a fragment.');
+// Syntax first: this costs no outbound request, so it runs before the login
+// gate and rejects malformed requests without touching the network.
+$syntax = ia_validate_syntax($clientId, $redirectUri);
+$cid    = $syntax['cid'];
+
+// ── Login gate ───────────────────────────────────────────────────────────────
+//
+// Deliberately ahead of the client-metadata fetch. Discovery makes the server
+// issue an HTTP request to a URL the caller chose, so it must not be reachable
+// by an unauthenticated visitor. An anonymous request cannot produce a code
+// anyway, which is why nothing below here needs to redirect errors back.
+
+$auth->startSession();
+if (!$auth->isAuthenticated()) {
+    header('Location: /admin/?return_to=' . urlencode($_SERVER['REQUEST_URI'] ?? '/indieauth.php'));
+    exit;
 }
 
-// redirect_uri: an absolute URL. Native apps are allowed an application-
-// specific scheme (e.g. org.example.app://callback) per IndieAuth §5.2.1;
-// those can never be same-origin with an http(s) client_id, so they always
-// fall through to the registration check below. A few schemes are refused
-// outright because they would turn the Location header into script or a
-// local file read.
-$ru = parse_url($redirectUri);
-$ruScheme = strtolower($ru['scheme'] ?? '');
-if (
-    $redirectUri === ''
-    || filter_var($redirectUri, FILTER_VALIDATE_URL) === false
-    || $ruScheme === ''
-    || in_array($ruScheme, ['javascript', 'data', 'vbscript', 'file'], true)
-) {
-    ia_error_page('redirect_uri must be an absolute URL with a safe scheme.');
-}
-
-// redirect_uri registration: same origin as client_id is auto-trusted;
-// otherwise it must be declared by the client (rel=redirect_uri link or
-// client-metadata redirect_uris). Never redirect to an unverified URI.
-$sameOrigin =
-    strtolower($cid['scheme'] ?? '') === strtolower($ru['scheme'] ?? '')
-    && strtolower($cid['host'] ?? '') === strtolower($ru['host'] ?? '')
-    && ($cid['port'] ?? null) === ($ru['port'] ?? null);
-
-$clientInfo = IndieAuth::fetchClientInfo($clientId);
-if (!$sameOrigin && !in_array($redirectUri, $clientInfo['redirect_uris'], true)) {
-    ia_error_page('redirect_uri is not registered for this client.');
-}
+$clientInfo = ia_validate_registration($clientId, $redirectUri, $syntax['sameOrigin']);
 
 // From here on the redirect_uri is trusted — protocol errors go back to it.
 $redirectError = function (string $error, string $description) use ($redirectUri, $state, $me): never {
@@ -196,14 +260,6 @@ if ($responseType === 'code' && $challenge !== '' && $method !== 'S256') {
 }
 
 $requestedScopes = IndieAuth::filterScopes($scopeParam);
-
-// ── Login gate ───────────────────────────────────────────────────────────────
-
-$auth->startSession();
-if (!$auth->isAuthenticated()) {
-    header('Location: /admin/?return_to=' . urlencode($_SERVER['REQUEST_URI'] ?? '/indieauth.php'));
-    exit;
-}
 
 $csrf        = $auth->csrfToken();
 $clientName  = $clientInfo['name'];
@@ -244,9 +300,10 @@ header('Cache-Control: no-store');
     </p>
 
     <form method="post" action="/indieauth.php">
+        <?php // No client_name field: the approval handler re-derives it from
+              // discovery rather than trusting a value posted back. ?>
         <input type="hidden" name="csrf_token"            value="<?= $e($csrf) ?>">
         <input type="hidden" name="client_id"             value="<?= $e($clientId) ?>">
-        <input type="hidden" name="client_name"           value="<?= $e($clientName) ?>">
         <input type="hidden" name="redirect_uri"          value="<?= $e($redirectUri) ?>">
         <input type="hidden" name="state"                 value="<?= $e($state) ?>">
         <input type="hidden" name="code_challenge"        value="<?= $e($challenge) ?>">
