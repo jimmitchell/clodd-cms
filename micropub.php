@@ -1097,11 +1097,20 @@ $activityLog->log($logAction, 'post', $post->id, $post->title . ' (via micropub)
 
 // ── Response ────────────────────────────────────────────────────────────────
 
-$siteUrl  = rtrim($db->getSetting('site_url', ''), '/');
-$cfgTz    = $db->getSetting('timezone', '');
-$location = $publishedAt !== null && $siteUrl !== ''
-    ? $siteUrl . '/' . \CMS\Post::datePath($publishedAt, $post->slug, $cfgTz) . '/'
-    : ($siteUrl !== '' ? $siteUrl . '/admin/post-edit.php?id=' . $post->id : '/admin/post-edit.php?id=' . $post->id);
+$siteUrl = rtrim($db->getSetting('site_url', ''), '/');
+$cfgTz   = $db->getSetting('timezone', '');
+
+// The Location must be a URL this endpoint can resolve again, because clients
+// store it and send it straight back as the `url` of a later update or delete.
+// A draft created without a `published` property has no date yet, so it has no
+// date-based permalink — fall back to the bare slug. Slugs are unique and
+// mp_resolve_post_by_url() matches on the final path segment, so both forms
+// address the same post; once the draft is published, the update response
+// returns 201 with the real permalink and the client re-points itself.
+//
+// Deliberately NOT /admin/post-edit.php?id=N, which this endpoint cannot
+// resolve — clients stored it and then failed every update with a 404.
+$location = ($siteUrl !== '' ? $siteUrl : '') . '/' . $post->addressablePath($cfgTz) . '/';
 
 // Spec: 202 Accepted when the post will be processed later (scheduled).
 http_response_code($status === 'scheduled' ? 202 : 201);

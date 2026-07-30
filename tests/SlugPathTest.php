@@ -158,6 +158,67 @@ final class SlugPathTest extends TestCase
         );
     }
 
+    // ── addressablePath / Micropub Location round-trip ────────────────────────
+
+    public function testAddressablePathIsTheDatePathOncePublished(): void
+    {
+        $post = $this->makePost('published-post');
+
+        $this->assertSame('2026/07/29/published-post', $post->addressablePath());
+    }
+
+    public function testAddressablePathFallsBackToTheSlugWithoutADate(): void
+    {
+        $post = new Post($this->db);
+        $post->title  = 'Draft';
+        $post->slug   = 'my-draft';
+        $post->status = 'draft';   // published_at stays null
+
+        $this->assertSame('my-draft', $post->addressablePath());
+    }
+
+    /**
+     * The property that matters: whatever addressablePath() produces has to be
+     * resolvable by the same last-segment lookup Micropub uses to turn a
+     * client-supplied URL back into a post. A draft used to be handed
+     * `/admin/post-edit.php?id=N`, which resolved to nothing, so every
+     * subsequent update or delete from the client 404'd.
+     */
+    public function testAddressablePathAlwaysResolvesBackToItsOwnPost(): void
+    {
+        $published = $this->makePost('round-trip-published');
+
+        $draft = new Post($this->db);
+        $draft->title   = 'D';
+        $draft->slug    = 'round-trip-draft';
+        $draft->content = 'x';
+        $draft->status  = 'draft';
+        $draft->save();
+
+        foreach ([$published, $draft] as $post) {
+            $path = $post->addressablePath();
+
+            // Exactly what mp_resolve_post_by_url() does with the URL path.
+            $segments = array_values(array_filter(explode('/', $path), fn($s) => $s !== ''));
+            $resolved = Post::findBySlug($this->db, (string) end($segments));
+
+            $this->assertNotNull($resolved, "addressable path '{$path}' resolved to nothing");
+            $this->assertSame($post->id, $resolved->id);
+            $this->assertStringNotContainsString('.php', $path);
+        }
+    }
+
+    public function testAddressablePathHonoursTheSiteTimezone(): void
+    {
+        $post = new Post($this->db);
+        $post->slug         = 'tz-post';
+        $post->published_at = '2026-07-30 02:00:00';   // stored UTC
+
+        // In UTC-7 that instant is still the 29th, so the date path must shift.
+        $this->assertSame('2026/07/29/tz-post', $post->addressablePath('America/Los_Angeles'));
+        $this->assertSame('2026/07/30/tz-post', $post->addressablePath());
+    }
+
     private function makePost(string $slug): Post
     {
         $post = new Post($this->db);

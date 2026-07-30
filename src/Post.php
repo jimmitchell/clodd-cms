@@ -699,6 +699,26 @@ class Post
         return date('Y/m/d', $ts) . '/' . $slug;
     }
 
+    /**
+     * The path segment that addresses this post, with no leading or trailing
+     * slash — the date-based permalink once there is a publish date, otherwise
+     * the bare slug.
+     *
+     * Use this for anything a client will send back to identify the post (the
+     * Micropub Location header, for instance). Both forms resolve to the same
+     * post, because slugs are unique and lookups match on the final segment, so
+     * a draft addressed by slug keeps working after it gains a date.
+     *
+     * Not the same as a *public* URL: an unpublished post has no page on disk,
+     * so the returned path 404s for visitors until the post is published.
+     */
+    public function addressablePath(string $tz = ''): string
+    {
+        return $this->published_at !== null
+            ? self::datePath($this->published_at, $this->slug, $tz)
+            : $this->slug;
+    }
+
     // ── Adjacent post navigation ──────────────────────────────────────────────
 
     /**
