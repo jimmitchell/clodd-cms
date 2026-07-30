@@ -11,6 +11,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.13.0] — 2026-07-30
+
+A full code and security review of the repository, plus the fixes and refactors
+it turned up. **This release migrates the database to schema v24**, which happens
+automatically on the first request after deploy. It also adds rules to
+`nginx.conf.example` that have to be applied to the server config by hand — until
+they are, the exposure described under Security below is still open.
+
+### Security
+
+- **A WordPress import could write files anywhere the web server could reach.** `<wp:post_name>` from a WXR file became a post's slug verbatim, skipping the `slugify()` the title branch alongside it already called. That slug is spliced into the output path, so an import item naming `../../../../var/www/evil` wrote its rendered HTML there — an arbitrary file write from an untrusted import file, in a directory tree that is also served. Both assignments now sanitise, and the import's private slug-dedupe helper was dropped for the canonical `Post::resolveUniqueSlug()`, which always has. `Builder`'s write and delete paths grew a containment check against the output root as a backstop, so no future slug can escape even if a sanitiser is missed.
+- **Two places fetched attacker-supplied URLs with no SSRF guard**, while a careful one already existed elsewhere in the tree for IndieAuth client discovery. Importing media harvests URLs out of post `<img src>` attributes — content that can arrive from a WXR file or a Micropub client — and followed redirects with no private-address check, so it could be pointed at cloud metadata endpoints or anything else on the internal network. Webmention was worse, because the destination itself came from a remote page: `discoverEndpoint()` reads the target out of a *foreign* server's `Link:` header, then POSTs to it, so linking to a hostile site from any post was enough to get a blind POST to an arbitrary internal address. The existing guard is now `CMS\SafeHttp` and all three callers go through it: DNS pinned via `CURLOPT_RESOLVE` so the address checked is the address connected to, redirects followed manually with every hop revalidated, and the protocol allowlist fixed to HTTP and HTTPS.
+- **The login form accepted a cross-site POST with no CSRF token at all.** `hash_equals('', '')` is `true`, and the login POST is verified before a session token exists, so a request carrying no cookie and an empty `csrf_token` compared empty against empty and passed. Both sides are now rejected when empty.
+- **The IndieAuth consent screen validated the client on display but not on submit.** The GET path did the full job — scheme allowlist, fragment rejection, and a same-origin-or-registered check on `redirect_uri` against the client's published metadata. The POST path that actually mints the authorization code trusted its own hidden form fields, so a forged submission could carry any `redirect_uri` and have a valid code delivered to it. Both branches now run the same validation before anything is issued, and `client_name` is re-derived from discovery rather than read back from the form.
+- **Anyone who knew the admin username could lock the account out from every address at once.** Failed logins recorded a per-user counter as well as a per-IP one, and the login gate honoured both, so five requests from anywhere denied the owner access from everywhere. The per-user counter is still recorded for the activity log but no longer gates login; IP lockout plus two-factor is the control.
+- **Four authentication surfaces shared one rate-limit bucket** keyed only on IP — `/admin/`, Micropub, the internal API, and XML-RPC. A Micropub client looping on a stale token locked the owner out of the admin, and vice versa. `login_attempts` now carries a `scope` column (**schema v24**) and each surface counts independently. Existing rows migrate to `admin`; the two string-prefix schemes previously used for the same purpose are folded into the column so there is one mechanism.
+- **An anonymous caller could make the server issue an HTTP GET to any public URL** by hitting the IndieAuth endpoint, which performed client discovery above the login gate. The fetch moved below it.
+- **Micropub resolved post URLs by their last path segment alone**, ignoring scheme and host, so a URL on somebody else's domain that happened to end in a local slug resolved to the local post — for `q=source`, `action=update` and `action=delete` alike. Absolute URLs must now match the configured site origin.
+- **The project root is web-servable, and only some of it was denied.** `composer.json`, `composer.lock`, `VERSION`, the `Dockerfile`, `docker-compose.yml`, `nginx.conf.example`, every `.md` file, the committed 3.2 MB composer PHAR, and — where present on the server — the production nginx config itself were all reachable. Everything under `admin/partials/` was directly executable too, running handler fragments with no bootstrap and so no authentication check; they fatal rather than doing anything useful, but they should not be reachable. Deny rules for both are in `nginx.conf.example`. **These need applying to the live server config manually.**
+- `LIBXML_NONET` on the WXR import parser, matching the XML-RPC parser. `display_errors` is now switched off centrally rather than in three files, so a fatal in an admin page or a public endpoint no longer prints filesystem paths.
+- Admin sessions now expire server-side against `admin.session_lifetime` on a sliding idle timeout. Previously the setting was only a cookie hint, which the client controls.
+- The composer PHAR is no longer committed. The `.gitignore` entries meant to exclude it carried trailing `#` comments, which gitignore does not support, so they were literal patterns matching nothing.
+
+### Added
+
+- **A test suite** — PHPUnit, 140 tests, `php composer test`. It covers the places where a regression is silent and expensive: the slug-to-path chain end to end, `SafeHttp`'s address classification across loopback, RFC1918, link-local, multicast and IPv6 ULA, the IndieAuth PKCE and code-redemption guards, XML-RPC value round-tripping, WXR export escaping, and the CSRF comparison. Each test was validated by reintroducing the bug it covers and confirming it fails.
+- `CMS\SafeHttp` — the single boundary for outbound HTTP to a URL the CMS did not choose.
+- A **Security invariants** section in `CLAUDE.md` recording the five rules above that have each been a real bug here, and an explicit note on the accepted risk of allowing raw HTML in post bodies.
+
+### Changed
+
+- **`admin/xmlrpc.php` split from 1731 lines to 81.** The helpers and all 38 method handlers moved into `src/XmlRpcServer.php`, grouped by API family, with the `global $db, $auth, $config` usage replaced by constructor injection; what remains is a front controller that reads the body, parses, dispatches and emits. Verified against a recorded baseline of 42 XML-RPC calls captured before the move and byte-identical after — which caught one regression that no test would have, a file-scope constant becoming a class constant while its reference stayed unqualified, silently emptying `wp.getPostFormats`.
+- Slug resolution consolidated on `Post::resolveUniqueSlug()`; `Page` gained the equivalent, and the two places that reimplemented it now call it.
+- The "first of `file[]`" upload normalisation, duplicated between the Micropub and media endpoints, moved to `MicropubAuth::firstUploadedFile()`.
+
+### Fixed
+
+- **A post whose rendered HTML contained the literal `]]>` corrupted the WXR export.** Content was wrapped in CDATA without escaping the one sequence that terminates it, so a post about CDATA — or any code block containing it — ended its own section early and spilled markup into the document. Neighbouring fields had the inverse bug: titles and excerpts were HTML-escaped *inside* CDATA, so an `&` in a title came back as `&amp;` on reimport. One `Helpers::cdata()` helper now handles all of it.
+- **A Micropub draft with no publication date was handed a URL its own endpoint could not resolve.** With `published_at` null there was no permalink to return, so the `Location` header carried the admin edit URL instead. Clients store that as the post's identity and send it back, and resolution takes the last path segment — `post-edit.php`, which is nobody's slug — so every later update or delete of that draft failed with a 404. A dateless post now reports its slug path, which resolves; publishing it later still returns the real permalink.
+- **Unpublishing or deleting a post orphaned its OG image.** The removal path unlinked `index.html` but not the `og.png` generated beside it, and because the directory prune only fires on an empty directory, the directory survived too. The same leftover existed in the Micropub rename cleanup, which reached for raw `unlink`/`rmdir` and so also bypassed the new containment check; both now go through one guarded helper.
+- `Database`'s settings cache was `static`, so it was shared across every instance in a process, and it cached misses — meaning a setting written through one instance was invisible to another that had already read it as absent. Harmless under PHP-FPM, wrong for the CLI builder.
+- `Helpers::readingTime()` counted words with `str_word_count()`, which miscounts non-ASCII text.
+- **The search form flashed unstyled at the foot of every page.** Its overlay markup ships on every document but the rules hiding it sat below the critical-CSS marker, so they arrived with the deferred stylesheet rather than the inlined head block. The search results page moved across too — that form is above the fold and autofocuses, so the reflow shifted the control the cursor was already in. 135 bytes gzipped.
+- **The footer social icons rendered enormous before the stylesheet landed.** Same cause, and the inline SVGs carry a `viewBox` but no dimensions, so until the CSS arrived they drew at their intrinsic 300×150 — a giant Mastodon icon on every search submit. The block moved above the marker and the icons now carry explicit dimensions, so they cannot balloon even with no CSS at all.
+- `color-scheme` is now declared, so the browser paints its own furniture to match: Chrome was drawing a light scrollbar under every dark code block. Syntax-highlighted blocks stay dark in light mode, so they declare it themselves.
+- The header inner width sat at 750px while the content column below it was 632px, so the header ran wider than everything else on the page.
+- Body leading set to 1.6667, which at the 18px root lands on a round 30px instead of 28.8.
+
+---
+
 ## [1.12.2] — 2026-07-26
 
 ### Fixed
