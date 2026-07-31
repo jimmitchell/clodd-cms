@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The home page h-card now links to the profiles instead of the /now page.** The "Here's what I'm up to" link has been replaced by the same Mastodon, Bluesky and GitHub icons the footer carries, a shade larger since they carry the line on their own. The feed is left out — the home page already advertises it through `<link rel="alternate">` and the footer. Both places render from one new partial, `templates/partials/social-links.php`, so the two link sets cannot drift apart, and the profiles' `rel="me"` now sits inside the representative h-card where an IndieAuth or mf2 parser looks first.
+
 ---
 
 ## [1.13.2] — 2026-07-31

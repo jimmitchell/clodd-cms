@@ -13,7 +13,7 @@
  * Copy is settings-driven — `home_intro` if set, otherwise the author bio. Renders
  * nothing at all when there is no author name to introduce.
  *
- * Required in scope: $settings, $siteUrl, $navPages
+ * Required in scope: $settings, $siteUrl
  */
 
 use CMS\Helpers;
@@ -24,16 +24,11 @@ if ($introText === '') {
     $introText = trim((string) ($settings['author_bio'] ?? ''));
 }
 
-// The /now page is a convention, not a guarantee — link it only if it exists.
-$nowUrl = null;
-foreach ($navPages as $navPage) {
-    foreach (array_merge([$navPage], $navPage->children ?? []) as $candidate) {
-        if (($candidate->slug ?? '') === 'now') {
-            $nowUrl = rtrim($siteUrl, '/') . '/now/';
-            break 2;
-        }
-    }
-}
+// Buffered so the wrapper — and its margin — disappear entirely when no social
+// profiles are configured, rather than leaving an empty gap under the greeting.
+ob_start();
+include __DIR__ . '/social-links.php';
+$introSocial = trim(ob_get_clean());
 
 if ($introName !== ''):
 ?>
@@ -45,10 +40,12 @@ if ($introName !== ''):
         <span class="p-note"><?= Helpers::e($introText) ?></span><?php
         endif; ?>
     </p>
-    <?php if ($nowUrl !== null): ?>
-    <p class="home-intro__now">
-        <a href="<?= Helpers::e($nowUrl) ?>">Here&rsquo;s what I&rsquo;m up to <span aria-hidden="true">&rarr;</span></a>
-    </p>
+    <?php /* The same icons as the footer, minus the feed — the home page already
+             advertises that through <link rel="alternate">. They sit inside the
+             h-card so their rel="me" is found on the representative h-card, not
+             only down in the footer. */ ?>
+    <?php if ($introSocial !== ''): ?>
+    <div class="home-intro__social"><?= $introSocial ?></div>
     <?php endif; ?>
 </div>
 <?php endif; ?>

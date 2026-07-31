@@ -652,15 +652,19 @@ audio { width: 100%; }
 
 .home-intro__text .p-note { color: var(--color-muted); }
 
-/* The one link that goes somewhere sits on its own line, so the eye lands on it
-   after the sentence rather than competing with it. */
-.home-intro__now {
-    margin-top: .6rem;
-    font-size: .95rem;
+/* The links that go somewhere sit on their own line, so the eye lands on them
+   after the sentence rather than competing with it. The same icons as the
+   footer, a shade larger: up here they carry the line on their own instead of
+   sitting beside a copyright notice, and they need to be worth aiming at. */
+.home-intro__social {
+    margin-top: .8rem;
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
 }
 
-.home-intro__now a { text-decoration: none; }
-.home-intro__now a:hover { text-decoration: underline; }
+.home-intro__social .social-link { padding: .15rem 0; }
+.home-intro__social .social-link svg { width: 1.05rem; height: 1.05rem; }
 
 /* ── Post list / index ────────────────────────────────────────────────────── */
 .post-list {
@@ -1257,25 +1261,23 @@ audio { width: 100%; }
     gap: .75rem;
 }
 
-.site-footer__feed,
-.site-footer__mastodon,
-.site-footer__bluesky,
-.site-footer__github {
+/* ── Social links ─────────────────────────────────────────────────────────── */
+/* Shared by the footer and the home page h-card (partials/social-links.php).
+   Muted until hovered, when each link takes its own network's colour — the one
+   place on the site where a brand colour other than ours is allowed to show. */
+.social-link {
     display: flex;
     align-items: center;
     color: var(--color-muted);
     text-decoration: none;
 }
 
-.site-footer__feed svg,
-.site-footer__mastodon svg,
-.site-footer__bluesky svg,
-.site-footer__github svg { width: .9rem; height: .9rem; }
+.social-link svg { width: .9rem; height: .9rem; flex-shrink: 0; }
 
-.site-footer__feed:hover     { color: #f26522; }
-.site-footer__mastodon:hover { color: #6364ff; }
-.site-footer__bluesky:hover  { color: #0085ff; }
-.site-footer__github:hover   { color: var(--color-text); }
+.social-link--feed:hover     { color: #f26522; }
+.social-link--mastodon:hover { color: #6364ff; }
+.social-link--bluesky:hover  { color: #0085ff; }
+.social-link--github:hover   { color: var(--color-text); }
 
 /* =END CRITICAL= */
 
