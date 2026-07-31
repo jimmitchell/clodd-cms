@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.13.2] — 2026-07-31
+
 ### Fixed
 
 - **A post re-published unchanged was never written back to disk.** To avoid rewriting files that have not changed, the builder compares a hash of the rendered page against the hash it stored on the last build — but that hash describes what was last rendered, not what is actually on disk, and unpublishing a post removes its page while leaving the hash behind. Re-publish with the same content and the same date, which the editor pre-fills, and the render comes out identical to the stored hash, so nothing was written: the post reappeared in the home page, feeds and sitemap, and every one of those links led to a 404. Both posts and pages now check that the file is actually there, the way the OG image generator already did. Anything generated that goes missing — deleted by hand, lost to a failed write — now comes back on the next build instead of needing the whole site rebuilt from scratch.
