@@ -133,6 +133,9 @@ class XmlRpcServer
                 $struct       = (array) ($params[3] ?? []);
                 $publish      = (bool) ($params[4] ?? false);
                 $wasPublished = $post->status === 'published';
+                $oldDir       = $wasPublished
+                    ? $this->builder->postOutputDir($post->published_at, $post->slug)
+                    : null;
 
                 $this->applyStruct($post, $struct, $publish, $this->timezone);
 
@@ -145,7 +148,7 @@ class XmlRpcServer
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
                 $this->syndicatePost($post);
-                $this->rebuildPost($post, $wasPublished);
+                $this->rebuildPost($post, $wasPublished, $oldDir);
 
                 echo XmlRpc::encodeResponse(true);
                 break;
@@ -596,6 +599,9 @@ class XmlRpcServer
                     $this->fault(404, 'Post not found.');
                 }
                 $wasPublished = $post->status === 'published';
+                $oldDir       = $wasPublished
+                    ? $this->builder->postOutputDir($post->published_at, $post->slug)
+                    : null;
                 $this->applyWpPostStruct($post, $struct, $this->timezone);
                 if ($post->title === '' && !$post->isNote()) {
                     $this->fault(400, 'Title is required.');
@@ -605,7 +611,7 @@ class XmlRpcServer
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
                 $this->syndicatePost($post);
-                $this->rebuildPost($post, $wasPublished);
+                $this->rebuildPost($post, $wasPublished, $oldDir);
                 echo XmlRpc::encodeResponse(true);
                 break;
 
@@ -1288,9 +1294,15 @@ class XmlRpcServer
     /**
      * Run the appropriate Builder calls after saving a post.
      * Mirrors the logic in admin/post-edit.php.
+     *
+     * $oldDir is the post's output directory as it stood before the save, from
+     * Builder::postOutputDir(); pass it on an edit so a renamed or re-dated post
+     * does not leave its previous URL serving the old HTML.
      */
-    private function rebuildPost(Post $post, bool $wasPublished = false): void
+    private function rebuildPost(Post $post, bool $wasPublished = false, ?string $oldDir = null): void
     {
+        $this->builder->removeVacatedPostOutput($oldDir, $post);
+
         if ($post->status === 'published' || $wasPublished) {
             // buildPost() rebuilds archives for $post->categories (old in-memory terms).
             // Re-fetch to find any newly added terms that also need their archives rebuilt.

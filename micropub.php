@@ -567,9 +567,7 @@ if ($action === 'update') {
     $snapExcerpt     = $post->excerpt;
     $wasPublished    = $post->status === 'published';
 
-    $oldDir = ($wasPublished && $post->published_at !== null)
-        ? rtrim($config['paths']['output'], '/\\') . '/posts/' . \CMS\Post::datePath($post->published_at, $post->slug, $db->getSetting('timezone', ''))
-        : null;
+    $oldDir = $wasPublished ? $builder->postOutputDir($post->published_at, $post->slug) : null;
 
     // Old-position neighbors, snapshotted before mutation: if the post moves in
     // the timeline (published date or slug change) their prev/next links must be
@@ -801,14 +799,7 @@ if ($action === 'update') {
     }
 
     // Remove stale output when the date-path changed (slug or published date).
-    if ($oldDir !== null) {
-        $newDir = $post->published_at !== null
-            ? rtrim($config['paths']['output'], '/\\') . '/posts/' . \CMS\Post::datePath($post->published_at, $post->slug, $db->getSetting('timezone', ''))
-            : null;
-        if ($newDir !== $oldDir) {
-            $builder->removePostOutput($oldDir);
-        }
-    }
+    $builder->removeVacatedPostOutput($oldDir, $post);
 
     if ($post->status === 'published' || $wasPublished) {
         $builder->buildPost($post);

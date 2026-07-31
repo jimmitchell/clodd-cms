@@ -24,6 +24,8 @@ final class BuilderOutputTest extends TestCase
     private string $dbPath;
     private string $root;
     private Builder $builder;
+    /** @var array{paths: array{output: string, templates: string, content: string}} */
+    private array $config;
 
     protected function setUp(): void
     {
@@ -36,13 +38,15 @@ final class BuilderOutputTest extends TestCase
         $this->root = realpath(sys_get_temp_dir()) . '/clodd_out_' . bin2hex(random_bytes(6));
         mkdir($this->root . '/output', 0775, true);
 
-        $this->builder = new Builder([
+        $this->config = [
             'paths' => [
                 'output'    => $this->root . '/output',
                 'templates' => $this->root . '/templates',
                 'content'   => $this->root . '/content',
             ],
-        ], $this->db);
+        ];
+
+        $this->builder = new Builder($this->config, $this->db);
     }
 
     protected function tearDown(): void
@@ -142,6 +146,94 @@ final class BuilderOutputTest extends TestCase
 
         $this->assertFileExists($outside . '/index.html');
         $this->assertFileExists($outside . '/og.png');
+    }
+
+    // ── Moving a post: the directory it vacates ───────────────────────────────
+
+    public function testPostOutputDirIsNullWithoutAPublicationDate(): void
+    {
+        $this->assertNull($this->builder->postOutputDir(null, 'some-slug'));
+        $this->assertNull($this->builder->postOutputDir('2026-07-29 12:00:00', ''));
+    }
+
+    public function testRenamingAPublishedPostClearsTheOldDirectory(): void
+    {
+        $post   = $this->makePublishedPost('before');
+        $oldDir = $this->builder->postOutputDir($post->published_at, $post->slug);
+        $this->seedOutput($oldDir);
+
+        $post->slug = 'after';
+        $this->builder->removeVacatedPostOutput($oldDir, $post);
+
+        $this->assertDirectoryDoesNotExist($oldDir, 'the old URL must stop serving');
+    }
+
+    public function testChangingThePublicationDateClearsTheOldDirectory(): void
+    {
+        $post   = $this->makePublishedPost('moved');
+        $oldDir = $this->builder->postOutputDir($post->published_at, $post->slug);
+        $this->seedOutput($oldDir);
+
+        $post->published_at = '2026-08-15 12:00:00';
+        $this->builder->removeVacatedPostOutput($oldDir, $post);
+
+        $this->assertDirectoryDoesNotExist($oldDir);
+    }
+
+    /**
+     * buildPost() derives the directory to clean from the post's *current*
+     * values, so an unpublish that also renames would otherwise clean a path
+     * that was never written and leave the live one behind.
+     */
+    public function testUnpublishingAndRenamingInOneSaveStillClearsTheOldDirectory(): void
+    {
+        $post   = $this->makePublishedPost('both-at-once');
+        $oldDir = $this->builder->postOutputDir($post->published_at, $post->slug);
+        $this->seedOutput($oldDir);
+
+        $post->slug   = 'renamed';
+        $post->status = 'draft';
+        $this->builder->removeVacatedPostOutput($oldDir, $post);
+
+        $this->assertDirectoryDoesNotExist($oldDir);
+    }
+
+    public function testAPostThatHasNotMovedKeepsItsOutput(): void
+    {
+        $post   = $this->makePublishedPost('staying');
+        $oldDir = $this->builder->postOutputDir($post->published_at, $post->slug);
+        $this->seedOutput($oldDir);
+
+        // Saved with no change to slug or date — an edit to the body alone.
+        $this->builder->removeVacatedPostOutput($oldDir, $post);
+
+        $this->assertFileExists($oldDir . '/index.html', 'an unmoved post must not lose its output');
+        $this->assertFileExists($oldDir . '/og.png');
+    }
+
+    /**
+     * A create path has no previous location and must not attempt a removal at
+     * all. Asserting on the filesystem alone would not catch a regression here:
+     * removeFile()'s containment check quietly absorbs a bad path, so the only
+     * evidence would be spurious "Refusing to delete" lines in the error log on
+     * every new post. Spy on the call instead.
+     */
+    public function testANewPostAttemptsNoRemovalAtAll(): void
+    {
+        $spy = new class($this->config, $this->db) extends \CMS\Builder {
+            /** @var list<string> */
+            public array $removed = [];
+
+            public function removePostOutput(string $dir): void
+            {
+                $this->removed[] = $dir;
+            }
+        };
+
+        $post = $this->makePublishedPost('brand-new');
+        $spy->removeVacatedPostOutput(null, $post);
+
+        $this->assertSame([], $spy->removed);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

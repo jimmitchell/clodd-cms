@@ -133,6 +133,47 @@ class Builder
     }
 
     /**
+     * The output directory a post occupies, or null if it has no public one.
+     *
+     * Takes the values rather than the Post so a caller can ask where a post
+     * *used* to live, from a snapshot taken before the save. Pass null for
+     * $publishedAt when the post was not published, so nothing is claimed.
+     */
+    public function postOutputDir(?string $publishedAt, string $slug): ?string
+    {
+        if ($publishedAt === null || $slug === '') {
+            return null;
+        }
+
+        return $this->outputDir . '/posts/' . Post::datePath($publishedAt, $slug, $this->settings['timezone'] ?? '');
+    }
+
+    /**
+     * Remove the output directory a post has moved away from.
+     *
+     * Snapshot the old location with postOutputDir() before saving, then pass
+     * it here afterwards: if the post has since moved — a renamed slug or a
+     * changed publication date — the directory it left is removed.
+     *
+     * Pair it with buildPost(), which handles only the location derived from
+     * the post's *current* values. That division is why this exists: without
+     * it a rename leaves the old URL serving the old HTML indefinitely, and it
+     * is also why an unpublish needs no special case here — buildPost() clears
+     * the current location, this clears the vacated one, and between them
+     * nothing survives.
+     */
+    public function removeVacatedPostOutput(?string $oldDir, Post $post): void
+    {
+        if ($oldDir === null) {
+            return;
+        }
+
+        if ($this->postOutputDir($post->published_at, $post->slug) !== $oldDir) {
+            $this->removePostOutput($oldDir);
+        }
+    }
+
+    /**
      * Rebuild a single published page.
      * If the page is not published, removes its output file instead.
      */

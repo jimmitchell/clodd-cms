@@ -76,6 +76,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $snapPostKind    = $post?->post_kind ?? 'standard';
     $wasPublished    = $post?->status === 'published';
 
+    // Where the post currently lives on disk. Captured before the form is applied
+    // so a slug or date change can clean up the directory it moves away from.
+    $oldDir = $wasPublished ? $builder->postOutputDir($snapPublishedAt, (string) $snapSlug) : null;
+
     // Populate from form.
     if ($post === null) {
         $post = new Post($db);
@@ -281,6 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             || $action === 'unpublish'
             || ($action === 'draft' && $post->status === 'published')) {
 
+            $builder->removeVacatedPostOutput($oldDir, $post);
             $builder->buildPost($post);
 
             // Neighbors only need rebuilding when fields they display change:

@@ -269,6 +269,9 @@ if ($resource === 'posts' && $method === 'PUT' && $id !== null) {
     $wasPublished = $post->status === 'published';
     $oldCatIds    = array_column($post->categories, 'id');
     $oldTagIds    = array_column($post->tags, 'id');
+    // Captured before the body is applied, so a slug or date change can clean up
+    // the output directory the post moves away from.
+    $oldDir       = $wasPublished ? $builder->postOutputDir($post->published_at, $post->slug) : null;
 
     if (isset($body['title']))   $post->title   = trim($body['title']);
     if (isset($body['slug']))    $post->slug    = \CMS\Helpers::slugify($body['slug']);
@@ -299,6 +302,7 @@ if ($resource === 'posts' && $method === 'PUT' && $id !== null) {
 
     // buildPost() rebuilds archives for old terms ($post->categories); only explicitly
     // rebuild archives for terms that were newly added.
+    $builder->removeVacatedPostOutput($oldDir, $post);
     $builder->buildPost($post);
     if ($post->status === 'published' || $wasPublished) {
         $prev = \CMS\Post::findPrev($db, $post);
