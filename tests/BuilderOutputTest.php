@@ -259,7 +259,75 @@ final class BuilderOutputTest extends TestCase
         $this->assertSame([], $spy->removed);
     }
 
+    // ── The build-skip guard ──────────────────────────────────────────────────
+
+    /**
+     * The write is skipped when the rendered hash matches the stored one, so a
+     * post whose file has gone missing since that hash was recorded must not be
+     * left unwritten. Unpublishing removes the file but not the hash, and the
+     * publish date is pre-filled in the editor, so re-publishing unchanged
+     * renders byte-identical HTML — the post would be listed everywhere with no
+     * page behind it.
+     */
+    public function testRePublishingUnchangedContentWritesTheFileBackOut(): void
+    {
+        $this->writeTemplate('post.php', '<h1><?= $post->title ?></h1>');
+
+        $post = $this->makePublishedPost('round-trip');
+        $dir  = $this->builder->postOutputDir($post->published_at, $post->slug);
+
+        $this->builder->buildPost($post);
+        $this->assertFileExists($dir . '/index.html', 'precondition: the first build writes');
+        $this->assertNotNull($post->content_hash, 'precondition: the hash is recorded');
+
+        $post->status = 'draft';
+        $this->builder->buildPost($post);
+        $this->assertFileDoesNotExist($dir . '/index.html', 'precondition: unpublishing removes it');
+
+        // Same content, same date — the render is byte-identical to the stored hash.
+        $post->status = 'published';
+        $this->builder->buildPost($post);
+
+        $this->assertFileExists($dir . '/index.html', 'a missing file must be rebuilt');
+    }
+
+    public function testRePublishingAnUnchangedPageWritesTheFileBackOut(): void
+    {
+        $this->writeTemplate('page.php', '<h1><?= $page->title ?></h1>');
+
+        $page = new \CMS\Page($this->db);
+        $page->title   = 'About';
+        $page->slug    = 'about';
+        $page->content = 'x';
+        $page->status  = 'published';
+        $page->save();
+
+        $path = $this->root . '/output/pages/about/index.html';
+
+        $this->builder->buildPage($page);
+        $this->assertFileExists($path, 'precondition: the first build writes');
+
+        $page->status = 'draft';
+        $this->builder->buildPage($page);
+        $this->assertFileDoesNotExist($path, 'precondition: unpublishing removes it');
+
+        $page->status = 'published';
+        $this->builder->buildPage($page);
+
+        $this->assertFileExists($path, 'a missing file must be rebuilt');
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Put a minimal template in place so render() has something to include. */
+    private function writeTemplate(string $name, string $body): void
+    {
+        if (!is_dir($this->root . '/templates')) {
+            mkdir($this->root . '/templates', 0775, true);
+        }
+        file_put_contents($this->root . '/templates/' . $name, $body);
+    }
+
 
     /** Write the pair of files a published build produces. */
     private function seedOutput(string $dir): void

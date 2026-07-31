@@ -98,7 +98,12 @@ class Builder
         ]);
         $hash     = hash('sha256', $rendered);
 
-        if ($hash !== $post->content_hash) {
+        // The hash records what was last rendered, not what is on disk, and the
+        // two part company whenever a file goes away without the hash going with
+        // it — unpublishing removes the output but leaves the hash, so a post
+        // re-published unchanged renders identically and would never be written
+        // back. Check the file too, the same way buildOgImage() does.
+        if ($hash !== $post->content_hash || !file_exists($path)) {
             if ($this->writeFile($path, $rendered)) {
                 $post->markBuilt($hash);
             }
@@ -192,7 +197,8 @@ class Builder
         $rendered = $this->render('page.php', ['page' => $page, 'html' => $html]);
         $hash     = hash('sha256', $rendered);
 
-        if ($hash !== $page->content_hash) {
+        // See buildPost(): the stored hash can outlive the file it describes.
+        if ($hash !== $page->content_hash || !file_exists($path)) {
             if ($this->writeFile($path, $rendered)) {
                 $page->markBuilt($hash);
             }
