@@ -280,10 +280,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        // A save that takes the post off the public site: unpublishing, but also
+        // re-scheduling a post that is already live. bootstrap.php promotes due
+        // scheduled posts and builds them on every admin request, so a post can
+        // become published between opening the editor and submitting it — press
+        // Publish with a future date and this is the transition you get.
+        $leftPublicSite = $wasPublished && $post->status !== 'published';
+
         // Rebuild this post + selectively rebuild neighbors and shared resources.
-        if (($action === 'publish' && $post->status === 'published')
-            || $action === 'unpublish'
-            || ($action === 'draft' && $post->status === 'published')) {
+        // Anything public now, or public before this save, needs the pass; a
+        // draft or scheduled post that was never live has nothing on disk.
+        if ($post->status === 'published' || $wasPublished) {
 
             $builder->removeVacatedPostOutput($oldDir, $post);
             $builder->buildPost($post);
@@ -291,7 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Neighbors only need rebuilding when fields they display change:
             // they show this post's title and URL in their prev/next navigation.
             $neighborsAffected = !$wasPublished
-                || $action === 'unpublish'
+                || $leftPublicSite
                 || $post->title        !== $snapTitle
                 || $post->slug         !== $snapSlug
                 || $post->published_at !== $snapPublishedAt;
@@ -307,7 +314,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Asides always trigger a shared rebuild because the home/list pages
             // render their full body, so any content edit must propagate.
             $sharedMetaChanged = !$wasPublished
-                || $action === 'unpublish'
+                || $leftPublicSite
                 || $post->title        !== $snapTitle
                 || $post->slug         !== $snapSlug
                 || $post->published_at !== $snapPublishedAt
@@ -331,7 +338,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $builder->buildTagArchive($tagId);
             }
         }
-        // Scheduled and draft-only saves don't need a build.
+        // A post that has never been public needs no build either way.
 
         $logAction = match (true) {
             $action === 'unpublish'                                => 'unpublish',

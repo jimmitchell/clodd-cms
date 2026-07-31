@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Putting a live post back on the schedule left it published.** Pushing a post's date into the future takes it off the site until that date comes round, but the admin editor decided whether to touch the generated files by looking at which button was pressed rather than at where the post ended up — and "publish, but later" fell through every branch. Nothing was rebuilt: the article kept answering its URL, and the home page, feeds and sitemap kept listing it, while the admin showed it as scheduled. It is reachable without doing anything unusual, because a scheduled post whose time arrives is promoted and built on the next admin request, so a post can go live in the moment between opening the editor and pressing Publish on a date you have since moved. The decision is now made on the post's status rather than the button, so anything that is public — or was public a moment ago — gets the same rebuild pass.
+
 ---
 
 ## [1.13.1] — 2026-07-30

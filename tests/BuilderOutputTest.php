@@ -198,6 +198,29 @@ final class BuilderOutputTest extends TestCase
         $this->assertDirectoryDoesNotExist($oldDir);
     }
 
+    /**
+     * Re-scheduling a post that is already live is an unpublish in disguise:
+     * the date moves into the future *and* the post leaves the site. The
+     * directory it vacates has to go, and the future-dated one it now points
+     * at must not be written — publishing it early is the failure mode.
+     */
+    public function testReSchedulingALivePostTakesItOffTheSite(): void
+    {
+        $post   = $this->makePublishedPost('back-in-the-oven');
+        $oldDir = $this->builder->postOutputDir($post->published_at, $post->slug);
+        $this->seedOutput($oldDir);
+
+        $post->published_at = '2027-01-01 09:00:00';
+        $post->status       = 'scheduled';
+        $newDir             = $this->builder->postOutputDir($post->published_at, $post->slug);
+
+        $this->builder->removeVacatedPostOutput($oldDir, $post);
+        $this->builder->buildPost($post);
+
+        $this->assertDirectoryDoesNotExist($oldDir, 'the live URL must stop serving');
+        $this->assertDirectoryDoesNotExist($newDir, 'a scheduled post must not be written');
+    }
+
     public function testAPostThatHasNotMovedKeepsItsOutput(): void
     {
         $post   = $this->makePublishedPost('staying');
