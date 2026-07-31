@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.13.1] — 2026-07-30
+
+### Fixed
+
+- **Renaming a published post left the old URL serving the old copy.** The builder works out where to write a post from its current slug and date, so it had no way to know about a location the post had moved away from — changing either left the previous directory in place, still serving the previous version of the article indefinitely, and search engines and anyone holding the old link kept finding it. Only the Micropub endpoint cleaned up after itself; the same edit made in the admin, through the internal API, or over XML-RPC from MarsEdit did not. All four now clear the vacated directory, and the path formula they each need — along with the timezone it depends on — lives in one place rather than being spelled out again at every call site.
+  - Existing strays are not swept up automatically. If a published post has been renamed at some point, the old directory is still on disk and still being served; removing it is a manual job.
+
+---
+
 ## [1.13.0] — 2026-07-30
 
 A full code and security review of the repository, plus the fixes and refactors
