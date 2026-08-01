@@ -66,8 +66,8 @@
     --color-rule:       color-mix(in srgb, var(--color-border) 60%, transparent);
     /* A neutral black shadow reads blue against warm paper. */
     --shadow-rgb:       60, 40, 20;
-    --max-content:      680px;
-    --max-wide:         720px;
+    --max-content:      700px;
+    --max-wide:         740px;
 }
 
 /* ── Dark mode tokens ──────────────────────────────────────────────────────── */
@@ -186,7 +186,7 @@ audio { width: 100%; }
 */
 .site-header__inner {
     /* max-width: 750px; */
-    max-width: 632px;
+    max-width: 652px;
     margin: 0 auto;
     display: flex;
     align-items: center;
