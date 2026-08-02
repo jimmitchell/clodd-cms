@@ -149,7 +149,9 @@ use CMS\Helpers;
         <p class="form-hint">
             Create a token in your Mastodon account under
             Preferences → Development → New application.
-            Only the <code>write:statuses</code> scope is needed.
+            It needs both <code>write:statuses</code> and <code>write:media</code> —
+            without the second, a photo post arrives with its words and no picture.
+            Changing an existing application's scopes means regenerating its token.
         </p>
     </div>
 

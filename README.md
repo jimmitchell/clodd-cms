@@ -355,7 +355,7 @@ The font files at `fonts/og/` must be present. The Docker image includes FreeTyp
 
 ### Mastodon
 
-Set your handle (`@user@instance.social`), instance URL, and an API access token in **Settings → Mastodon**. The token only needs the `write:statuses` scope. When both fields are saved, new posts are automatically tooted on first publish. Individual posts have a **Skip Mastodon** checkbox to suppress tooting.
+Set your handle (`@user@instance.social`), instance URL, and an API access token in **Settings → Mastodon**. The token needs the `write:statuses` and `write:media` scopes — without the second, a post carrying photos is tooted with its words and no pictures, since uploading an attachment is a separate permission. Changing the scopes on an application you already made means regenerating its token. When both fields are saved, new posts are automatically tooted on first publish. Individual posts have a **Skip Mastodon** checkbox to suppress tooting.
 
 The handle also adds a `fediverse:creator` meta tag to every page and renders a Mastodon icon link in the footer.
 

@@ -110,9 +110,15 @@ class Mastodon
             return null;
         }
         if (!in_array($response['code'], [200, 202], true)) {
+            // Uploading an attachment is write:media, a scope of its own — a
+            // token holding only write:statuses toots the words and is refused
+            // here, which reads as a post that simply lost its pictures.
+            $hint = $response['code'] === 403
+                ? ' — does the access token carry the write:media scope?'
+                : '';
             self::log(
                 "media upload refused with HTTP {$response['code']} ({$name}, {$mime}, {$bytes} bytes): "
-                . self::snippet($response['body'])
+                . self::snippet($response['body']) . $hint
             );
             return null;
         }
