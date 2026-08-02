@@ -8,6 +8,9 @@ class Bluesky
 {
     private const API_BASE = 'https://bsky.social/xrpc';
 
+    /** The collection every post this CMS writes lives in. */
+    private const COLLECTION = 'app.bsky.feed.post';
+
     /** Ceiling a PDS puts on an image blob. Larger files are re-encoded to fit. */
     private const BLOB_MAX_BYTES = 976_560;
 
@@ -22,12 +25,13 @@ class Bluesky
 
     /**
      * Build and post to Bluesky for a newly-published post.
-     * Returns the canonical bsky.app post URL on success, null on failure.
+     * Returns ['url' => canonical bsky.app URL, 'rkey' => record key], null on failure.
      *
-     * @param array<array{path:string,mime:string,alt:string}> $images
-     *        Local image files to attach — see SyndicationMedia::forPost().
+     * @param  array<array{path:string,mime:string,alt:string}> $images
+     *         Local image files to attach — see SyndicationMedia::forPost().
+     * @return array{url:string,rkey:string}|null
      */
-    public function postToBluesky(string $title, string $excerpt, string $url, array $images = []): ?string
+    public function postToBluesky(string $title, string $excerpt, string $url, array $images = []): ?array
     {
         $session = $this->createSession();
         if ($session === false) {
@@ -47,6 +51,119 @@ class Bluesky
         return $this->createPost($session['did'], $session['jwt'], $text, $facets, $embed);
     }
 
+    /**
+     * Rewrite an existing record to match the post as it now stands.
+     *
+     * AT Protocol has no edit operation: putRecord replaces what is at the
+     * record key. Doing that rather than deleting and re-posting is what keeps
+     * the bsky.app URL, and the likes and replies hanging off it, alive.
+     *
+     * Returns true when the record already says this, as well as when the
+     * rewrite lands — both leave the copy correct.
+     *
+     * @param array<array{path:string,mime:string,alt:string}> $images
+     */
+    public function editPost(string $rkey, string $title, string $excerpt, string $url, array $images = []): bool
+    {
+        $session = $this->createSession();
+        if ($session === false) {
+            self::log("could not sign in to edit record {$rkey}");
+            return false;
+        }
+
+        $existing = $this->fetchRecord($session['did'], $rkey);
+        if ($existing === null) {
+            return false;
+        }
+        $record = $existing['record'];
+
+        $text   = $this->buildText($title, $excerpt, $url);
+        $facets = $this->buildFacets($text, $url);
+
+        // Blobs already on the PDS are reused, so fixing a typo on a photo post
+        // rewrites the words without pushing the pictures over the wire again.
+        // A changed number of images means the post's photos really did change,
+        // and only then are they uploaded afresh.
+        $embed = is_array($record['embed'] ?? null) ? $record['embed'] : null;
+        if (count($images) !== count($embed['images'] ?? [])) {
+            $embed = $this->buildImageEmbed($session['jwt'], $images);
+        }
+
+        if ($text === '' && $embed === null) {
+            self::log("skipping edit of record {$rkey}: the post has no text and no images left");
+            return false;
+        }
+
+        $updated = ['$type' => self::COLLECTION, 'text' => $text];
+        // The original timestamp stays: it is what orders the record in every
+        // reader's timeline, and an edit is not a re-post.
+        $updated['createdAt'] = (string) ($record['createdAt'] ?? gmdate('Y-m-d\TH:i:s\Z'));
+        if ($facets !== []) {
+            $updated['facets'] = $facets;
+        }
+        if ($embed !== null) {
+            $updated['embed'] = $embed;
+        }
+
+        if (self::sameRecord($record, $updated)) {
+            return true;
+        }
+
+        $response = $this->request('POST', 'com.atproto.repo.putRecord', $session['jwt'], [
+            'repo'       => $session['did'],
+            'collection' => self::COLLECTION,
+            'rkey'       => $rkey,
+            'record'     => $updated,
+            // Refuse the write if the record changed since it was read, rather
+            // than overwriting an edit made in the Bluesky app.
+            'swapRecord' => $existing['cid'],
+        ]);
+
+        if ($response === null || $response['code'] !== 200) {
+            $code = $response['code'] ?? 'no response';
+            self::log("putRecord refused for {$rkey} (HTTP {$code}): " . self::snippet($response['body'] ?? ''));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Delete a record. Returns true once it is gone from the repo — including
+     * when it was already gone, since the caller's goal is met either way and a
+     * missing record means somebody deleted it in the app.
+     */
+    public function deletePost(string $rkey): bool
+    {
+        $session = $this->createSession();
+        if ($session === false) {
+            self::log("could not sign in to delete record {$rkey}");
+            return false;
+        }
+
+        $response = $this->request('POST', 'com.atproto.repo.deleteRecord', $session['jwt'], [
+            'repo'       => $session['did'],
+            'collection' => self::COLLECTION,
+            'rkey'       => $rkey,
+        ]);
+
+        if ($response === null) {
+            self::log("deleteRecord got no response for {$rkey}");
+            return false;
+        }
+        if ($response['code'] === 200) {
+            return true;
+        }
+        // Older PDS builds answer a delete of something already deleted with an
+        // error rather than the modern no-op.
+        if (str_contains($response['body'], 'RecordNotFound') || $response['code'] === 404) {
+            return true;
+        }
+
+        self::log("deleteRecord refused for {$rkey} (HTTP {$response['code']}): " . self::snippet($response['body']));
+        return false;
+    }
+
     // ── Private ───────────────────────────────────────────────────────────────
 
     /**
@@ -56,29 +173,71 @@ class Bluesky
      */
     private function createSession(): array|false
     {
-        $ch = curl_init(self::API_BASE . '/com.atproto.server.createSession');
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => json_encode(['identifier' => $this->handle, 'password' => $this->appPassword]),
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 10,
+        $response = $this->request('POST', 'com.atproto.server.createSession', null, [
+            'identifier' => $this->handle,
+            'password'   => $this->appPassword,
         ]);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($response === false || $httpCode !== 200) {
+        if ($response === null || $response['code'] !== 200) {
             return false;
         }
 
-        $data = json_decode((string) $response, true);
+        $data = json_decode($response['body'], true);
         if (!is_array($data) || empty($data['did']) || empty($data['accessJwt'])) {
             return false;
         }
 
         return ['did' => $data['did'], 'jwt' => $data['accessJwt']];
+    }
+
+    /**
+     * Read a record as it currently stands in the repo.
+     * Returns the record body and its cid, or null when it can't be read.
+     *
+     * @return array{record:array<string,mixed>,cid:string}|null
+     */
+    private function fetchRecord(string $did, string $rkey): ?array
+    {
+        $query = http_build_query([
+            'repo'       => $did,
+            'collection' => self::COLLECTION,
+            'rkey'       => $rkey,
+        ]);
+
+        $response = $this->request('GET', 'com.atproto.repo.getRecord?' . $query, null);
+        if ($response === null || $response['code'] !== 200) {
+            $code = $response['code'] ?? 'no response';
+            self::log("could not read record {$rkey} (HTTP {$code})");
+            return null;
+        }
+
+        $data = json_decode($response['body'], true);
+        if (!is_array($data) || !is_array($data['value'] ?? null) || empty($data['cid'])) {
+            self::log("getRecord returned nothing usable for {$rkey}: " . self::snippet($response['body']));
+            return null;
+        }
+
+        return ['record' => $data['value'], 'cid' => (string) $data['cid']];
+    }
+
+    /**
+     * Whether a rewrite would leave the record saying exactly what it says now.
+     *
+     * Compared on the fields this CMS writes, so a key the PDS or the Bluesky
+     * app added of its own accord — langs, a label — is not read as a change
+     * and does not provoke a pointless write.
+     *
+     * @param array<string,mixed> $current
+     * @param array<string,mixed> $updated
+     */
+    private static function sameRecord(array $current, array $updated): bool
+    {
+        foreach (['text', 'createdAt', 'facets', 'embed'] as $field) {
+            if (($current[$field] ?? null) != ($updated[$field] ?? null)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -174,38 +333,27 @@ class Bluesky
      */
     private function uploadBlob(string $jwt, string $bytes, string $mime): ?array
     {
-        $ch = curl_init(self::API_BASE . '/com.atproto.repo.uploadBlob');
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $bytes,
-            CURLOPT_HTTPHEADER     => [
-                'Authorization: Bearer ' . $jwt,
-                'Content-Type: ' . $mime,
-            ],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 30,
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($response === false || $httpCode !== 200) {
+        $response = $this->request('POST', 'com.atproto.repo.uploadBlob', $jwt, $bytes, $mime, 30);
+        if ($response === null || $response['code'] !== 200) {
+            $code = $response['code'] ?? 'no response';
+            self::log("uploadBlob refused a {$mime} of " . strlen($bytes) . " bytes (HTTP {$code})");
             return null;
         }
 
-        $data = json_decode((string) $response, true);
+        $data = json_decode($response['body'], true);
         return (is_array($data) && isset($data['blob']) && is_array($data['blob'])) ? $data['blob'] : null;
     }
 
     /**
      * POST the record to the Bluesky API.
-     * Returns the canonical bsky.app post URL on success, null on failure.
+     * Returns ['url' => ..., 'rkey' => ...] on success, null on failure.
+     *
+     * @return array{url:string,rkey:string}|null
      */
-    private function createPost(string $did, string $jwt, string $text, array $facets, ?array $embed = null): ?string
+    private function createPost(string $did, string $jwt, string $text, array $facets, ?array $embed = null): ?array
     {
         $record = [
-            '$type'     => 'app.bsky.feed.post',
+            '$type'     => self::COLLECTION,
             'text'      => $text,
             'createdAt' => gmdate('Y-m-d\TH:i:s\Z'),
         ];
@@ -218,40 +366,96 @@ class Bluesky
             $record['embed'] = $embed;
         }
 
-        $body = json_encode([
+        $response = $this->request('POST', 'com.atproto.repo.createRecord', $jwt, [
             'repo'       => $did,
-            'collection' => 'app.bsky.feed.post',
+            'collection' => self::COLLECTION,
             'record'     => $record,
         ]);
 
-        $ch = curl_init(self::API_BASE . '/com.atproto.repo.createRecord');
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_HTTPHEADER     => [
-                'Authorization: Bearer ' . $jwt,
-                'Content-Type: application/json',
-            ],
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 10,
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($response === false || $httpCode !== 200) {
+        if ($response === null || $response['code'] !== 200) {
+            $code = $response['code'] ?? 'no response';
+            self::log("createRecord refused (HTTP {$code}): " . self::snippet($response['body'] ?? ''));
             return null;
         }
 
         // AT URI format: at://did:plc:.../app.bsky.feed.post/{rkey}
         // Construct the canonical bsky.app URL from the handle and rkey.
-        $data = json_decode((string) $response, true);
+        $data = json_decode($response['body'], true);
         if (!is_array($data) || empty($data['uri'])) {
+            self::log('createRecord returned no uri: ' . self::snippet($response['body']));
             return null;
         }
 
         $rkey = basename($data['uri']);
-        return 'https://bsky.app/profile/' . $this->handle . '/post/' . $rkey;
+        return [
+            'url'  => 'https://bsky.app/profile/' . $this->handle . '/post/' . $rkey,
+            'rkey' => $rkey,
+        ];
+    }
+
+    /**
+     * Send one XRPC request.
+     *
+     * @param  array<string,mixed>|string|null $body  array → JSON, string → raw bytes
+     * @return array{code:int,body:string}|null
+     */
+    private function request(
+        string $method,
+        string $endpoint,
+        ?string $jwt = null,
+        array|string|null $body = null,
+        string $contentType = 'application/json',
+        int $timeout = 10
+    ): ?array {
+        $headers = [];
+        if ($jwt !== null) {
+            $headers[] = 'Authorization: Bearer ' . $jwt;
+        }
+
+        $options = [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => $timeout,
+        ];
+
+        if ($method === 'POST') {
+            $options[CURLOPT_POST]       = true;
+            $options[CURLOPT_POSTFIELDS] = is_array($body) ? (string) json_encode($body) : (string) $body;
+            $headers[]                   = 'Content-Type: ' . $contentType;
+        }
+
+        $options[CURLOPT_HTTPHEADER] = $headers;
+
+        $ch = curl_init(self::API_BASE . '/' . $endpoint);
+        curl_setopt_array($ch, $options);
+
+        $response = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false) {
+            self::log("{$method} {$endpoint} failed: " . ($error !== '' ? $error : 'unknown cURL error'));
+            return null;
+        }
+
+        return ['code' => $httpCode, 'body' => (string) $response];
+    }
+
+    /**
+     * Syndication runs alongside publishing, where there is nobody to show an
+     * error to and the post itself must still succeed. Every failure here is
+     * therefore swallowed — so each one says what happened on the way past,
+     * because otherwise a copy that never arrived leaves nothing to read.
+     */
+    private static function log(string $message): void
+    {
+        error_log('[bluesky] ' . $message);
+    }
+
+    /** A response body cut to something a log line can carry. */
+    private static function snippet(string $body, int $max = 300): string
+    {
+        $body = trim(preg_replace('/\s+/', ' ', $body) ?? '');
+        return mb_strlen($body) > $max ? mb_substr($body, 0, $max) . '…' : $body;
     }
 }

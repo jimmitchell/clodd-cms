@@ -25,7 +25,7 @@ A lightweight flat-file CMS with a PHP/SQLite admin panel and a fully static HTM
 - **JSON-LD structured data** — `BlogPosting` schema.org markup in every post's `<head>` for richer search results; author name configurable in Settings
 - **Reading time** — estimated minutes-to-read displayed inline with the post date
 - **Microformats2 (h-entry)** — posts and index items carry MF2 classes for IndieWeb parsers and readers
-- **Mastodon & Bluesky** — optional auto-post on first publish; the URL of the remote post is stored and displayed as an "Also on:" link at the bottom of each post; per-post skip checkbox for each platform. Aside notes use [POSSE](https://indieweb.org/POSSE) — they syndicate as native-looking notes (full plaintext body, no title, no link back), with a live Bluesky-grapheme/Mastodon-character counter and over-limit warning under the editor
+- **Mastodon & Bluesky** — optional auto-post on first publish, with the copies kept in step afterwards: editing the post rewrites them, deleting or unpublishing it takes them down; the URL of the remote post is stored and displayed as an "Also on:" link at the bottom of each post; per-post skip checkbox for each platform. Aside notes use [POSSE](https://indieweb.org/POSSE) — they syndicate as native-looking notes (full plaintext body, no title, no link back), with a live Bluesky-grapheme/Mastodon-character counter and over-limit warning under the editor
 - **Incoming webmentions** — display likes, reposts, and replies on posts via webmention.io; client-side fetch with avatar grid for reactions and threaded reply cards
 - **Outgoing webmentions** — CLI script (`bin/send-webmentions.php`) discovers endpoints and sends pings for all external links in published posts; safe to schedule via cron
 - **WordPress XML export** — download all posts (with categories, tags, and optional drafts) as a WXR file importable via WordPress Tools → Import
@@ -355,7 +355,7 @@ The font files at `fonts/og/` must be present. The Docker image includes FreeTyp
 
 ### Mastodon
 
-Set your handle (`@user@instance.social`), instance URL, and an API access token in **Settings → Mastodon**. The token needs the `write:statuses` and `write:media` scopes — without the second, a post carrying photos is tooted with its words and no pictures, since uploading an attachment is a separate permission. Changing the scopes on an application you already made means regenerating its token. When both fields are saved, new posts are automatically tooted on first publish. Individual posts have a **Skip Mastodon** checkbox to suppress tooting.
+Set your handle (`@user@instance.social`), instance URL, and an API access token in **Settings → Mastodon**. The token needs the `write:statuses` and `write:media` scopes — without the second, a post carrying photos is tooted with its words and no pictures, since uploading an attachment is a separate permission. `read:statuses` is optional and only affects editing; see [keeping the copies in step](#keeping-the-copies-in-step). Changing the scopes on an application you already made means regenerating its token. When both fields are saved, new posts are automatically tooted on first publish. Individual posts have a **Skip Mastodon** checkbox to suppress tooting.
 
 The handle also adds a `fediverse:creator` meta tag to every page and renders a Mastodon icon link in the footer.
 
@@ -364,6 +364,20 @@ The handle also adds a `fediverse:creator` meta tag to every page and renders a 
 Set your Bluesky handle and an app password in **Settings → Bluesky**. New posts are automatically cross-posted on first publish. Individual posts have a **Skip Bluesky** checkbox.
 
 Both platforms are independent — you can enable one, both, or neither.
+
+### Keeping the copies in step
+
+A syndicated copy follows the post for the rest of its life:
+
+- **Editing a published post** rewrites the copies to match. Mastodon is edited through its own edit endpoint; Bluesky has no edit operation, so the record is rewritten in place at the same key, which keeps the `bsky.app` URL and the likes and replies on it. A save that leaves the syndicated words unchanged sends nothing, so fixing a category or a tag does not mark the toot as edited.
+- **Deleting a post** deletes the copies — from the posts list, the post editor, `DELETE /admin/api/posts/{id}`, or a Micropub `action=delete`. A Micropub undelete restores the post here but cannot bring the copies back; the post returns unsyndicated.
+- **Unpublishing a post** deletes the copies too, so nothing is left pointing readers at a page that has stopped existing. Publishing it again syndicates afresh if the checkboxes are ticked.
+
+Photos are only re-uploaded when their number has changed, so editing the words of a photo post leaves the pictures alone. Changing which photos a post carries without changing how many — swapping one for another, or reordering them — is not detected, and the copies keep the pictures they were published with.
+
+Editing and deleting need no scope beyond the `write:statuses` and `write:media` the Mastodon token already has, and Bluesky uses the same app password. Adding `read:statuses` is worth it though: it lets the toot be read back before an edit is sent, so a save that changed nothing a reader can see stops marking the toot as edited. Without it every save of a published post sends its edit and the instance decides what to do with it.
+
+Copies made before this existed are still reachable: the ids are recovered from the stored URLs on upgrade. The **Toot URL** and **Bluesky post URL** fields in the post editor are what an edit or delete follows, so pointing one at a different status re-points both.
 
 ### GitHub
 
@@ -639,6 +653,7 @@ clodd-cms/
 │   ├── Page.php
 │   ├── Post.php            # Post model (incl. post_kind: standard | aside)
 │   ├── RssFeed.php         # RSS 2.0 feed generator (root + per-term archives)
+│   ├── Syndication.php     # Creates, updates and removes the Mastodon/Bluesky copies
 │   ├── Webmention.php      # Outgoing webmention discovery and sending
 │   └── XmlRpc.php
 ├── templates/              # Public HTML templates

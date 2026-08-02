@@ -29,6 +29,7 @@ $auth->startSession();
 
 $builder     = new \CMS\Builder($config, $db);
 $activityLog = new \CMS\ActivityLog($db);
+$syndication = new \CMS\Syndication($db, $config);
 
 // Prune stale login attempts (~1% of requests). Keeps the table small so the
 // rate-limiting query stays fast; entries older than 24 hours are never needed.

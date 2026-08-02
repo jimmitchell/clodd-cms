@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A syndicated copy now follows the post for the rest of its life.** Mastodon and Bluesky copies were made once, on first publish, and then forgotten: fixing a typo left the wrong words on two other networks, and deleting a post left both copies up, still linking to a page that had stopped existing. Editing a published post now rewrites its copies, and deleting or unpublishing it takes them down — from the posts list, the post editor, `DELETE /admin/api/posts/{id}`, `PUT /admin/api/posts/{id}`, and Micropub `action=update` / `action=delete` alike. A Micropub undelete restores the post here but cannot bring the copies back; the post returns unsyndicated.
+
+  Mastodon is edited through its own edit endpoint. Bluesky has no edit operation, so the record is rewritten in place at the same key with `putRecord`, which keeps the `bsky.app` URL and the likes and replies hanging off it; the write is guarded by `swapRecord` so an edit made in the Bluesky app is not silently overwritten. Both clients read the copy back first and send nothing when it already says what the post says, so a save that only moved a post between categories does not mark the toot as edited. Reading a toot's text back needs `read:statuses`, which a token minted only to post does not carry — without it the edit is sent anyway and the instance decides, and the log line says which scope would quieten it. Photos are only re-uploaded when their number has changed — changing which photos a post carries without changing how many is not detected, and the copies keep the pictures they were published with.
+
+  Schema v25 adds `posts.mastodon_status_id` and `posts.bluesky_rkey`, the handles the two APIs address a copy by. Posts syndicated before the columns existed have theirs recovered from the stored URLs on upgrade, so an old post is editable and deletable too. The **Toot URL** and **Bluesky post URL** fields in the post editor are what an edit or a delete follows, so pointing one at a different status re-points both.
+
+### Changed
+
+- **Composing a syndicated copy now happens in one place.** The admin post form and the Micropub endpoint each assembled their own payload — which words a note contributes, whether to send a link back, which photos ride along — and the two had already drifted once. `CMS\Syndication` now holds that decision, and the admin form, the REST API and Micropub all call through it. A network is only forgotten once its copy is actually gone, so a delete that failed against an instance that was down leaves the id in place rather than losing the only way back to it.
+
 ### Fixed
 
 - **A photo post published over Micropub syndicated without its words.** A photo post keeps the picture in its content and the caption in its excerpt, so `Post::noteText()` — what Mastodon and Bluesky are handed, and what the search index stores — read the excerpt. But Micropub has no caption property: a client sends the words as `content` and the picture as `photo`, so a photo post arriving that way has an empty excerpt and its caption in the body. Bluesky got the picture with no text at all, and the search index stored a blank entry. `noteText()` now falls back to the body when a photo post has no excerpt, which still yields nothing for a post written in the admin whose body is only the image.

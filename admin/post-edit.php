@@ -7,9 +7,6 @@ $auth->check();
 
 use CMS\Post;
 use CMS\Helpers;
-use CMS\Mastodon;
-use CMS\Bluesky;
-use CMS\SyndicationMedia;
 
 $post    = null;
 $isNew   = true;
@@ -52,6 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $wasPublished = $post->status === 'published';
             $prevNeighbor = $wasPublished ? Post::findPrev($db, $post) : null;
             $nextNeighbor = $wasPublished ? Post::findNext($db, $post) : null;
+            // Before the row goes: the ids of the copies live on it.
+            $syndication->remove($post);
             $post->delete();
             // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
             $post->status = 'draft';
@@ -221,63 +220,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $addedTagIds        = array_values(array_diff($tagIds,    $oldTagIds));
         $removedTagIds      = array_values(array_diff($oldTagIds, $tagIds));
 
-        // Update syndication URLs if the user edited them.
+        // Update syndication URLs if the user edited them. Pointing the field at
+        // a different status re-points the edits and deletes that follow it, so
+        // the remote id is re-read from the URL rather than left pointing at
+        // whichever status was there before.
         if (isset($_POST['mastodon_url'])) {
             $newMastodonUrl = trim($_POST['mastodon_url']) ?: null;
             if ($newMastodonUrl !== $post->mastodon_url) {
-                $post->mastodon_url = $newMastodonUrl;
-                $db->update('posts', ['mastodon_url' => $newMastodonUrl], 'id = :id', ['id' => $post->id]);
+                $post->mastodon_url       = $newMastodonUrl;
+                $post->mastodon_status_id = $newMastodonUrl !== null
+                    ? Helpers::mastodonStatusId($newMastodonUrl)
+                    : null;
+                $db->update('posts', [
+                    'mastodon_url'       => $post->mastodon_url,
+                    'mastodon_status_id' => $post->mastodon_status_id,
+                ], 'id = :id', ['id' => $post->id]);
             }
         }
         if (isset($_POST['bluesky_url'])) {
             $newBlueskyUrl = trim($_POST['bluesky_url']) ?: null;
             if ($newBlueskyUrl !== $post->bluesky_url) {
-                $post->bluesky_url = $newBlueskyUrl;
-                $db->update('posts', ['bluesky_url' => $newBlueskyUrl], 'id = :id', ['id' => $post->id]);
+                $post->bluesky_url  = $newBlueskyUrl;
+                $post->bluesky_rkey = $newBlueskyUrl !== null
+                    ? Helpers::blueskyRkey($newBlueskyUrl)
+                    : null;
+                $db->update('posts', [
+                    'bluesky_url'  => $post->bluesky_url,
+                    'bluesky_rkey' => $post->bluesky_rkey,
+                ], 'id = :id', ['id' => $post->id]);
             }
         }
 
         // Syndicate to Mastodon and/or Bluesky on first publish (unless opted out).
         if ($isFirstPublish || $isFirstBluesky) {
-            // POSSE: notes (asides and photo posts) syndicate as native-looking
-            // notes — no title, no link back.
-            if ($post->isNote()) {
-                $postUrl = '';
-                $excerpt = $post->noteText();
-            } else {
-                $postUrl = rtrim($db->getSetting('site_url', ''), '/') . '/' . Post::datePath($post->published_at, $post->slug, $cfgTz) . '/';
-                $effectiveExcerpt = $post->effectiveExcerpt();
-                $excerpt = $effectiveExcerpt !== null
-                    ? strip_tags($effectiveExcerpt)
-                    : Helpers::truncate($post->content, 280);
-            }
-
-            // Photos ride along with the text so a photo post looks native on
-            // both networks instead of arriving as a caption with no picture.
-            $images = SyndicationMedia::forPost(
-                $post,
-                $config['paths']['content'] . '/media',
-                rtrim($db->getSetting('site_url', ''), '/')
-            );
-
-            // A note syndicates with no title and no link back, so the text and
-            // the photos are all there is. Nothing to say — no excerpt and no
-            // photo — means there is no post to make; don't publish a blank status.
-            $hasNoteContent = !$post->isNote() || $excerpt !== '' || $images !== [];
-
-            if ($isFirstPublish && $hasNoteContent) {
-                $mastodon = new Mastodon($mastodonInstance, $mastodonToken);
-                if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl, $images)) {
-                    $post->markTooted($tootUrl);
-                }
-            }
-
-            if ($isFirstBluesky && $hasNoteContent) {
-                $bluesky = new Bluesky($blueskyHandle, $blueskyAppPassword);
-                if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl, $images)) {
-                    $post->markBluesky($bskyUrl);
-                }
-            }
+            $syndication->publish($post);
         }
 
         // A save that takes the post off the public site: unpublishing, but also
@@ -286,6 +262,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // become published between opening the editor and submitting it — press
         // Publish with a future date and this is the transition you get.
         $leftPublicSite = $wasPublished && $post->status !== 'published';
+
+        // The copies follow the post. Off the public site means off the other
+        // networks too: nothing should be left pointing readers at a page that
+        // has stopped existing. Otherwise a save of a post that is still live
+        // brings its copies into line with the words as they now read.
+        if ($leftPublicSite) {
+            $syndication->remove($post);
+        } elseif ($post->status === 'published') {
+            $syndication->update($post);
+        }
 
         // Rebuild this post + selectively rebuild neighbors and shared resources.
         // Anything public now, or public before this save, needs the pass; a
@@ -521,7 +507,8 @@ if ($post->published_at) {
                     <?php endif; ?>
                     <?php elseif ($hasMastodon && $post->tooted_at !== null): ?>
                     <div style="margin-bottom:.75rem">
-                        <p class="form-hint" style="margin-bottom:.25rem">&#10003; Already shared to Mastodon</p>
+                        <p class="form-hint" style="margin-bottom:.25rem">&#10003; Shared to Mastodon</p>
+                        <p class="form-hint" style="margin-bottom:.5rem">Saving updates the toot. Unpublishing or deleting removes it.</p>
                         <label for="mastodon_url" style="font-size:.8rem;font-weight:400;color:var(--color-muted)">Toot URL</label>
                         <input type="url" id="mastodon_url" name="mastodon_url"
                                value="<?= Helpers::e($post->mastodon_url ?? '') ?>"
@@ -549,7 +536,8 @@ if ($post->published_at) {
                     <?php endif; ?>
                     <?php elseif ($hasBluesky && $post->bluesky_at !== null): ?>
                     <div style="margin-bottom:.75rem">
-                        <p class="form-hint" style="margin-bottom:.25rem">&#10003; Already shared to Bluesky</p>
+                        <p class="form-hint" style="margin-bottom:.25rem">&#10003; Shared to Bluesky</p>
+                        <p class="form-hint" style="margin-bottom:.5rem">Saving updates the Bluesky post. Unpublishing or deleting removes it.</p>
                         <label for="bluesky_url" style="font-size:.8rem;font-weight:400;color:var(--color-muted)">Bluesky post URL</label>
                         <input type="url" id="bluesky_url" name="bluesky_url"
                                value="<?= Helpers::e($post->bluesky_url ?? '') ?>"

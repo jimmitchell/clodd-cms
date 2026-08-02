@@ -29,7 +29,7 @@ class Database
     private array $settingsCache = [];
 
     // Increment this whenever the schema changes.
-    private const SCHEMA_VERSION = 24;
+    private const SCHEMA_VERSION = 25;
 
     public function __construct(string $dbPath)
     {
@@ -557,6 +557,35 @@ class Database
         // at once, and is no longer consulted.
         $this->run("UPDATE login_attempts SET scope = 'totp', ip = substr(ip, 6) WHERE ip LIKE 'totp:%'");
         $this->run("DELETE FROM login_attempts WHERE ip LIKE 'user:%'");
+    }
+
+    private function applySchemaV25(): void
+    {
+        // The handles the Mastodon and Bluesky APIs address a syndicated copy
+        // by, so an edit or a delete here can reach it. The stored URLs are not
+        // enough: they are hand-editable in the post form, and their shape
+        // belongs to whichever instance published them.
+        $this->run("ALTER TABLE posts ADD COLUMN mastodon_status_id TEXT");
+        $this->run("ALTER TABLE posts ADD COLUMN bluesky_rkey       TEXT");
+
+        // Posts syndicated before the columns existed still have their URLs, and
+        // both ids are the last path segment of one. Anything that doesn't look
+        // like an id is left NULL — an unrecognised URL means the copy is simply
+        // not reachable from here, which is what a NULL already says.
+        $rows = $this->select(
+            "SELECT id, mastodon_url, bluesky_url FROM posts
+              WHERE mastodon_url IS NOT NULL OR bluesky_url IS NOT NULL"
+        );
+        foreach ($rows as $row) {
+            $this->run(
+                "UPDATE posts SET mastodon_status_id = :sid, bluesky_rkey = :rkey WHERE id = :id",
+                [
+                    'sid'  => Helpers::mastodonStatusId((string) ($row['mastodon_url'] ?? '')),
+                    'rkey' => Helpers::blueskyRkey((string) ($row['bluesky_url'] ?? '')),
+                    'id'   => $row['id'],
+                ]
+            );
+        }
     }
 
     /** Insert or update a single settings row. */

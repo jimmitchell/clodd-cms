@@ -44,6 +44,8 @@ $config  = require CMS_ROOT . '/config.php';
 $db      = new \CMS\Database($config['paths']['data'] . '/cms.db');
 $builder = new \CMS\Builder($config, $db);
 
+$syndication = new \CMS\Syndication($db, $config);
+
 // Promote any due scheduled posts (same as bootstrap.php does for the UI).
 \CMS\Post::promoteScheduled($db);
 
@@ -318,6 +320,16 @@ if ($resource === 'posts' && $method === 'PUT' && $id !== null) {
         }
     }
 
+    // The syndicated copies follow the post: taken down when it leaves the
+    // public site, brought into line with it when it stays. This endpoint never
+    // creates copies, so an API-authored post that was never syndicated has
+    // nothing here to keep in step.
+    if ($wasPublished && $post->status !== 'published') {
+        $syndication->remove($post);
+    } elseif ($post->status === 'published') {
+        $syndication->update($post);
+    }
+
     api_json(post_to_array($post, $siteUrl, $timezone));
 }
 
@@ -331,6 +343,8 @@ if ($resource === 'posts' && $method === 'DELETE' && $id !== null) {
     $wasPublished = $post->status === 'published';
     $prevNeighbor = $wasPublished ? \CMS\Post::findPrev($db, $post) : null;
     $nextNeighbor = $wasPublished ? \CMS\Post::findNext($db, $post) : null;
+    // Before the row goes: the ids of the syndicated copies live on it.
+    $syndication->remove($post);
     // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
     $post->status = 'draft';
     $builder->buildPost($post);

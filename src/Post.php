@@ -19,9 +19,11 @@ class Post
     public ?string $content_hash = null;
     public ?string $tooted_at    = null;
     public ?string $mastodon_url = null;
+    public ?string $mastodon_status_id = null;
     public int     $mastodon_skip = 0;
     public ?string $bluesky_at   = null;
     public ?string $bluesky_url  = null;
+    public ?string $bluesky_rkey = null;
     public int     $bluesky_skip  = 0;
     public ?string $og_image_hash      = null;
     public ?string $webmentions_sent_at = null;
@@ -489,9 +491,10 @@ class Post
 
     /**
      * Record that this post was successfully posted to Bluesky.
-     * Optionally stores the canonical bsky.app URL.
+     * Optionally stores the canonical bsky.app URL and the record key a later
+     * edit or delete addresses the record by.
      */
-    public function markBluesky(string $url = ''): void
+    public function markBluesky(string $url = '', string $rkey = ''): void
     {
         $now              = date('Y-m-d H:i:s');
         $this->bluesky_at = $now;
@@ -500,6 +503,10 @@ class Post
         if ($url !== '') {
             $this->bluesky_url = $url;
             $cols['bluesky_url'] = $url;
+        }
+        if ($rkey !== '') {
+            $this->bluesky_rkey = $rkey;
+            $cols['bluesky_rkey'] = $rkey;
         }
 
         $this->db->update('posts', $cols, 'id = :id', ['id' => $this->id]);
@@ -517,9 +524,10 @@ class Post
 
     /**
      * Record that this post was successfully tooted to Mastodon.
-     * Optionally stores the canonical toot URL.
+     * Optionally stores the canonical toot URL and the status id a later edit
+     * or delete addresses the toot by.
      */
-    public function markTooted(string $url = ''): void
+    public function markTooted(string $url = '', string $statusId = ''): void
     {
         $now             = date('Y-m-d H:i:s');
         $this->tooted_at = $now;
@@ -528,6 +536,41 @@ class Post
         if ($url !== '') {
             $this->mastodon_url = $url;
             $cols['mastodon_url'] = $url;
+        }
+        if ($statusId !== '') {
+            $this->mastodon_status_id = $statusId;
+            $cols['mastodon_status_id'] = $statusId;
+        }
+
+        $this->db->update('posts', $cols, 'id = :id', ['id' => $this->id]);
+    }
+
+    /**
+     * Forget every trace of a syndicated copy, for one network or both.
+     *
+     * Called once the remote copy is gone: the post page links to
+     * mastodon_url / bluesky_url, so leaving them behind would publish a link
+     * to a status that no longer exists. Clearing tooted_at / bluesky_at also
+     * re-arms first-publish syndication, which is what an unpublish-then-
+     * republish should do.
+     */
+    public function clearSyndication(bool $mastodon = true, bool $bluesky = true): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+
+        $cols = [];
+        if ($mastodon) {
+            $this->tooted_at = $this->mastodon_url = $this->mastodon_status_id = null;
+            $cols += ['tooted_at' => null, 'mastodon_url' => null, 'mastodon_status_id' => null];
+        }
+        if ($bluesky) {
+            $this->bluesky_at = $this->bluesky_url = $this->bluesky_rkey = null;
+            $cols += ['bluesky_at' => null, 'bluesky_url' => null, 'bluesky_rkey' => null];
+        }
+        if ($cols === []) {
+            return;
         }
 
         $this->db->update('posts', $cols, 'id = :id', ['id' => $this->id]);
@@ -818,11 +861,13 @@ class Post
         $post->updated_at   = $row['updated_at'] ?? '';
         $post->built_at     = $row['built_at'] ?? null;
         $post->content_hash = $row['content_hash'] ?? null;
-        $post->tooted_at     = $row['tooted_at']    ?? null;
-        $post->mastodon_url  = $row['mastodon_url'] ?? null;
+        $post->tooted_at          = $row['tooted_at']    ?? null;
+        $post->mastodon_url       = $row['mastodon_url'] ?? null;
+        $post->mastodon_status_id = $row['mastodon_status_id'] ?? null;
         $post->mastodon_skip = (int) ($row['mastodon_skip'] ?? 0);
         $post->bluesky_at    = $row['bluesky_at']   ?? null;
         $post->bluesky_url   = $row['bluesky_url']  ?? null;
+        $post->bluesky_rkey  = $row['bluesky_rkey'] ?? null;
         $post->bluesky_skip  = (int) ($row['bluesky_skip']  ?? 0);
         $post->og_image_hash       = $row['og_image_hash']       ?? null;
         $post->webmentions_sent_at = $row['webmentions_sent_at'] ?? null;

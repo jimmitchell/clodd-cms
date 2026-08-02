@@ -146,4 +146,41 @@ class Helpers
         }
         return 'https://' . $instance . '/@' . $user;
     }
+
+    /**
+     * The status id in a Mastodon post URL, e.g.
+     * https://mastodon.social/@user/113456789 → "113456789".
+     *
+     * This is what the API addresses a toot by when editing or deleting it.
+     * Returns null when the URL is not shaped like a status permalink.
+     */
+    public static function mastodonStatusId(string $url): ?string
+    {
+        return self::trailingSegment($url, '/^\d+$/');
+    }
+
+    /**
+     * The record key in a Bluesky post URL, e.g.
+     * https://bsky.app/profile/me.example/post/3kabc123 → "3kabc123".
+     *
+     * Returns null when the URL is not shaped like a post permalink.
+     */
+    public static function blueskyRkey(string $url): ?string
+    {
+        return self::trailingSegment($url, '/^[a-z0-9]+$/');
+    }
+
+    /**
+     * The last path segment of a URL, when it matches $pattern. Null otherwise.
+     * Query strings and trailing slashes are ignored.
+     */
+    private static function trailingSegment(string $url, string $pattern): ?string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        if (!is_string($path)) {
+            return null;
+        }
+        $segment = basename(rtrim($path, '/'));
+        return preg_match($pattern, $segment) === 1 ? $segment : null;
+    }
 }

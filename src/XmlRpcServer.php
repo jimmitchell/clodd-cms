@@ -29,13 +29,7 @@ class XmlRpcServer
     private string $siteDescription;
     private string $timezone;
 
-    private string $mastodonInstance;
-    private string $mastodonToken;
-    private bool   $hasMastodon;
-
-    private string $blueskyHandle;
-    private string $blueskyAppPassword;
-    private bool   $hasBluesky;
+    private Syndication $syndication;
 
     public function __construct(
         private Database $db,
@@ -48,13 +42,7 @@ class XmlRpcServer
         $this->siteDescription = $db->getSetting('site_description', '');
         $this->timezone        = $db->getSetting('timezone', '');
 
-        $this->mastodonInstance = $db->getSetting('mastodon_instance', '');
-        $this->mastodonToken    = $db->getSetting('mastodon_token', '');
-        $this->hasMastodon      = $this->mastodonInstance !== '' && $this->mastodonToken !== '';
-
-        $this->blueskyHandle      = $db->getSetting('bluesky_handle', '');
-        $this->blueskyAppPassword = $db->getSetting('bluesky_app_password', '');
-        $this->hasBluesky         = $this->blueskyHandle !== '' && $this->blueskyAppPassword !== '';
+        $this->syndication = new Syndication($db, $config);
     }
 
     /**
@@ -148,6 +136,7 @@ class XmlRpcServer
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
                 $this->syndicatePost($post);
+                $this->resyndicatePost($post, $wasPublished);
                 $this->rebuildPost($post, $wasPublished, $oldDir);
 
                 echo XmlRpc::encodeResponse(true);
@@ -164,6 +153,8 @@ class XmlRpcServer
                 $wasPublished = $post->status === 'published';
                 $prevNeighbor = $wasPublished ? Post::findPrev($this->db, $post) : null;
                 $nextNeighbor = $wasPublished ? Post::findNext($this->db, $post) : null;
+                // Before the row goes: the ids of the syndicated copies live on it.
+                $this->syndication->remove($post);
                 $post->delete();
                 // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
                 $post->status = 'draft';
@@ -611,6 +602,7 @@ class XmlRpcServer
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
                 $this->syndicatePost($post);
+                $this->resyndicatePost($post, $wasPublished);
                 $this->rebuildPost($post, $wasPublished, $oldDir);
                 echo XmlRpc::encodeResponse(true);
                 break;
@@ -644,6 +636,8 @@ class XmlRpcServer
                 $wasPublished = $post->status === 'published';
                 $prevNeighbor = $wasPublished ? Post::findPrev($this->db, $post) : null;
                 $nextNeighbor = $wasPublished ? Post::findNext($this->db, $post) : null;
+                // Before the row goes: the ids of the syndicated copies live on it.
+                $this->syndication->remove($post);
                 $post->delete();
                 // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
                 $post->status = 'draft';
@@ -1167,7 +1161,6 @@ class XmlRpcServer
 
     /**
      * Syndicate a newly-published post to Mastodon and/or Bluesky.
-     * Mirrors the first-publish logic in admin/post-edit.php.
      * Only fires when status = 'published' and the post has not already been shared.
      */
     private function syndicatePost(Post $post): void
@@ -1176,45 +1169,19 @@ class XmlRpcServer
             return;
         }
 
-        // POSSE: notes (asides and photo posts) syndicate as native-looking notes —
-        // no title, no link back.
-        if ($post->isNote()) {
-            $postUrl = '';
-            $excerpt = $post->noteText();
-        } else {
-            $postUrl = rtrim($this->siteUrl, '/') . '/' . Post::datePath($post->published_at, $post->slug, $this->timezone) . '/';
-            $excerpt = ($post->effectiveExcerpt() !== null)
-                ? strip_tags($post->effectiveExcerpt())
-                : Helpers::truncate($post->content, 280);
-        }
+        $this->syndication->publish($post);
+    }
 
-        // Photos ride along with the text so a photo post looks native on both
-        // networks instead of arriving as a caption with no picture.
-        $images = SyndicationMedia::forPost(
-            $post,
-            $this->config['paths']['content'] . '/media',
-            rtrim($this->siteUrl, '/')
-        );
-
-        // A note syndicates with no title and no link back, so the text and the
-        // photos are all there is. Nothing to say — no excerpt and no photo — means
-        // there is no post to make; don't publish a blank status.
-        if ($post->isNote() && $excerpt === '' && $images === []) {
-            return;
-        }
-
-        if ($this->hasMastodon && $post->tooted_at === null && $post->mastodon_skip === 0) {
-            $mastodon = new Mastodon($this->mastodonInstance, $this->mastodonToken);
-            if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl, $images)) {
-                $post->markTooted($tootUrl);
-            }
-        }
-
-        if ($this->hasBluesky && $post->bluesky_at === null && $post->bluesky_skip === 0) {
-            $bluesky = new Bluesky($this->blueskyHandle, $this->blueskyAppPassword);
-            if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl, $images)) {
-                $post->markBluesky($bskyUrl);
-            }
+    /**
+     * Bring the syndicated copies into line with a post MarsEdit has just
+     * changed, or take them down when the change pulled it off the public site.
+     */
+    private function resyndicatePost(Post $post, bool $wasPublished): void
+    {
+        if ($wasPublished && $post->status !== 'published') {
+            $this->syndication->remove($post);
+        } elseif ($post->status === 'published') {
+            $this->syndication->update($post);
         }
     }
 

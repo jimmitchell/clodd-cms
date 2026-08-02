@@ -119,4 +119,39 @@ final class HelpersTest extends TestCase
         $this->assertNull(Helpers::mastodonProfileUrl('@jim@a@b'));
         $this->assertNull(Helpers::mastodonProfileUrl('@jim@'));
     }
+
+    // ── Remote ids parsed out of syndication URLs ─────────────────────────────
+
+    /**
+     * These are what an edit or a delete addresses the remote copy by, both for
+     * posts syndicated before the ids were stored and for a toot URL typed into
+     * the post form by hand.
+     */
+    public function testMastodonStatusIdReadsTheTrailingId(): void
+    {
+        $this->assertSame('113456789', Helpers::mastodonStatusId('https://mastodon.social/@jim/113456789'));
+        $this->assertSame('113456789', Helpers::mastodonStatusId('https://mastodon.social/@jim/113456789/'));
+        $this->assertSame('113456789', Helpers::mastodonStatusId('https://example.social/users/jim/statuses/113456789?x=1'));
+    }
+
+    public function testMastodonStatusIdRejectsAnythingElse(): void
+    {
+        $this->assertNull(Helpers::mastodonStatusId(''));
+        $this->assertNull(Helpers::mastodonStatusId('https://mastodon.social/@jim'));
+        $this->assertNull(Helpers::mastodonStatusId('not a url'));
+    }
+
+    public function testBlueskyRkeyReadsTheTrailingRecordKey(): void
+    {
+        $this->assertSame('3kv7qabcd2s', Helpers::blueskyRkey('https://bsky.app/profile/jim.example/post/3kv7qabcd2s'));
+        $this->assertSame('3kv7qabcd2s', Helpers::blueskyRkey('https://bsky.app/profile/jim.example/post/3kv7qabcd2s/'));
+    }
+
+    public function testBlueskyRkeyRejectsAnythingElse(): void
+    {
+        $this->assertNull(Helpers::blueskyRkey(''));
+        $this->assertNull(Helpers::blueskyRkey('https://bsky.app/profile/jim.example'));
+        // Record keys are lowercase base32; an uppercase segment is a path, not a key.
+        $this->assertNull(Helpers::blueskyRkey('https://bsky.app/profile/jim.example/post/ABC'));
+    }
 }

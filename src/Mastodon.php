@@ -24,22 +24,17 @@ class Mastodon
 
     /**
      * Build and post a toot for a newly-published post.
-     * Returns the canonical toot URL on success, null on failure.
+     * Returns ['url' => canonical toot URL, 'id' => status id], null on failure.
      *
-     * @param array<array{path:string,mime:string,alt:string}> $images
-     *        Local image files to attach — see SyndicationMedia::forPost().
+     * @param  array<array{path:string,mime:string,alt:string}> $images
+     *         Local image files to attach — see SyndicationMedia::forPost().
+     * @return array{url:string,id:string}|null
      */
-    public function tootPost(string $title, string $excerpt, string $postUrl, array $images = []): ?string
+    public function tootPost(string $title, string $excerpt, string $postUrl, array $images = []): ?array
     {
         $text = $this->buildText($title, $excerpt, $postUrl);
 
-        $mediaIds = [];
-        foreach ($images as $image) {
-            $id = $this->uploadMedia($image['path'], $image['mime'], $image['alt'] ?? '');
-            if ($id !== null) {
-                $mediaIds[] = $id;
-            }
-        }
+        $mediaIds = $this->uploadAll($images);
 
         // Every attachment failed on a post that had nothing but pictures to
         // say — an empty status would be rejected anyway.
@@ -50,7 +45,181 @@ class Mastodon
         return $this->post($text, $mediaIds);
     }
 
+    /**
+     * Rewrite an existing toot to match the post as it now stands.
+     *
+     * Returns true when the toot already says this, as well as when the edit
+     * lands — both leave the copy correct, which is all the caller can act on.
+     *
+     * Pictures are only re-uploaded when their number has changed. Mastodon
+     * accepts the attachment ids already on the status, so the ordinary case —
+     * fixing a typo on a photo post — edits the words and leaves the photos
+     * where they are instead of pushing them over the wire again.
+     *
+     * @param array<array{path:string,mime:string,alt:string}> $images
+     */
+    public function editPost(string $statusId, string $title, string $excerpt, string $postUrl, array $images = []): bool
+    {
+        $text = $this->buildText($title, $excerpt, $postUrl);
+
+        $current = $this->fetchStatus($statusId);
+        if ($current === null) {
+            return false;
+        }
+
+        $mediaIds = $current['media_ids'];
+        if (count($images) !== count($mediaIds)) {
+            $mediaIds = $this->uploadAll($images);
+        }
+
+        // Nothing to say and nothing to show: an empty status is not something
+        // Mastodon will accept, so leave the existing one alone.
+        if ($text === '' && $mediaIds === []) {
+            self::log("skipping edit of status {$statusId}: the post has no text and no attachments left");
+            return false;
+        }
+
+        // An edit that changes nothing still marks the toot as edited for every
+        // reader, so a save that didn't touch the syndicated text stays quiet —
+        // when the text could be read back to know that.
+        if ($current['text'] !== null && $text === $current['text'] && $mediaIds === $current['media_ids']) {
+            return true;
+        }
+
+        $response = $this->request(
+            'PUT',
+            '/api/v1/statuses/' . rawurlencode($statusId),
+            self::statusBody($text, $mediaIds, false)
+        );
+        if ($response === null) {
+            self::log("status PUT got no response for {$statusId}");
+            return false;
+        }
+        if ($response['code'] !== 200) {
+            self::log("status PUT refused with HTTP {$response['code']} for {$statusId}: " . self::snippet($response['body']));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Delete a toot. Returns true once the status is gone from the instance —
+     * including when it was already gone, since the caller's goal is met either
+     * way and a 404 here means somebody deleted it by hand.
+     */
+    public function deletePost(string $statusId): bool
+    {
+        $response = $this->request('DELETE', '/api/v1/statuses/' . rawurlencode($statusId));
+        if ($response === null) {
+            self::log("status DELETE got no response for {$statusId}");
+            return false;
+        }
+        if ($response['code'] === 404 || $response['code'] === 410) {
+            return true;
+        }
+        if ($response['code'] !== 200) {
+            self::log("status DELETE refused with HTTP {$response['code']} for {$statusId}: " . self::snippet($response['body']));
+            return false;
+        }
+
+        return true;
+    }
+
     // ── Private ───────────────────────────────────────────────────────────────
+
+    /**
+     * Upload every image, dropping the ones the instance refused.
+     *
+     * @param  array<array{path:string,mime:string,alt:string}> $images
+     * @return string[]
+     */
+    private function uploadAll(array $images): array
+    {
+        $mediaIds = [];
+        foreach ($images as $image) {
+            $id = $this->uploadMedia($image['path'], $image['mime'], $image['alt'] ?? '');
+            if ($id !== null) {
+                $mediaIds[] = $id;
+            }
+        }
+        return $mediaIds;
+    }
+
+    /**
+     * Read back a status as it currently stands: the ids of the attachments
+     * hanging off it, and — when the token is allowed to see it — the plain
+     * text the author submitted.
+     *
+     * A status that cannot be read at all is not editable, and returns null.
+     * The text comes back as null when it could not be read, which is not the
+     * same as an empty status: it means the comparison that would have skipped
+     * a pointless edit could not be made, and the edit goes ahead regardless.
+     *
+     * @return array{text:?string,media_ids:string[]}|null
+     */
+    private function fetchStatus(string $statusId): ?array
+    {
+        $id = rawurlencode($statusId);
+
+        $status = $this->request('GET', "/api/v1/statuses/{$id}");
+        if ($status === null || $status['code'] !== 200) {
+            $code = $status['code'] ?? 'no response';
+            self::log("could not read status {$statusId} (HTTP {$code})");
+            return null;
+        }
+        $statusData  = json_decode($status['body'], true);
+        $attachments = is_array($statusData) && is_array($statusData['media_attachments'] ?? null)
+            ? $statusData['media_attachments']
+            : [];
+
+        $mediaIds = [];
+        foreach ($attachments as $attachment) {
+            if (is_array($attachment) && isset($attachment['id'])) {
+                $mediaIds[] = (string) $attachment['id'];
+            }
+        }
+
+        return ['text' => $this->fetchSource($statusId), 'media_ids' => $mediaIds];
+    }
+
+    /**
+     * The plain text a status was submitted with, or null when it can't be read.
+     *
+     * The status itself carries its text as HTML, with URLs linkified and
+     * newlines turned into markup, so there is no honest way to compare it to
+     * text composed here. /source returns exactly what was submitted — but it
+     * is the author's own view of their status and needs `read:statuses`,
+     * which a token minted only to post does not carry. Without it there is no
+     * way to tell an edit that changes something from one that changes nothing,
+     * so every save sends its edit and the instance decides.
+     */
+    private function fetchSource(string $statusId): ?string
+    {
+        $response = $this->request('GET', '/api/v1/statuses/' . rawurlencode($statusId) . '/source');
+        if ($response === null) {
+            return null;
+        }
+        if ($response['code'] === 401 || $response['code'] === 403) {
+            self::log(
+                "cannot read the text of status {$statusId} (HTTP {$response['code']}) — add the read:statuses "
+                . 'scope to the access token and an edit that changes nothing will stop being sent'
+            );
+            return null;
+        }
+        if ($response['code'] !== 200) {
+            self::log("could not read the source of status {$statusId} (HTTP {$response['code']})");
+            return null;
+        }
+
+        $data = json_decode($response['body'], true);
+        if (!is_array($data) || !isset($data['text'])) {
+            self::log("status source for {$statusId} carried no text: " . self::snippet($response['body']));
+            return null;
+        }
+
+        return (string) $data['text'];
+    }
 
     /**
      * Compose toot text within Mastodon's 500-character limit.
@@ -179,11 +348,12 @@ class Mastodon
 
     /**
      * POST the status to the Mastodon API.
-     * Returns the canonical toot URL on success, null on failure.
+     * Returns ['url' => ..., 'id' => ...] on success, null on failure.
      *
-     * @param string[] $mediaIds
+     * @param  string[] $mediaIds
+     * @return array{url:string,id:string}|null
      */
-    private function post(string $text, array $mediaIds = []): ?string
+    private function post(string $text, array $mediaIds = []): ?array
     {
         $response = $this->request('POST', '/api/v1/statuses', self::statusBody($text, $mediaIds));
         if ($response === null) {
@@ -200,6 +370,11 @@ class Mastodon
             self::log('status POST returned no url: ' . self::snippet($response['body']));
             return null;
         }
+        if (empty($data['id'])) {
+            // The toot exists and is worth recording, but nothing here will be
+            // able to edit or delete it later.
+            self::log('status POST returned no id; the toot cannot be edited or deleted from here');
+        }
 
         // A status that came back with fewer attachments than were sent posted
         // without some of the pictures — the id was accepted and then dropped.
@@ -208,7 +383,7 @@ class Mastodon
             self::log('status posted with ' . $attached . ' of ' . count($mediaIds) . ' attachments');
         }
 
-        return $data['url'];
+        return ['url' => (string) $data['url'], 'id' => (string) ($data['id'] ?? '')];
     }
 
     /**
@@ -220,11 +395,18 @@ class Mastodon
      * The status then posts with no pictures at all, or is refused outright
      * when the photos were the whole post and the text is empty.
      *
+     * `visibility` is only meaningful when the status is first posted; the edit
+     * endpoint cannot change it and does not accept it.
+     *
      * @param string[] $mediaIds
      */
-    private static function statusBody(string $text, array $mediaIds): string
+    private static function statusBody(string $text, array $mediaIds, bool $withVisibility = true): string
     {
-        $body = http_build_query(['status' => $text, 'visibility' => 'public']);
+        $params = ['status' => $text];
+        if ($withVisibility) {
+            $params['visibility'] = 'public';
+        }
+        $body = http_build_query($params);
         foreach ($mediaIds as $id) {
             $body .= '&' . rawurlencode('media_ids[]') . '=' . rawurlencode($id);
         }
@@ -262,6 +444,17 @@ class Mastodon
         if ($method === 'POST') {
             $options[CURLOPT_POST]       = true;
             $options[CURLOPT_POSTFIELDS] = $body;
+        } elseif ($method !== 'GET') {
+            $options[CURLOPT_CUSTOMREQUEST] = $method;
+            if ($body !== null) {
+                $options[CURLOPT_POSTFIELDS] = $body;
+                // cURL only volunteers a Content-Type for POST. An edit sent as
+                // a PUT with no type arrives as an empty params hash, and
+                // Mastodon answers 422 for a status that is now blank.
+                if (is_string($body)) {
+                    $options[CURLOPT_HTTPHEADER][] = 'Content-Type: application/x-www-form-urlencoded';
+                }
+            }
         }
 
         $ch = curl_init($this->instanceUrl . $path);

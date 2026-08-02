@@ -41,6 +41,7 @@ $config      = require CMS_ROOT . '/config.php';
 $db          = new \CMS\Database($config['paths']['data'] . '/cms.db');
 $builder     = new \CMS\Builder($config, $db);
 $activityLog = new \CMS\ActivityLog($db);
+$syndication = new \CMS\Syndication($db, $config);
 
 \CMS\Post::promoteScheduled($db);
 
@@ -503,6 +504,11 @@ if ($action === 'delete') {
     $prev = $wasPublished ? \CMS\Post::findPrev($db, $post) : null;
     $next = $wasPublished ? \CMS\Post::findNext($db, $post) : null;
 
+    // The copies go with it. A later undelete restores the post here but
+    // cannot bring them back — the statuses are gone from the networks, and
+    // the post returns unsyndicated.
+    $syndication->remove($post);
+
     // Soft delete so action=undelete can restore. buildPost() removes the
     // output file and rebuilds taxonomy archives for deleted posts.
     $post->softDelete();
@@ -821,6 +827,14 @@ if ($action === 'update') {
         $builder->rebuildSharedResources();
     }
 
+    // The syndicated copies follow the post: taken down when the update pulls
+    // it off the public site, brought into line with it when it stays.
+    if ($wasPublished && $post->status !== 'published') {
+        $syndication->remove($post);
+    } elseif ($post->status === 'published') {
+        $syndication->update($post);
+    }
+
     $activityLog->log('update', 'post', $post->id, $post->title . ' (via micropub)');
 
     // Spec: 201 + Location when the update changed the post's URL, else 204.
@@ -1015,64 +1029,9 @@ if ($status === 'published') {
 }
 
 // ── Syndicate to Mastodon / Bluesky on first publish ────────────────────────
-//
-// Content-less interaction posts (a bare like/repost/bookmark) have nothing to
-// say on other networks — skip syndication for those. A photo carries the post
-// on its own, so photos count as something to say.
 
-if ($status === 'published' && (trim($post->content) !== '' || $post->photos !== [])) {
-    $cfgTz              = $db->getSetting('timezone', '');
-    $mastodonInstance   = $db->getSetting('mastodon_instance');
-    $mastodonToken      = $db->getSetting('mastodon_token');
-    $hasMastodon        = $mastodonInstance !== '' && $mastodonToken !== '';
-    $blueskyHandle      = $db->getSetting('bluesky_handle');
-    $blueskyAppPassword = $db->getSetting('bluesky_app_password');
-    $hasBluesky         = $blueskyHandle !== '' && $blueskyAppPassword !== '';
-
-    if (($hasMastodon && $post->mastodon_skip === 0) || ($hasBluesky && $post->bluesky_skip === 0)) {
-        // POSSE: notes (asides and photo posts) syndicate as native-looking
-        // notes — no title, no link back.
-        if ($post->isNote()) {
-            $postUrl = '';
-            $excerpt = $post->noteText();
-        } else {
-            $postUrl = rtrim($db->getSetting('site_url', ''), '/')
-                     . '/' . \CMS\Post::datePath($post->published_at, $post->slug, $cfgTz) . '/';
-
-            $effective = $post->effectiveExcerpt();
-            $excerpt   = $effective !== null
-                ? strip_tags($effective)
-                : \CMS\Helpers::truncate($post->content, 280);
-        }
-
-        // Photos ride along with the text so a photo post looks native on both
-        // networks instead of arriving as a caption with no picture.
-        $images = \CMS\SyndicationMedia::forPost(
-            $post,
-            $config['paths']['content'] . '/media',
-            rtrim($db->getSetting('site_url', ''), '/')
-        );
-
-        // A note syndicates with no title and no link back, so the text and the
-        // photos are all there is. Nothing to say — no excerpt and no photo —
-        // means there is no post to make; don't publish a blank status.
-        if ($post->isNote() && $excerpt === '' && $images === []) {
-            error_log('[micropub] Skipping syndication for post ' . $post->id . ': note has no text or photo');
-        } else {
-            if ($hasMastodon && $post->mastodon_skip === 0 && $post->tooted_at === null) {
-                $mastodon = new \CMS\Mastodon($mastodonInstance, $mastodonToken);
-                if ($tootUrl = $mastodon->tootPost($post->title, $excerpt, $postUrl, $images)) {
-                    $post->markTooted($tootUrl);
-                }
-            }
-            if ($hasBluesky && $post->bluesky_skip === 0 && $post->bluesky_at === null) {
-                $bluesky = new \CMS\Bluesky($blueskyHandle, $blueskyAppPassword);
-                if ($bskyUrl = $bluesky->postToBluesky($post->title, $excerpt, $postUrl, $images)) {
-                    $post->markBluesky($bskyUrl);
-                }
-            }
-        }
-    }
+if ($status === 'published') {
+    $syndication->publish($post);
 }
 
 // ── Activity log ────────────────────────────────────────────────────────────
