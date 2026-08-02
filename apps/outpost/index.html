@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outpost — a Micropub client for iPhone, iPad and Mac</title>
+
+<!-- REQUIRED. Outpost's redirect uses a custom scheme, so it does not share an
+     origin with this page. Conformant IndieAuth servers fetch this page and
+     will only accept the authorization request if they find this link. -->
+<link rel="redirect_uri" href="outpost://auth/callback">
+
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 1rem/1.6 system-ui, -apple-system, sans-serif;
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 3rem 1.25rem;
+  }
+  h1 { font-size: 1.75rem; margin-bottom: .25rem; }
+  .tagline { color: GrayText; margin-top: 0; }
+  ul { padding-left: 1.2rem; }
+  footer { margin-top: 2.5rem; font-size: .875rem; color: GrayText; }
+</style>
+</head>
+<body>
+
+<!-- The h-app microformat lets the authorization server show the app's name
+     (and logo, if you add one) on the consent screen instead of a bare URL. -->
+<main class="h-app">
+  <h1 class="p-name">Outpost</h1>
+  <p class="tagline">A Micropub client for iPhone, iPad and Mac.</p>
+
+  <p class="p-summary">
+    Outpost publishes notes and articles straight to your own website using
+    <a href="https://micropub.spec.indieweb.org/">Micropub</a>, signing in with
+    <a href="https://indieauth.spec.indieweb.org/">IndieAuth</a>. Your posts live
+    on your domain — not on someone else's platform.
+  </p>
+
+  <h2>What Outpost asks for</h2>
+  <ul>
+    <li><code>create</code> — publish new posts</li>
+    <li><code>update</code> — edit posts you have already published</li>
+    <li><code>delete</code> — remove posts</li>
+    <li><code>media</code> — upload photos to your media endpoint</li>
+    <li><code>draft</code> — save posts without publishing them</li>
+    <li><code>profile</code> — read your name and photo for display in the app</li>
+  </ul>
+
+  <h2>Where your data goes</h2>
+  <p>
+    Nowhere but your own site. Outpost talks directly to the Micropub and token
+    endpoints advertised on your homepage. Access tokens are stored in the
+    Keychain on your device. There is no Outpost server and no analytics.
+  </p>
+
+  <p>
+    <a class="u-url" href="https://jimmitchell.org/apps/outpost/">jimmitchell.org/apps/outpost/</a>
+  </p>
+</main>
+
+<footer>
+  <p>Built by <a href="https://jimmitchell.org/">Jim Mitchell</a>.</p>
+</footer>
+
+</body>
+</html>
