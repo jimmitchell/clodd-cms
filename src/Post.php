@@ -865,15 +865,27 @@ class Post
     /**
      * The plain-text words of a note, for syndication and the search index.
      *
-     * A photo post keeps its words in the excerpt — the content holds only the
-     * picture, and plaintextFromMarkdown() strips images, so reading the body
-     * would yield an empty string and syndicate a blank status.
+     * A photo post written in the admin keeps its words in the excerpt — the
+     * content holds only the picture, and plaintextFromMarkdown() strips
+     * images, so reading the body would yield an empty string and syndicate a
+     * blank status.
+     *
+     * Micropub has no caption property: a client sends the words as `content`
+     * and the picture as `photo`, so a photo post created that way has an empty
+     * excerpt and its words in the body. Falling back to the body picks those
+     * up, and still returns '' for an admin photo post whose body is nothing
+     * but the image.
      */
     public function noteText(): string
     {
-        return $this->isPhoto()
-            ? trim((string) $this->excerpt)
-            : trim(self::plaintextFromMarkdown($this->content));
+        if ($this->isPhoto()) {
+            $caption = trim((string) $this->excerpt);
+            if ($caption !== '') {
+                return $caption;
+            }
+        }
+
+        return trim(self::plaintextFromMarkdown($this->content));
     }
 
     /**

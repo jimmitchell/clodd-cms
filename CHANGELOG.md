@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A photo post published over Micropub syndicated without its words.** A photo post keeps the picture in its content and the caption in its excerpt, so `Post::noteText()` — what Mastodon and Bluesky are handed, and what the search index stores — read the excerpt. But Micropub has no caption property: a client sends the words as `content` and the picture as `photo`, so a photo post arriving that way has an empty excerpt and its caption in the body. Bluesky got the picture with no text at all, and the search index stored a blank entry. `noteText()` now falls back to the body when a photo post has no excerpt, which still yields nothing for a post written in the admin whose body is only the image.
+- **A photo post reached Mastodon with no picture, or not at all.** Attachment ids were form-encoded as `media_ids[0]`, `media_ids[1]` — what `http_build_query()` emits for an array — and Rails reads that as a hash, which `permit(media_ids: [])` then drops. The status posted with the photos missing; when the words were missing too, as they were for every Micropub photo post, the instance refused the empty status and nothing was posted. The ids now go as repeated `media_ids[]` keys.
+
 ### Changed
 
 - **The home page h-card now links to the profiles instead of the /now page.** The "Here's what I'm up to" link has been replaced by the same Mastodon, Bluesky and GitHub icons the footer carries, a shade larger since they carry the line on their own. The feed is left out — the home page already advertises it through `<link rel="alternate">` and the footer. Both places render from one new partial, `templates/partials/social-links.php`, so the two link sets cannot drift apart, and the profiles' `rel="me"` now sits inside the representative h-card where an IndieAuth or mf2 parser looks first.

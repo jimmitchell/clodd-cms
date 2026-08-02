@@ -168,18 +168,33 @@ class Mastodon
      */
     private function post(string $text, array $mediaIds = []): ?string
     {
-        $fields = ['status' => $text, 'visibility' => 'public'];
-        if ($mediaIds !== []) {
-            $fields['media_ids'] = $mediaIds;
-        }
-
-        $response = $this->request('POST', '/api/v1/statuses', http_build_query($fields));
+        $response = $this->request('POST', '/api/v1/statuses', self::statusBody($text, $mediaIds));
         if ($response === null || !in_array($response['code'], [200, 201], true)) {
             return null;
         }
 
         $data = json_decode($response['body'], true);
         return (is_array($data) && !empty($data['url'])) ? $data['url'] : null;
+    }
+
+    /**
+     * Form-encode the status POST.
+     *
+     * Attachments go as repeated `media_ids[]` keys, not the numbered
+     * `media_ids[0]`, `media_ids[1]` http_build_query() emits for an array:
+     * Rails reads the numbered form as a hash, and strong parameters drops it.
+     * The status then posts with no pictures at all, or is refused outright
+     * when the photos were the whole post and the text is empty.
+     *
+     * @param string[] $mediaIds
+     */
+    private static function statusBody(string $text, array $mediaIds): string
+    {
+        $body = http_build_query(['status' => $text, 'visibility' => 'public']);
+        foreach ($mediaIds as $id) {
+            $body .= '&' . rawurlencode('media_ids[]') . '=' . rawurlencode($id);
+        }
+        return $body;
     }
 
     /**
