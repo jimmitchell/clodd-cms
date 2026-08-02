@@ -47,19 +47,8 @@ if (file_exists($_themeCss) && (!file_exists($_themeMinCss) || filemtime($_theme
 }
 unset($_themeCss, $_themeMinCss);
 
-// Promote any scheduled posts whose publish time has passed and rebuild them.
-$promotedIds = \CMS\Post::promoteScheduled($db);
-foreach ($promotedIds as $pid) {
-    $promoted = \CMS\Post::findById($db, $pid);
-    if ($promoted) {
-        // buildPost() rebuilds taxonomy archives for the post's own terms.
-        $builder->buildPost($promoted);
-        $prev = \CMS\Post::findPrev($db, $promoted);
-        if ($prev) $builder->buildPost($prev);
-        $next = \CMS\Post::findNext($db, $promoted);
-        if ($next) $builder->buildPost($next);
-    }
-}
-if (!empty($promotedIds)) {
-    $builder->rebuildSharedResources();
-}
+// Promote any scheduled posts whose publish time has passed: build them and
+// send them to the networks. Shared with api.php and micropub.php, either of
+// which may be the request that arrives first.
+$scheduler = new \CMS\Scheduler($db, $builder, $syndication);
+$scheduler->run();

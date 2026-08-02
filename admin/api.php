@@ -47,7 +47,7 @@ $builder = new \CMS\Builder($config, $db);
 $syndication = new \CMS\Syndication($db, $config);
 
 // Promote any due scheduled posts (same as bootstrap.php does for the UI).
-\CMS\Post::promoteScheduled($db);
+(new \CMS\Scheduler($db, $builder, $syndication))->run();
 
 // ── CORS ────────────────────────────────────────────────────────────────────
 // Restrict to the site's own origin. Native clients (iOS, Xcode simulator)

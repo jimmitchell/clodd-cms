@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.13.3] — 2026-08-02
 
 ### Added
 
@@ -20,9 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Composing a syndicated copy now happens in one place.** The admin post form and the Micropub endpoint each assembled their own payload — which words a note contributes, whether to send a link back, which photos ride along — and the two had already drifted once. `CMS\Syndication` now holds that decision, and the admin form, the REST API and Micropub all call through it. A network is only forgotten once its copy is actually gone, so a delete that failed against an instance that was down leaves the id in place rather than losing the only way back to it.
+- **The home page h-card now links to the profiles instead of the /now page.** The "Here's what I'm up to" link has been replaced by the same Mastodon, Bluesky and GitHub icons the footer carries, a shade larger since they carry the line on their own. The feed is left out — the home page already advertises it through `<link rel="alternate">` and the footer. Both places render from one new partial, `templates/partials/social-links.php`, so the two link sets cannot drift apart, and the profiles' `rel="me"` now sits inside the representative h-card where an IndieAuth or mf2 parser looks first.
 
 ### Fixed
 
+- **A post published over Micropub showed no syndication links until something else rebuilt it.** The endpoint wrote the post's page and then syndicated it, so the copies were made after the only page that links to them had already been written. The links appeared whenever something rebuilt that page next — most often publishing the following post, which rebuilds its neighbours — which put them a post behind. The build still comes first, because Mastodon and Bluesky both fetch the permalink to build their preview cards and a copy made before the page exists links to a 404; the page is now rebuilt once afterwards, and only when a copy was actually made. The admin editor and the MarsEdit endpoint already syndicated before building and were never affected.
+- **A scheduled post went live with no copy on Mastodon or Bluesky, and sometimes with no page at all.** Nothing syndicated a post that published itself: promotion built the post and stopped there, so scheduling a post rather than publishing it meant silently opting out of both networks. Worse, of the three entry points that promote due posts, only the admin UI did anything with what it promoted — a REST API or Micropub request that happened to be the first one after the publication time flipped the post to published and built nothing. Because promotion only matches posts that are still scheduled, no later request would pick it up either: the post was live in the database, absent from the site, and stayed that way until it was edited. All three now run `CMS\Scheduler`, which promotes, builds the post and its neighbours, rebuilds the shared pages, and syndicates.
 - **A photo post published over Micropub syndicated without its words.** A photo post keeps the picture in its content and the caption in its excerpt, so `Post::noteText()` — what Mastodon and Bluesky are handed, and what the search index stores — read the excerpt. But Micropub has no caption property: a client sends the words as `content` and the picture as `photo`, so a photo post arriving that way has an empty excerpt and its caption in the body. Bluesky got the picture with no text at all, and the search index stored a blank entry. `noteText()` now falls back to the body when a photo post has no excerpt, which still yields nothing for a post written in the admin whose body is only the image.
 - **A photo post reached Mastodon with no picture, or not at all.** Attachment ids were form-encoded as `media_ids[0]`, `media_ids[1]` — what `http_build_query()` emits for an array — and Rails reads that as a hash, which `permit(media_ids: [])` then drops. The status posted with the photos missing; when the words were missing too, as they were for every Micropub photo post, the instance refused the empty status and nothing was posted. The ids now go as repeated `media_ids[]` keys.
 - **A failed Mastodon syndication said nothing at all.** Syndication runs on the publish path, where an error cannot be shown to anybody and must not take the publish down with it, so every failure returned quietly and a copy that never arrived left nothing to read. Each one now logs what happened — the HTTP status and a trimmed body for a refused upload or status POST, the cURL error when the request never completed, the resolved address when the DNS guard rejects a host, and a count when a status posts with fewer attachments than were sent. `bin/check-mastodon-media.php` walks the same steps for one post and prints what the instance said, without posting anything.
@@ -30,10 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **The Mastodon token needs `write:media` as well as `write:statuses`.** Uploading an attachment is a scope of its own, so a token made before photo syndication existed toots the words and is refused the picture — which reads as a post that simply lost its images. Both the setup notes and the hint under the token field said `write:statuses` was all it took. Changing the scopes on an application already made means regenerating its token.
-
-### Changed
-
-- **The home page h-card now links to the profiles instead of the /now page.** The "Here's what I'm up to" link has been replaced by the same Mastodon, Bluesky and GitHub icons the footer carries, a shade larger since they carry the line on their own. The feed is left out — the home page already advertises it through `<link rel="alternate">` and the footer. Both places render from one new partial, `templates/partials/social-links.php`, so the two link sets cannot drift apart, and the profiles' `rel="me"` now sits inside the representative h-card where an IndieAuth or mf2 parser looks first.
 
 ---
 

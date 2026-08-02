@@ -43,7 +43,8 @@ $builder     = new \CMS\Builder($config, $db);
 $activityLog = new \CMS\ActivityLog($db);
 $syndication = new \CMS\Syndication($db, $config);
 
-\CMS\Post::promoteScheduled($db);
+// Promote any due scheduled posts (same as bootstrap.php does for the UI).
+(new \CMS\Scheduler($db, $builder, $syndication))->run();
 
 // ── Response helpers (delegate to the shared endpoint auth class) ───────────
 
@@ -1030,8 +1031,19 @@ if ($status === 'published') {
 
 // ── Syndicate to Mastodon / Bluesky on first publish ────────────────────────
 
+// Deliberately after the build: both networks fetch the permalink to make a
+// preview card, so a copy created before the page is on disk links to a 404.
+// The post page shows the copies it made, though, so a syndication that
+// recorded a URL leaves the page just written a version behind — rebuild it.
+// Only post.php renders these URLs; the feeds and index don't, so nothing else
+// needs the second pass.
 if ($status === 'published') {
+    $syndicationBefore = [$post->mastodon_url, $post->bluesky_url];
     $syndication->publish($post);
+
+    if ([$post->mastodon_url, $post->bluesky_url] !== $syndicationBefore) {
+        $builder->buildPost($post);
+    }
 }
 
 // ── Activity log ────────────────────────────────────────────────────────────
