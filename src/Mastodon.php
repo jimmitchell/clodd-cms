@@ -98,18 +98,28 @@ class Mastodon
             $fields['description'] = $alt;
         }
 
+        $bytes    = (@filesize($path) ?: 0);
         $response = $this->request('POST', '/api/v2/media', $fields, 30);
 
         if ($shrunk !== null) {
             @unlink($shrunk[0]);
         }
 
-        if ($response === null || !in_array($response['code'], [200, 202], true)) {
+        if ($response === null) {
+            self::log("media upload got no response ({$name}, {$mime}, {$bytes} bytes)");
+            return null;
+        }
+        if (!in_array($response['code'], [200, 202], true)) {
+            self::log(
+                "media upload refused with HTTP {$response['code']} ({$name}, {$mime}, {$bytes} bytes): "
+                . self::snippet($response['body'])
+            );
             return null;
         }
 
         $data = json_decode($response['body'], true);
         if (!is_array($data) || empty($data['id'])) {
+            self::log('media upload returned no attachment id: ' . self::snippet($response['body']));
             return null;
         }
         $id = (string) $data['id'];
@@ -117,6 +127,7 @@ class Mastodon
         // 202 means the instance is still processing the file. Attaching an
         // unprocessed attachment to a status is a 422, so wait for it.
         if ($response['code'] === 202 && !$this->awaitMedia($id)) {
+            self::log("attachment {$id} was still processing after the wait; posting without it");
             return null;
         }
 
@@ -169,12 +180,29 @@ class Mastodon
     private function post(string $text, array $mediaIds = []): ?string
     {
         $response = $this->request('POST', '/api/v1/statuses', self::statusBody($text, $mediaIds));
-        if ($response === null || !in_array($response['code'], [200, 201], true)) {
+        if ($response === null) {
+            self::log('status POST got no response');
+            return null;
+        }
+        if (!in_array($response['code'], [200, 201], true)) {
+            self::log("status POST refused with HTTP {$response['code']}: " . self::snippet($response['body']));
             return null;
         }
 
         $data = json_decode($response['body'], true);
-        return (is_array($data) && !empty($data['url'])) ? $data['url'] : null;
+        if (!is_array($data) || empty($data['url'])) {
+            self::log('status POST returned no url: ' . self::snippet($response['body']));
+            return null;
+        }
+
+        // A status that came back with fewer attachments than were sent posted
+        // without some of the pictures — the id was accepted and then dropped.
+        $attached = is_array($data['media_attachments'] ?? null) ? count($data['media_attachments']) : 0;
+        if ($attached < count($mediaIds)) {
+            self::log('status posted with ' . $attached . ' of ' . count($mediaIds) . ' attachments');
+        }
+
+        return $data['url'];
     }
 
     /**
@@ -215,6 +243,7 @@ class Mastodon
 
         $resolvedIp = gethostbyname($host);
         if (filter_var($resolvedIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+            self::log("refusing to call {$host}: it resolves to {$resolvedIp}");
             return null;
         }
 
@@ -234,8 +263,32 @@ class Mastodon
 
         $response = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
         curl_close($ch);
 
-        return $response === false ? null : ['code' => $httpCode, 'body' => (string) $response];
+        if ($response === false) {
+            self::log("{$method} {$path} failed: " . ($error !== '' ? $error : 'unknown cURL error'));
+            return null;
+        }
+
+        return ['code' => $httpCode, 'body' => (string) $response];
+    }
+
+    /**
+     * Syndication runs on the publish path, where there is nobody to show an
+     * error to and the post itself must still succeed. Every failure here is
+     * therefore swallowed — so each one says what happened on the way past,
+     * because otherwise a copy that never arrived leaves nothing to read.
+     */
+    private static function log(string $message): void
+    {
+        error_log('[mastodon] ' . $message);
+    }
+
+    /** A response body cut to something a log line can carry. */
+    private static function snippet(string $body, int $max = 300): string
+    {
+        $body = trim(preg_replace('/\s+/', ' ', $body) ?? '');
+        return mb_strlen($body) > $max ? mb_substr($body, 0, $max) . '…' : $body;
     }
 }
