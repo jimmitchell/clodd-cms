@@ -32,6 +32,13 @@ class Auth
         $name     = $this->config['admin']['session_name'] ?? 'cms_session';
         $lifetime = (int) ($this->config['admin']['session_lifetime'] ?? 3600);
 
+        // PHP defaults use_strict_mode to 0, which makes it accept a session ID
+        // it never issued. Anyone able to set a cookie for the domain — a taken
+        // subdomain, or plain HTTP on one — could then plant an ID and wait for
+        // it to be authenticated. The regenerate-on-login calls blunt that, but
+        // refusing unknown IDs outright is the actual fix.
+        ini_set('session.use_strict_mode', '1');
+
         session_name($name);
         session_set_cookie_params([
             'lifetime' => $lifetime,
@@ -65,7 +72,11 @@ class Auth
         $expectedUser = $this->config['admin']['username'] ?? '';
         $hash         = $this->config['admin']['password_hash'] ?? '';
 
-        $ok = ($username === $expectedUser)
+        // hash_equals rather than ===, matching api.php and XmlRpcServer: a
+        // short-circuiting compare here leaks the username through timing,
+        // because password_verify() only runs once the name is right and it is
+        // by far the slower of the two.
+        $ok = hash_equals($expectedUser, $username)
             && $hash !== ''
             && password_verify($password, $hash);
 
@@ -278,6 +289,12 @@ class Auth
     {
         $user = $_SESSION['totp_pending_user'] ?? '';
         unset($_SESSION['totp_pending'], $_SESSION['totp_pending_user'], $_SESSION['totp_pending_at']);
+
+        // The ID carried through the 2FA step becomes a fully authenticated one
+        // here, so it is rotated at the moment the privilege changes — the same
+        // point login() and the passkey path rotate theirs.
+        session_regenerate_id(true);
+
         $_SESSION['authenticated'] = true;
         $_SESSION['last_seen']     = time();
         $_SESSION['user']          = $user;

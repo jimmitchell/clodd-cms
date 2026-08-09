@@ -299,7 +299,15 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
 // ── GET: configuration queries ──────────────────────────────────────────────
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'HEAD') {
-    \CMS\MicropubAuth::authenticate($db, $config);
+    $authz = \CMS\MicropubAuth::authenticate($db, $config);
+
+    // A token issued for sign-in alone carries only 'profile', and every q=
+    // response below discloses authoring data: q=source returns the full body
+    // of any post including drafts and scheduled ones, q=config names the
+    // syndication accounts, q=category lists the whole taxonomy. Require a
+    // publishing scope so a third-party site the owner merely signed in to
+    // cannot read unpublished work.
+    \CMS\MicropubAuth::requireScope($authz, 'create', 'update', 'delete');
 
     $q       = $_GET['q'] ?? '';
     $siteUrl = rtrim($db->getSetting('site_url', ''), '/');
@@ -436,7 +444,7 @@ if ($contentType === 'application/json') {
         }
         \CMS\MicropubAuth::requireScope($mpAuthz, 'media', 'create');
         try {
-            $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media');
+            $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media', (int) ($config['media']['max_bytes'] ?? 52_428_800));
             $result       = $mediaService->upload($f);
         } catch (\RuntimeException $e) {
             mp_error('invalid_request', $e->getMessage(), 422);
@@ -901,7 +909,7 @@ $photoRows = isset($properties['photo']) && is_array($properties['photo'])
     : [];
 
 if (!empty($photoFiles)) {
-    $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media');
+    $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media', (int) ($config['media']['max_bytes'] ?? 52_428_800));
     $photoAlts    = isset($properties['mp-photo-alt']) && is_array($properties['mp-photo-alt'])
         ? array_map('strval', $properties['mp-photo-alt'])
         : [];

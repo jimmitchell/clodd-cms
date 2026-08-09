@@ -14,7 +14,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // toggling it requires no site rebuild.
         if ($action === 'generate') {
             $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-            $db->upsertSetting('micropub_token', $token);
+            // Only the digest is stored; the one-time display below is the sole
+            // chance to copy the token itself.
+            $db->upsertSetting('micropub_token', \CMS\MicropubAuth::hashLegacyToken($token));
             $activityLog->log('settings', 'settings', null, 'micropub token issued');
             // One-time display after the redirect — the GET side below consumes it.
             $_SESSION['micropub_new_token'] = $token;

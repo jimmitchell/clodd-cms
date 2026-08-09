@@ -68,8 +68,7 @@ if ($action === 'introspect') {
     MicropubAuth::authenticate($db, $config);
 
     $subject = (string) ($_POST['token'] ?? '');
-    $legacy  = $db->getSetting('micropub_token', '');
-    if ($subject !== '' && $legacy !== '' && hash_equals($legacy, $subject)) {
+    if (MicropubAuth::legacyTokenMatches($db->getSetting('micropub_token', ''), $subject)) {
         MicropubAuth::json([
             'active'    => true,
             'me'        => $me,

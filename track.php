@@ -15,6 +15,10 @@
 
 declare(strict_types=1);
 
+// This endpoint is public and returns no body — never let PHP render an error
+// page carrying the data path to a caller.
+ini_set('display_errors', '0');
+
 // Only accept POST from navigator.sendBeacon.
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -70,16 +74,42 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
     );
     $pdo->exec('PRAGMA journal_mode=WAL');
+    // A build holding the write lock would otherwise make the beacon fail
+    // instantly with SQLITE_BUSY and silently drop the view.
+    $pdo->exec('PRAGMA busy_timeout=3000');
+    // Under WAL this is crash-safe against process death and only risks losing
+    // the last commits on a host power cut — an acceptable trade for page-view
+    // rows, and it removes an fsync from every beacon.
+    $pdo->exec('PRAGMA synchronous=NORMAL');
 
-    // Get or generate the HMAC salt stored in the settings table.
-    // Generated once on the first beacon call and reused thereafter.
-    $saltRow = $pdo->query("SELECT value FROM settings WHERE key = 'analytics_salt'")->fetch();
-    $salt    = $saltRow['value'] ?? '';
+    // The salt never changes once seeded (Database::migrate() creates it), so
+    // the per-request SELECT is cached on disk beside the database. data/ is
+    // denied by nginx, and the file is written 0600.
+    $saltFile = __DIR__ . '/data/analytics_salt';
+    $salt     = is_file($saltFile) ? (string) file_get_contents($saltFile) : '';
+
     if ($salt === '') {
-        $salt = bin2hex(random_bytes(32));
-        $pdo->prepare(
-            "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('analytics_salt', ?, CURRENT_TIMESTAMP)"
-        )->execute([$salt]);
+        $saltRow = $pdo->query("SELECT value FROM settings WHERE key = 'analytics_salt'")->fetch();
+        $salt    = (string) ($saltRow['value'] ?? '');
+
+        // Only reachable on an install that has never run a migration.
+        if ($salt === '') {
+            $salt = bin2hex(random_bytes(32));
+            $pdo->prepare(
+                "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('analytics_salt', ?, CURRENT_TIMESTAMP)"
+            )->execute([$salt]);
+            // Re-read: INSERT OR IGNORE is a no-op if another request won the
+            // race, and that request's salt is the one already hashed against.
+            $saltRow = $pdo->query("SELECT value FROM settings WHERE key = 'analytics_salt'")->fetch();
+            $salt    = (string) ($saltRow['value'] ?? $salt);
+        }
+
+        // Write via a temp file so a concurrent reader never sees a partial salt.
+        $tmp = $saltFile . '.' . getmypid();
+        if (@file_put_contents($tmp, $salt) !== false) {
+            @chmod($tmp, 0600);
+            @rename($tmp, $saltFile);
+        }
     }
 
     // Hash IP with HMAC-SHA256 using the server-side salt.

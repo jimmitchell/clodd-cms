@@ -107,7 +107,7 @@ if (isset($_GET['uploaded'])) {
     $n     = (int) $_GET['uploaded'];
     $flash = $n === 1 ? '1 file uploaded.' : "{$n} files uploaded.";
 } elseif (isset($_GET['error'])) {
-    $flash     = htmlspecialchars(urldecode($_GET['error']));
+    $flash     = urldecode($_GET['error']);
     $flashType = 'error';
 }
 
@@ -131,7 +131,7 @@ if (isset($_GET['uploaded'])) {
     </header>
 
     <?php if ($flash !== ''): ?>
-        <p class="alert alert--<?= $flashType ?>" id="flash-msg"><?= $flash ?></p>
+        <p class="alert alert--<?= $flashType ?>" id="flash-msg"><?= Helpers::e($flash) ?></p>
     <?php endif; ?>
 
     <!-- Upload zone -->

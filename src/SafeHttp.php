@@ -254,6 +254,15 @@ class SafeHttp
             return null;
         }
 
+        // Two blocking lookups per call, and bin/send-webmentions.php resolves
+        // the same handful of hosts over and over across hundreds of posts.
+        // Cached per process only: a long-lived cache would defeat the point of
+        // re-resolving on each redirect hop, but within one run the answer is
+        // the same and the result is still checked before use.
+        if (array_key_exists($host, self::$dnsCache)) {
+            return self::$dnsCache[$host];
+        }
+
         $ips = [];
         foreach ((array) @dns_get_record($host, DNS_A) as $r) {
             if (!empty($r['ip'])) $ips[] = (string) $r['ip'];
@@ -262,15 +271,43 @@ class SafeHttp
             if (!empty($r['ipv6'])) $ips[] = (string) $r['ipv6'];
         }
         if ($ips === []) {
-            return null;
+            return self::$dnsCache[$host] = null;
         }
         foreach ($ips as $ip) {
             if (!self::isPublicIp($ip)) {
-                return null;
+                // Cache the refusal too — a host that resolves inward should not
+                // be re-resolved on every mention that points at it.
+                return self::$dnsCache[$host] = null;
             }
         }
-        return $ips[0];
+        return self::$dnsCache[$host] = $ips[0];
     }
+
+    /**
+     * Ranges PHP's filter flags treat as public but which are not routable on
+     * the open internet — each one can name a host on the same infrastructure
+     * as this server.
+     *
+     * 100.64.0.0/10 matters most: it is carrier-grade NAT, which is also
+     * Tailscale's range and the internal network of several VPS providers.
+     * 64:ff9b::/96 is NAT64, which embeds an IPv4 address in its low 32 bits
+     * and can therefore express 127.0.0.1 as an apparently public IPv6 address.
+     */
+    /**
+     * Per-process host => first public IP (or null when refused).
+     * @var array<string, string|null>
+     */
+    private static array $dnsCache = [];
+
+    private const BLOCKED_CIDRS = [
+        '100.64.0.0/10',    // RFC 6598 carrier-grade NAT
+        '192.0.0.0/24',     // RFC 6890 IETF protocol assignments
+        '192.88.99.0/24',   // RFC 7526 6to4 anycast relay
+        '198.18.0.0/15',    // RFC 2544 benchmarking
+        '64:ff9b::/96',     // RFC 6052 NAT64
+        '64:ff9b:1::/48',   // RFC 8215 local-use NAT64
+        '::ffff:0:0/96',    // IPv4-mapped IPv6
+    ];
 
     public static function isPublicIp(string $ip): bool
     {
@@ -279,12 +316,48 @@ class SafeHttp
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
             return false;
         }
+
+        foreach (self::BLOCKED_CIDRS as $cidr) {
+            if (self::ipInCidr($ip, $cidr)) {
+                return false;
+            }
+        }
+
         // Multicast is not covered by either flag.
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
             $first = (int) explode('.', $ip)[0];
             return $first < 224;
         }
         return stripos($ip, 'ff') !== 0;
+    }
+
+    /**
+     * True when $ip falls inside $cidr. Compares packed binary representations
+     * so the same code covers IPv4 and IPv6; mismatched families never match.
+     */
+    private static function ipInCidr(string $ip, string $cidr): bool
+    {
+        [$subnet, $bits] = explode('/', $cidr, 2);
+
+        $ipBin     = @inet_pton($ip);
+        $subnetBin = @inet_pton($subnet);
+        if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin)) {
+            return false;
+        }
+
+        $bits      = (int) $bits;
+        $wholeBytes = intdiv($bits, 8);
+        $restBits   = $bits % 8;
+
+        if ($wholeBytes > 0 && strncmp($ipBin, $subnetBin, $wholeBytes) !== 0) {
+            return false;
+        }
+        if ($restBits === 0) {
+            return true;
+        }
+
+        $mask = ~((1 << (8 - $restBits)) - 1) & 0xFF;
+        return (ord($ipBin[$wholeBytes]) & $mask) === (ord($subnetBin[$wholeBytes]) & $mask);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

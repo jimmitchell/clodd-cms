@@ -55,13 +55,34 @@ class Post
      *
      * @return self[]
      */
-    public static function findAll(Database $db, ?string $status = null): array
+    public static function findAll(Database $db, ?string $status = null, ?int $limit = null, int $offset = 0): array
     {
         $sql    = "SELECT * FROM posts WHERE deleted_at IS NULL" . ($status !== null ? " AND status = :status" : "") . " ORDER BY published_at DESC, created_at DESC";
         $params = $status !== null ? ['status' => $status] : [];
-        $posts  = array_map(fn($row) => self::fromRow($db, $row), $db->select($sql, $params));
+
+        // LIMIT/OFFSET are interpolated rather than bound: PDO's SQLite driver
+        // binds them as strings by default, which SQLite rejects in this
+        // position. Both are cast to int by the signature, so there is nothing
+        // here an argument could inject.
+        if ($limit !== null) {
+            $sql .= ' LIMIT ' . max(0, $limit) . ' OFFSET ' . max(0, $offset);
+        }
+
+        $posts = array_map(fn($row) => self::fromRow($db, $row), $db->select($sql, $params));
         self::hydrateManyTerms($db, $posts);
         return $posts;
+    }
+
+    /** Count of non-deleted posts, optionally filtered by status. */
+    public static function countAll(Database $db, ?string $status = null): int
+    {
+        $row = $db->selectOne(
+            "SELECT COUNT(*) AS c FROM posts WHERE deleted_at IS NULL"
+                . ($status !== null ? " AND status = :status" : ""),
+            $status !== null ? ['status' => $status] : []
+        );
+
+        return (int) ($row['c'] ?? 0);
     }
 
     /**
@@ -784,9 +805,11 @@ class Post
         if (!$row) {
             return null;
         }
-        $prev = self::fromRow($db, $row);
-        self::hydrateManyTerms($db, [$prev]);
-        return $prev;
+        // Not hydrated: the prev/next links in templates/post.php read only
+        // title, slug, published_at and post_kind. Loading categories, tags,
+        // photos and contexts cost four extra queries per call, twice per post,
+        // for data nothing rendered.
+        return self::fromRow($db, $row);
     }
 
     /**
@@ -809,9 +832,8 @@ class Post
         if (!$row) {
             return null;
         }
-        $next = self::fromRow($db, $row);
-        self::hydrateManyTerms($db, [$next]);
-        return $next;
+        // Not hydrated — see findPrev().
+        return self::fromRow($db, $row);
     }
 
     // ── Scheduled post promotion ──────────────────────────────────────────────

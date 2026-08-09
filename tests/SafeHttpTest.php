@@ -35,6 +35,20 @@ final class SafeHttpTest extends TestCase
             'IPv6 ULA'             => ['fd00::1'],
             'IPv6 link-local'      => ['fe80::1'],
             'IPv6 multicast'       => ['ff02::1'],
+
+            // Ranges PHP's own filter flags consider public. CGNAT is the one
+            // that bites in practice: it is Tailscale's range and the internal
+            // network of several VPS providers.
+            'CGNAT low'            => ['100.64.0.0'],
+            'CGNAT mid'            => ['100.64.1.1'],
+            'CGNAT high'           => ['100.127.255.255'],
+            'IETF protocol'        => ['192.0.0.1'],
+            '6to4 relay anycast'   => ['192.88.99.1'],
+            'benchmarking low'     => ['198.18.0.1'],
+            'benchmarking high'    => ['198.19.255.255'],
+            'NAT64 wrapping loopback' => ['64:ff9b::7f00:1'],
+            'NAT64 local-use'      => ['64:ff9b:1::1'],
+            'IPv4-mapped loopback' => ['::ffff:127.0.0.1'],
         ];
     }
 
@@ -56,6 +70,15 @@ final class SafeHttpTest extends TestCase
             'example.com'   => ['93.184.216.34'],
             'just below multicast' => ['223.255.255.255'],
             'cloudflare v6' => ['2606:4700:4700::1111'],
+
+            // Boundaries of the CIDR denylist — these are genuinely routable
+            // and must not be caught by an off-by-one in the mask arithmetic.
+            'just below CGNAT'      => ['100.63.255.255'],
+            'just above CGNAT'      => ['100.128.0.0'],
+            'just above IETF proto' => ['192.0.1.1'],
+            'just below benchmark'  => ['198.17.255.255'],
+            'just above benchmark'  => ['198.20.0.0'],
+            'just above 6to4 relay' => ['192.88.100.1'],
         ];
     }
 

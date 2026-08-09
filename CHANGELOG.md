@@ -7,6 +7,137 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.14.0] — 2026-08-09
+
+A security and performance pass. Six of the security items are real bugs rather
+than hardening, and two of those are controls that were designed and then never
+wired up. On the performance side a full rebuild went from 12.4s to 1.1s and the
+homepage from 1.8 MB of images to 110 KB on a phone.
+
+### Security
+
+- **A sign-in-only token could read every draft.** Every Micropub `POST` action
+  checked its scope; the `GET` branch authenticated and then checked nothing. A
+  token carrying only `profile` — what IndieAuth issues when you merely sign in
+  to a third-party site — could therefore call `q=source` against any URL and
+  get back the full body, excerpt, categories and syndication state of any post,
+  including drafts and scheduled ones, because the post lookup never filtered on
+  status. `q=` now requires a publishing scope.
+
+- **Passkey authentication had no rate limit.** `Auth::SCOPE_PASSKEY` existed and
+  failures were recorded under it, but nothing ever asked whether the scope was
+  locked out — the constant was written and never read, while every other auth
+  surface (`admin`, `totp`, `api`, `xmlrpc`, `micropub`) was wired up correctly.
+  Both passkey endpoints are public, so this was an unmetered public-key
+  verification anyone could trigger, and an unbounded `login_attempts` table that
+  the admin-only pruner could not keep up with. A verification that threw also
+  bypassed the counter entirely, so that path records a failure now too.
+
+- **`admin/api.php` leaked filesystem paths to unauthenticated callers.** Alone
+  among the public entry points it never turned off `display_errors`, and it
+  built the database, the Builder and ran the Scheduler — a full build path —
+  *before* authenticating. A database that would not open reported its absolute
+  path to anyone who asked. Authentication now happens before that work, the
+  connection failure is generic, and there is a shutdown guard for fatals.
+
+- **Webmention author links could run script.** The client-side renderer escaped
+  the URLs it received from webmention.io but never checked their scheme, so a
+  mention whose `u-url` was `javascript:…` became a working XSS against any
+  visitor who clicked the author link. Unlike raw HTML in post bodies — which is
+  deliberate and documented — this is unauthenticated third-party input. URLs are
+  now allowlisted to `http`/`https`.
+
+- **`tests/` was served as source.** The web root is the project root, so
+  `GET /tests/AuthTest.php` returned the file. Denied, along with `phpunit.xml`,
+  in both nginx configs. (`apps/` and `docs/` are intentionally public and were
+  left alone.)
+
+- **SSRF: the public-IP check missed several ranges.** `100.64.0.0/10` — carrier
+  grade NAT, which is also Tailscale's range and the internal network of a number
+  of VPS providers — passed as public, as did `192.0.0.0/24`, `192.88.99.0/24`,
+  `198.18.0.0/15` and NAT64 addresses, which can embed `127.0.0.1` in what looks
+  like a public IPv6 address. Reachable from webmention discovery, IndieAuth
+  client lookups and media ingestion. Now an explicit CIDR denylist, with tests
+  covering each range and its boundaries.
+
+- **The legacy Micropub token is stored hashed** (schema v27 rewrites an existing
+  one in place, so clients keep working). It grants every scope and sat in the
+  settings table verbatim while IndieAuth tokens were already hashed.
+
+- **`GET /admin/api/settings` was leaking two secrets.** Its redaction was a
+  denylist of four keys and had fallen behind the schema, exposing
+  `micropub_token` and `analytics_salt` — the latter being what keeps stored
+  visitor IPs unlinkable. Replaced with an allowlist, which fails closed.
+
+- Changing the admin password can now revoke every app token with it, on by
+  default. The password is also the REST and XML-RPC credential, so previously
+  "change it, I may be compromised" left every issued token working.
+
+- `session.use_strict_mode` is enabled; the 2FA completion regenerates its
+  session id like the other two login paths; the admin username is compared with
+  `hash_equals` rather than `===`, matching the API and XML-RPC paths; the API
+  no longer sends `Access-Control-Allow-Origin: *` before setup; the configured
+  upload cap is honoured on the Micropub and API paths instead of silently
+  falling back to 50 MB; `config.php` keeps its permissions across a password
+  change; and a username containing `$0` no longer corrupts `config.php`.
+
+### Performance
+
+- **A full rebuild spent most of its time rebuilding the same pages.** Building a
+  post rebuilds the archives of every term it belongs to — right for a single
+  edit, quadratic for a full build, and redundant besides because `buildAll()`
+  sweeps every archive at the end anyway. A category holding 105 posts was
+  rebuilt 105 times. Deferred during the post loop: **12.4s → 1.1s**, verified
+  byte-identical across all 884 generated files.
+
+- **Every build rewrote every file, unchanged or not.** Posts and pages were
+  hash-guarded; the index, feeds, sitemap, search index and archives were not, so
+  860+ files had their mtime moved on each build — wasted I/O, and enough to make
+  rsync and CDN syncs treat the entire site as changed. `writeFile()` now
+  compares before writing.
+
+- **Schema v26 adds three indexes.** `posts(status, published_at)` — the separate
+  status and date indexes meant SQLite could only use one, so every prev/next
+  lookup sorted the whole table with a temp b-tree, ~1,400 times per rebuild.
+  Plus term-first indexes on both junction tables. Prev/next across all posts:
+  244ms → 49ms. Prev/next also no longer hydrate categories, tags, photos and
+  contexts that the templates never read — four queries per call, twice per post.
+
+- **Images: 102 MB of originals now have 30 MB of WebP companions.** WebP
+  generation only ever ran on new uploads, so imported images never got one, and
+  the companions that did exist were full-resolution re-encodes. Companions are
+  now downscaled to a longest edge of 1600px with an 800px variant, and the
+  templates emit `<picture>` with a `srcset` and `width`/`height`. The homepage
+  went from 1835 KB of images to 279 KB, or 110 KB on a phone. `bin/optimise-media.php`
+  backfills existing files; originals are never touched.
+
+- **~11.5 KB of JavaScript was inlined into all 860 pages**, identical every time
+  and therefore never cacheable. Split into `/theme.js`, `/gallery.js` and
+  `/webmentions.js`, loaded with `defer` and cached — the latter two only on
+  pages that need them. Only the two roman fonts are preloaded now; the italics
+  were 57 KB competing with the faces actually needed to paint.
+
+- `track.php` sets `busy_timeout` (a build holding the write lock made the beacon
+  fail instantly and drop the view) and `synchronous=NORMAL`, removing an fsync
+  per request, and caches the analytics salt instead of querying it every time.
+  `Database` sets `busy_timeout` too.
+
+- `GET /admin/api/posts` accepts `?page` / `?per_page`. Opt-in: without them it
+  still returns everything, because existing clients depend on that.
+
+- The three feed builders share one Markdown converter instead of constructing
+  54 identical ones per rebuild, and image dimensions are cached per process
+  rather than re-read from disk on every render.
+
+### Changed
+
+- **Retention pruning moved to `bin/prune.php` and needs a cron entry** — see
+  INSTALL.md. It previously ran inline on ~1% of admin page loads, so it was tied
+  to how often the owner logged in and never ran for the public endpoints that
+  fill those tables.
+
+---
+
 ## [1.13.3] — 2026-08-02
 
 ### Added

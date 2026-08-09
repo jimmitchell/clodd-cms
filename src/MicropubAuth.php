@@ -13,6 +13,39 @@ namespace CMS;
  */
 class MicropubAuth
 {
+    /**
+     * Marks a stored legacy token as a digest rather than the token itself.
+     *
+     * The legacy token grants every scope and used to sit in the settings table
+     * verbatim, so anything that could read the database — a backup, a snapshot,
+     * the settings API — yielded a working full-scope publishing credential.
+     * IndieAuth codes and tokens were already hashed; this brings the shared
+     * token in line. The prefix makes a stored value self-describing, so an
+     * un-migrated plaintext row is recognisable and refused rather than silently
+     * compared as if it were a digest.
+     */
+    public const LEGACY_TOKEN_PREFIX = 'sha256:';
+
+    /** Storage form of a legacy shared token. */
+    public static function hashLegacyToken(string $token): string
+    {
+        return self::LEGACY_TOKEN_PREFIX . hash('sha256', $token);
+    }
+
+    /**
+     * Constant-time check of a presented token against the stored digest.
+     * A plain SHA-256 is right here: the token is 256 bits of CSPRNG output,
+     * so there is no guessable input for a slow KDF to protect.
+     */
+    public static function legacyTokenMatches(string $stored, string $presented): bool
+    {
+        if ($stored === '' || $presented === '' || !str_starts_with($stored, self::LEGACY_TOKEN_PREFIX)) {
+            return false;
+        }
+
+        return hash_equals($stored, self::hashLegacyToken($presented));
+    }
+
     // ── JSON response emitters (shared error shape across endpoints) ──────────
 
     public static function json(mixed $data, int $status = 200): never
@@ -92,9 +125,8 @@ class MicropubAuth
         $siteUrl = rtrim($db->getSetting('site_url', ''), '/');
         $me      = $siteUrl !== '' ? $siteUrl . '/' : '';
 
-        // Legacy shared token: full scopes.
-        $stored = $db->getSetting('micropub_token', '');
-        if ($stored !== '' && hash_equals($stored, $token)) {
+        // Legacy shared token: full scopes. Stored as a digest, never verbatim.
+        if (self::legacyTokenMatches($db->getSetting('micropub_token', ''), $token)) {
             return ['scopes' => IndieAuth::SCOPES, 'client_id' => null, 'me' => $me];
         }
 

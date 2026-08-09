@@ -80,6 +80,10 @@ chmod 775 /var/www/cms/content/media
 # Run this after setup.php has created data/cms.db:
 chmod 660 /var/www/cms/data/cms.db
 
+# config.php holds the admin bcrypt hash — the web server needs to read it,
+# nobody else does. Created by hand it would inherit the default umask (644).
+chmod 640 /var/www/cms/config.php
+
 # Web root writable so the Builder can write generated HTML
 chmod 775 /var/www/cms
 
@@ -230,6 +234,48 @@ Add to your crontab (`crontab -e`) to run daily at 02:00:
 Verify the PHP binary path first: `which php`
 
 The script exits with code `0` on success and `1` if any pings failed (useful for monitoring).
+
+---
+
+## Retention pruning (cron)
+
+**Required.** `login_attempts`, `activity_log` and `page_views` grow with every
+failed login, admin action and page view. Pruning used to happen inline on a
+small fraction of admin page loads, which tied it to how often you happened to
+be logged in — and never ran at all for the public endpoints that fill those
+tables. It is now a CLI script:
+
+```bash
+php /var/www/cms/bin/prune.php             # delete expired rows
+php /var/www/cms/bin/prune.php --dry-run   # report what would go, change nothing
+```
+
+Retention: login attempts 24 hours, activity log and page views 90 days.
+
+Add to your crontab to run daily at 03:00, as the same user PHP-FPM runs as so
+the WAL and journal files keep consistent ownership:
+
+```
+0 3 * * * /usr/bin/php /var/www/cms/bin/prune.php >> /var/www/cms/storage/prune.log 2>&1
+```
+
+---
+
+## Image optimisation
+
+New uploads automatically get WebP companions, downscaled to a longest edge of
+1600px plus an 800px variant for phones. To generate them for images already in
+`content/media/` — anything imported, or uploaded before this existed:
+
+```bash
+php /var/www/cms/bin/optimise-media.php --dry-run   # report what would be written
+php /var/www/cms/bin/optimise-media.php             # write the companions
+php /var/www/cms/bin/optimise-media.php --force     # rebuild existing companions
+```
+
+Originals are never modified or deleted; the `.webp` files sit alongside them and
+pages fall back to the original wherever a companion is missing. Rebuild the site
+afterwards (`php bin/build.php`) so pages start referencing them.
 
 ---
 

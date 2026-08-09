@@ -92,8 +92,10 @@ ob_start();
     <div class="post__photos" data-count="<?= count($post->photos) ?>">
         <?php foreach ($post->photos as $photo): ?>
         <figure class="post__photo">
-            <img class="u-photo" src="<?= htmlspecialchars($photo['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
-                 alt="<?= htmlspecialchars($photo['alt'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" loading="lazy">
+            <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
+                'class' => 'u-photo',
+                'sizes' => '(max-width: 44rem) 100vw, 44rem',
+            ]) ?>
         </figure>
         <?php endforeach; ?>
     </div>

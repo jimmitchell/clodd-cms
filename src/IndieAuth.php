@@ -156,6 +156,29 @@ class IndieAuth
         ) > 0;
     }
 
+    /**
+     * Revoke every live token and drop any unredeemed authorization codes.
+     * Returns the number of tokens revoked.
+     *
+     * Used when the admin password changes: the password is also the credential
+     * for the REST API and XML-RPC, so "I may be compromised, change it" has to
+     * be able to cut off the tokens issued under the old one too.
+     */
+    public function revokeAllTokens(): int
+    {
+        $count = $this->db->update(
+            'indieauth_tokens',
+            ['revoked_at' => gmdate('Y-m-d H:i:s')],
+            'revoked_at IS NULL'
+        );
+
+        // Codes are single-use and short-lived, but one already issued would
+        // otherwise still be redeemable for a fresh token after the reset.
+        $this->db->exec("DELETE FROM indieauth_codes");
+
+        return $count;
+    }
+
     public function revokeTokenById(int $id): bool
     {
         return $this->db->update(

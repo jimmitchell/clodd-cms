@@ -50,9 +50,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     fclose($fp);
                     $errors[] = 'Could not write config.php — check file permissions.';
                 } else {
+                    // tempnam() creates at 0600, and rename() carries the temp
+                    // file's mode onto the target — so writing through it used
+                    // to silently reset config.php's permissions. Copy the
+                    // existing mode across so a deployment that grants the
+                    // group read access keeps it after a password change.
+                    $mode = @fileperms($configPath);
+                    $mode = $mode === false ? 0600 : ($mode & 0777);
+
                     $tmp = tempnam(dirname($configPath), '.cfg_');
                     $ok  = $tmp !== false
                         && file_put_contents($tmp, $updated) !== false
+                        && chmod($tmp, $mode)
                         && rename($tmp, $configPath);
                     flock($fp, LOCK_UN);
                     fclose($fp);
@@ -68,8 +77,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
                         $_SESSION['last_seen']  = time();
 
+                        // The password is also the REST API and XML-RPC
+                        // credential, so a change made in response to a
+                        // suspected compromise has to be able to take the
+                        // separately-issued publishing tokens with it.
+                        $revoked = 0;
+                        if (!empty($_POST['revoke_tokens'])) {
+                            $revoked = (new \CMS\IndieAuth($db))->revokeAllTokens();
+                            if ($db->getSetting('micropub_token', '') !== '') {
+                                $db->upsertSetting('micropub_token', '');
+                                $revoked++;
+                            }
+                            $activityLog->log('settings', 'security', null, "all app tokens revoked ({$revoked})");
+                        }
+
                         $activityLog->log('password', 'account');
-                        $auth->flash('Password changed successfully.');
+                        $auth->flash($revoked > 0
+                            ? "Password changed. {$revoked} app token(s) revoked."
+                            : 'Password changed successfully.');
                         header('Location: /admin/settings.php?tab=account');
                         exit;
                     }

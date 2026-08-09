@@ -29,7 +29,7 @@ class Database
     private array $settingsCache = [];
 
     // Increment this whenever the schema changes.
-    private const SCHEMA_VERSION = 25;
+    private const SCHEMA_VERSION = 27;
 
     public function __construct(string $dbPath)
     {
@@ -45,6 +45,10 @@ class Database
             );
             $this->pdo->exec('PRAGMA journal_mode=WAL');
             $this->pdo->exec('PRAGMA foreign_keys=ON');
+            // Without this, a writer that meets a held lock (a build running
+            // while the analytics beacon writes, say) raises SQLITE_BUSY
+            // immediately instead of waiting for it to clear.
+            $this->pdo->exec('PRAGMA busy_timeout=5000');
         } catch (PDOException $e) {
             throw new RuntimeException('Cannot open database: ' . $e->getMessage());
         }
@@ -585,6 +589,51 @@ class Database
                     'id'   => $row['id'],
                 ]
             );
+        }
+    }
+
+    private function applySchemaV26(): void
+    {
+        // idx_posts_published_at and idx_posts_status are separate indexes and
+        // SQLite can only use one per table reference, so every query filtering
+        // on status and ordering by date fell back to sorting the whole table:
+        //
+        //   SEARCH posts USING INDEX idx_posts_status (status=?)
+        //   USE TEMP B-TREE FOR ORDER BY
+        //
+        // Post::findPrev()/findNext() run twice per post build, so a full
+        // rebuild paid that sort ~1,400 times. The composite covers both.
+        $this->run("CREATE INDEX IF NOT EXISTS idx_posts_status_pub ON posts(status, published_at)");
+
+        // The junction tables were only indexed by post_id, which serves
+        // hydration but not Post::findByCategory()/findByTag() — those look up
+        // by term and had to scan. Ordering the columns term-first makes the
+        // index cover the lookup and the rowid join together.
+        $this->run("CREATE INDEX IF NOT EXISTS idx_post_categories_cat ON post_categories(category_id, post_id)");
+        $this->run("CREATE INDEX IF NOT EXISTS idx_post_tags_tag       ON post_tags(tag_id, post_id)");
+
+        // The analytics HMAC salt used to be minted by whichever unauthenticated
+        // beacon request arrived first, via INSERT OR REPLACE — two concurrent
+        // first requests could each generate one, and the loser's already-stored
+        // ip_hash values became unlinkable. Seeding it here makes it exist
+        // before any beacon can run. Existing installs keep the salt they have.
+        $row = $this->selectOne("SELECT value FROM settings WHERE key = 'analytics_salt'");
+        if ($row === null || (string) $row['value'] === '') {
+            $this->upsertSetting('analytics_salt', bin2hex(random_bytes(32)));
+        }
+    }
+
+    private function applySchemaV27(): void
+    {
+        // The legacy Micropub shared token was stored verbatim while IndieAuth
+        // tokens were already hashed. Rewrite it in place so existing clients
+        // keep working — they present the same token, only the stored form
+        // changes — without the plaintext surviving in the settings table.
+        $row    = $this->selectOne("SELECT value FROM settings WHERE key = 'micropub_token'");
+        $stored = (string) ($row['value'] ?? '');
+
+        if ($stored !== '' && !str_starts_with($stored, MicropubAuth::LEGACY_TOKEN_PREFIX)) {
+            $this->upsertSetting('micropub_token', MicropubAuth::hashLegacyToken($stored));
         }
     }
 

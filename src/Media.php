@@ -464,13 +464,31 @@ class Media
     }
 
     /**
-     * Generate a .webp companion file alongside a JPEG or PNG source.
-     * Silently skips if GD is unavailable or conversion fails.
+     * Longest edge of the primary WebP companion, in pixels. Camera and phone
+     * originals run to 4000px and beyond; nothing on the site is displayed
+     * wider than the article measure, so serving the full original was sending
+     * several megabytes to render a ~700px column.
      */
-    private function generateWebp(string $sourcePath): void
+    public const WEBP_MAX_EDGE = 1600;
+
+    /** Quality for WebP encoding. 82 is visually clean at this scale. */
+    private const WEBP_QUALITY = 82;
+
+    /**
+     * Generate .webp companions alongside a JPEG or PNG source: one capped at
+     * WEBP_MAX_EDGE, and a narrow variant for phones. Both are proportional, so
+     * the original's aspect ratio (and therefore the width/height attributes
+     * taken from it) still describes them.
+     *
+     * Silently skips if GD is unavailable or conversion fails — a missing
+     * companion only costs bytes, and ImageTag falls back to the original.
+     *
+     * @return list<string> paths written
+     */
+    public function generateWebp(string $sourcePath): array
     {
         if (!extension_loaded('gd') || !function_exists('imagewebp')) {
-            return;
+            return [];
         }
 
         $ext   = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
@@ -481,18 +499,82 @@ class Media
         };
 
         if ($image === false) {
-            return;
+            return [];
         }
 
-        // Preserve PNG transparency.
-        if ($ext === 'png') {
-            imagepalettetotruecolor($image);
-            imagealphablending($image, true);
-            imagesavealpha($image, true);
+        try {
+            $written = [];
+
+            $primary = (string) preg_replace('/\.[^.]+$/', '.webp', $sourcePath);
+            if ($this->writeWebpAtWidth($image, $ext, $primary, self::WEBP_MAX_EDGE)) {
+                $written[] = $primary;
+            }
+
+            $narrow = (string) preg_replace('/\.[^.]+$/', '-' . ImageTag::NARROW_WIDTH . '.webp', $sourcePath);
+            if ($this->writeWebpAtWidth($image, $ext, $narrow, ImageTag::NARROW_WIDTH)) {
+                $written[] = $narrow;
+            }
+
+            return $written;
+        } finally {
+            imagedestroy($image);
+        }
+    }
+
+    /**
+     * Write $image to $destPath, scaled so its longest edge is at most $maxEdge.
+     * Images already within the bound are written at their original size rather
+     * than upscaled. Returns false when nothing was written.
+     *
+     * @param \GdImage $image
+     */
+    private function writeWebpAtWidth(\GdImage $image, string $ext, string $destPath, int $maxEdge): bool
+    {
+        $srcW = imagesx($image);
+        $srcH = imagesy($image);
+        if ($srcW < 1 || $srcH < 1) {
+            return false;
         }
 
-        $destPath = (string) preg_replace('/\.[^.]+$/', '.webp', $sourcePath);
-        @imagewebp($image, $destPath, 82);
+        $longest = max($srcW, $srcH);
+
+        // The narrow variant only earns its place when it is actually smaller;
+        // for an image already under the cap it would duplicate the primary.
+        if ($longest <= $maxEdge && $maxEdge !== self::WEBP_MAX_EDGE) {
+            return false;
+        }
+
+        $scale = $longest > $maxEdge ? $maxEdge / $longest : 1.0;
+        $dstW  = max(1, (int) round($srcW * $scale));
+        $dstH  = max(1, (int) round($srcH * $scale));
+
+        if ($scale === 1.0) {
+            $target = $image;
+        } else {
+            $target = imagecreatetruecolor($dstW, $dstH);
+            if ($target === false) {
+                return false;
+            }
+            if ($ext === 'png') {
+                imagealphablending($target, false);
+                imagesavealpha($target, true);
+            }
+            imagecopyresampled($target, $image, 0, 0, 0, 0, $dstW, $dstH, $srcW, $srcH);
+        }
+
+        if ($ext === 'png' && $target === $image) {
+            imagepalettetotruecolor($target);
+            imagealphablending($target, true);
+            imagesavealpha($target, true);
+        }
+
+        $ok = @imagewebp($target, $destPath, self::WEBP_QUALITY);
+
+        if ($target !== $image) {
+            imagedestroy($target);
+        }
+
+        return $ok;
     }
 
     private function phpUploadError(int $code): string

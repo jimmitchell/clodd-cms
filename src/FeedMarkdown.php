@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+namespace CMS;
+
+use League\CommonMark\GithubFlavoredMarkdownConverter;
+
+/**
+ * The Markdown converter shared by the Atom, JSON and RSS feed builders.
+ *
+ * Each of the three used to construct its own in its constructor, and
+ * Builder::buildTaxonomyFeed() constructs all three per term per rebuild — so a
+ * site with 18 taxonomy terms built 54 identical converters, each of which
+ * assembles the full CommonMark environment and extension set.
+ *
+ * The converter is stateless, so one instance serves every caller.
+ *
+ * Note the 'html_input' => 'allow' setting, which is deliberate and documented
+ * in CLAUDE.md: it is what lets the author embed raw HTML (video, audio,
+ * embeds) in post bodies. Keeping it in one place means the three feeds cannot
+ * drift apart on it.
+ */
+final class FeedMarkdown
+{
+    private static ?GithubFlavoredMarkdownConverter $converter = null;
+
+    public static function converter(): GithubFlavoredMarkdownConverter
+    {
+        return self::$converter ??= new GithubFlavoredMarkdownConverter(['html_input' => 'allow']);
+    }
+}

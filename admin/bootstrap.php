@@ -31,13 +31,11 @@ $builder     = new \CMS\Builder($config, $db);
 $activityLog = new \CMS\ActivityLog($db);
 $syndication = new \CMS\Syndication($db, $config);
 
-// Prune stale login attempts (~1% of requests). Keeps the table small so the
-// rate-limiting query stays fast; entries older than 24 hours are never needed.
-if (random_int(1, 100) === 1) {
-    $db->exec("DELETE FROM login_attempts WHERE attempted_at < datetime('now', '-24 hours')");
-    $db->exec("DELETE FROM activity_log WHERE created_at < datetime('now', '-90 days')");
-    $db->exec("DELETE FROM page_views WHERE timestamp < strftime('%s', datetime('now', '-90 days'))");
-}
+// Retention pruning lives in bin/prune.php, run from cron. It used to happen
+// here on ~1% of admin requests, which meant the public endpoints that fill
+// these tables (the analytics beacon, the passkey and Micropub auth surfaces)
+// never triggered it, and a quiet month left the eventual DELETE to land in
+// the middle of a page load. See INSTALL.md for the cron entry.
 
 // Regenerate theme.min.css if it is missing or theme.css has been modified.
 $_themeCss    = CMS_ROOT . '/theme.css';
