@@ -29,6 +29,15 @@ class Builder
     private array              $navPages;
     private string             $criticalCss = '';
 
+    /**
+     * When non-null, buildCategoryArchive()/buildTagArchive() record the term
+     * instead of rebuilding it. buildPost() rebuilds the archives of every term
+     * its post belongs to, which is right for a single edit but quadratic
+     * during a full build: a category holding 100 posts was rebuilt 100 times,
+     * and buildAll() then rebuilt every archive again anyway.
+     */
+    private bool $deferTaxonomy = false;
+
     public function __construct(array $config, Database $db)
     {
         $this->db          = $db;
@@ -497,7 +506,12 @@ class Builder
                 $html,
                 1
             );
-            file_put_contents($file, $patched);
+            // Through writeFile() rather than file_put_contents(), so this
+            // shares the output-root guard with every other write the builder
+            // makes. $file comes from generatedHtmlFiles()' own glob today, but
+            // this was the one write that would not have been stopped had that
+            // ever changed.
+            $this->writeFile($file, $patched);
             $updated++;
         }
 
@@ -587,9 +601,17 @@ class Builder
         $this->db->exec("UPDATE posts SET content_hash = NULL");
         $this->db->exec("UPDATE pages SET content_hash = NULL");
 
-        foreach (Post::findAll($this->db) as $post) {
-            $this->buildPost($post);
+        // Suppress buildPost()'s per-post archive rebuilds for the duration of
+        // the loop; buildAllTaxonomyArchives() below covers every term once.
+        $this->deferTaxonomy = true;
+        try {
+            foreach (Post::findAll($this->db) as $post) {
+                $this->buildPost($post);
+            }
+        } finally {
+            $this->deferTaxonomy = false;
         }
+
         foreach (Page::findAll($this->db) as $page) {
             $this->buildPage($page);
         }
@@ -606,6 +628,10 @@ class Builder
      */
     public function buildCategoryArchive(int $categoryId): void
     {
+        if ($this->deferTaxonomy) {
+            return; // buildAll() sweeps every term once the post loop finishes.
+        }
+
         $cat = $this->db->selectOne("SELECT * FROM categories WHERE id = :id", [':id' => $categoryId]);
         if ($cat === null) {
             return;
@@ -621,6 +647,10 @@ class Builder
      */
     public function buildTagArchive(int $tagId): void
     {
+        if ($this->deferTaxonomy) {
+            return; // buildAll() sweeps every term once the post loop finishes.
+        }
+
         $tag = $this->db->selectOne("SELECT * FROM tags WHERE id = :id", [':id' => $tagId]);
         if ($tag === null) {
             return;
@@ -935,6 +965,9 @@ class Builder
         // Give templates access to a $render closure for including base.php.
         $vars['render']      = $render;
         $vars['criticalCss'] = $this->criticalCss;
+        // Photo templates build their <img>/<picture> through ImageTag, which
+        // needs the media directory to find dimensions and WebP companions.
+        $vars['mediaDir']    = $this->mediaDir;
 
         return $render($template, $vars);
     }
@@ -955,6 +988,17 @@ class Builder
         if (str_ends_with($path, '.html')) {
             $content = $this->minifyHtml($content);
         }
+
+        // Only posts and pages are hash-guarded upstream; the index, feeds,
+        // sitemap, search index and taxonomy archives are re-rendered on every
+        // build and were previously rewritten even when byte-identical. Beyond
+        // the wasted I/O that moved every mtime, which makes rsync and CDN
+        // syncs treat the whole site as changed. Compare after minifying so the
+        // comparison sees exactly what would be written.
+        if (is_file($path) && file_get_contents($path) === $content) {
+            return true;
+        }
+
         return file_put_contents($path, $content) !== false;
     }
 

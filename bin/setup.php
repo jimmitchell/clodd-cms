@@ -85,9 +85,12 @@ $configPath    = CMS_ROOT . '/config.php';
 $configContent = file_get_contents($configPath);
 
 // Write username.
-$updatedUsername = preg_replace(
+// preg_replace_callback for the same reason as the hash below: a username
+// containing "$0" or "\1" would otherwise be expanded as a backreference and
+// write a corrupt config.php, locking the operator out of their own install.
+$updatedUsername = preg_replace_callback(
     "/'username'\s*=>\s*'[^']*'/",
-    "'username' => '" . addslashes($username) . "'",
+    fn($m) => "'username' => '" . addslashes($username) . "'",
     $configContent
 );
 
@@ -113,8 +116,18 @@ if ($updated === null || $updated === $updatedUsername) {
     echo "Could not auto-update password_hash in config.php. Paste this hash manually:\n";
     echo "    'password_hash' => '{$hash}',\n";
 } else {
+    // config.php holds the bcrypt hash, so it must not stay world-readable if
+    // it was created by hand with a default umask. 0640 keeps it readable by
+    // the web server's group (INSTALL.md chowns the tree to deploy:www-data)
+    // and closed to everyone else.
+    $mode = @fileperms($configPath);
+    $mode = $mode === false ? 0640 : ($mode & 0777) & ~0007;
+
     $tmp = tempnam(dirname($configPath), '.cfg_');
-    if ($tmp === false || file_put_contents($tmp, $updated) === false || !rename($tmp, $configPath)) {
+    if ($tmp === false
+        || file_put_contents($tmp, $updated) === false
+        || !chmod($tmp, $mode)
+        || !rename($tmp, $configPath)) {
         if ($tmp !== false && file_exists($tmp)) { unlink($tmp); }
         echo "Could not write config.php atomically. Paste this hash manually:\n";
         echo "    'password_hash' => '{$hash}',\n";

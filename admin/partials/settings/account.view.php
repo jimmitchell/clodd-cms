@@ -28,6 +28,20 @@ use CMS\Helpers;
                autocomplete="new-password">
 
         <div style="margin-top:1.25rem">
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+                <input type="checkbox" name="revoke_tokens" value="1" checked>
+                Disconnect apps as well
+            </label>
+            <p style="font-size:.8125rem;color:var(--muted, #666);margin:.35rem 0 0">
+                Revokes every IndieAuth token and the Micropub token, so apps you have
+                connected stop publishing until you reconnect them. Your password also
+                signs in to the REST API and XML-RPC, so leave this on if you are
+                changing it because the old one may be known. Passkeys and two-factor
+                settings are not affected.
+            </p>
+        </div>
+
+        <div style="margin-top:1.25rem">
             <button type="submit" class="btn">Change password</button>
         </div>
     </div>

@@ -40,20 +40,41 @@ $_apiRawBody = (string) file_get_contents('php://input');
 define('CMS_ROOT', dirname(__DIR__));
 require CMS_ROOT . '/vendor/autoload.php';
 
-$config  = require CMS_ROOT . '/config.php';
-$db      = new \CMS\Database($config['paths']['data'] . '/cms.db');
-$builder = new \CMS\Builder($config, $db);
+// This is a JSON API — never send PHP error HTML to an unauthenticated caller.
+// The Database constructor reports the absolute data path in its exception
+// message, so this has to be set before anything can throw.
+ini_set('display_errors', '0');
+ob_start();
 
-$syndication = new \CMS\Syndication($db, $config);
+// Catch fatal errors that bypass try/catch and return generic JSON instead.
+register_shutdown_function(function (): void {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => 'Internal server error']);
+    }
+});
 
-// Promote any due scheduled posts (same as bootstrap.php does for the UI).
-(new \CMS\Scheduler($db, $builder, $syndication))->run();
+$config = require CMS_ROOT . '/config.php';
+
+// api_authenticate() needs the database for its lockout check, so the
+// connection cannot wait until after auth — but its failure message can.
+try {
+    $db = new \CMS\Database($config['paths']['data'] . '/cms.db');
+} catch (\Throwable $e) {
+    error_log('[api] database unavailable: ' . $e->getMessage());
+    api_error('Internal server error', 500);
+}
 
 // ── CORS ────────────────────────────────────────────────────────────────────
 // Restrict to the site's own origin. Native clients (iOS, Xcode simulator)
-// do not send an Origin header and are unaffected by CORS policy.
-// If site_url is not yet configured, fall back to wildcard so the API
-// remains usable during initial setup.
+// do not send an Origin header and are unaffected by CORS policy, so an
+// unconfigured site_url sends no ACAO header at all rather than a wildcard —
+// during setup that would make GET /admin/api/settings cross-origin readable.
 $_corsSiteUrl = $db->getSetting('site_url', '');
 $_allowedOrigin = '';
 if ($_corsSiteUrl !== '') {
@@ -69,11 +90,8 @@ $_requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($_allowedOrigin !== '' && $_requestOrigin === $_allowedOrigin) {
     header('Access-Control-Allow-Origin: ' . $_allowedOrigin);
     header('Vary: Origin');
-} elseif ($_allowedOrigin === '') {
-    // site_url not configured yet — allow all origins during setup.
-    header('Access-Control-Allow-Origin: *');
 }
-// If origin is configured but doesn't match, send no ACAO header (browser will block).
+// Otherwise send no ACAO header at all and let the browser block the read.
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Authorization, Content-Type');
 
@@ -169,6 +187,17 @@ function api_authenticate(array $config, \CMS\Database $db): void
 
 api_authenticate($config, $db);
 
+// ── Deferred setup ──────────────────────────────────────────────────────────
+// Everything below runs only for an authenticated caller. The Scheduler drives
+// a full Builder pass, so leaving it above the auth check exposed the whole
+// build path — and any exception raised inside it — to anonymous requests.
+
+$builder     = new \CMS\Builder($config, $db);
+$syndication = new \CMS\Syndication($db, $config);
+
+// Promote any due scheduled posts (same as bootstrap.php does for the UI).
+(new \CMS\Scheduler($db, $builder, $syndication))->run();
+
 // ── Parse request ────────────────────────────────────────────────────────────
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -198,10 +227,34 @@ $timezone = $db->getSetting('timezone', '');
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 // Posts — list
+//
+// Pagination is opt-in: without ?page or ?per_page this returns every post, as
+// it always has, because existing clients (the Obsidian plugin among them) rely
+// on a single call returning the lot. Passing either parameter switches to a
+// bounded response with the page metadata in a "meta" envelope.
 if ($resource === 'posts' && $method === 'GET' && $id === null) {
-    $status = $_GET['status'] ?? null;
-    $posts  = \CMS\Post::findAll($db, $status ?: null);
-    api_json(array_map(fn($p) => post_to_array($p, $siteUrl, $timezone), $posts));
+    $status    = $_GET['status'] ?? null;
+    $paginated = isset($_GET['page']) || isset($_GET['per_page']);
+
+    if (!$paginated) {
+        $posts = \CMS\Post::findAll($db, $status ?: null);
+        api_json(array_map(fn($p) => post_to_array($p, $siteUrl, $timezone), $posts));
+    }
+
+    $perPage = max(1, min(200, (int) ($_GET['per_page'] ?? 50)));
+    $page    = max(1, (int) ($_GET['page'] ?? 1));
+    $total   = \CMS\Post::countAll($db, $status ?: null);
+    $posts   = \CMS\Post::findAll($db, $status ?: null, $perPage, ($page - 1) * $perPage);
+
+    api_json([
+        'data' => array_map(fn($p) => post_to_array($p, $siteUrl, $timezone), $posts),
+        'meta' => [
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'total'       => $total,
+            'total_pages' => (int) ceil($total / $perPage),
+        ],
+    ]);
 }
 
 // Posts — get one
@@ -456,13 +509,21 @@ if ($resource === 'media' && $method === 'GET' && $id === null) {
 
 // Media — upload (multipart/form-data, field name: "file")
 if ($resource === 'media' && $method === 'POST' && $id === null) {
-    if (empty($_FILES['file'])) {
+    // Clients send the upload as either `file` or `file[]`, and PHP shapes those
+    // two very differently. Passing the array shape straight through reached
+    // finfo::file() with an array and raised an uncaught TypeError.
+    $upload = \CMS\MicropubAuth::firstUploadedFile($_FILES['file'] ?? null);
+    if ($upload === null || $upload['error'] === UPLOAD_ERR_NO_FILE) {
         api_error('No file received. Send multipart/form-data with field name "file".');
     }
 
-    $media = new \CMS\Media($db, $config['paths']['content'] . '/media');
+    $media = new \CMS\Media(
+        $db,
+        $config['paths']['content'] . '/media',
+        (int) ($config['media']['max_bytes'] ?? 52_428_800)
+    );
     try {
-        $result = $media->upload($_FILES['file']);
+        $result = $media->upload($upload);
         api_json($result, 201);
     } catch (\RuntimeException $e) {
         api_error($e->getMessage(), 422);
@@ -490,14 +551,31 @@ if ($resource === 'tags' && $method === 'GET') {
     api_json($rows);
 }
 
-// Settings — read-only snapshot (excludes sensitive keys)
+// Settings — read-only snapshot.
+//
+// Deliberately an allowlist. The previous denylist named four secrets and had
+// already fallen behind the schema: it exposed micropub_token (a full-scope
+// publishing credential) and analytics_salt (the HMAC key that keeps stored
+// visitor IPs unlinkable). A denylist has to be updated every time a secret is
+// added, and silently leaks it when someone forgets; an allowlist fails closed.
+// Every key below is site configuration that already appears on the public site.
+const API_PUBLIC_SETTINGS = [
+    'author_avatar_url', 'author_bio', 'author_name',
+    'bluesky_handle', 'bluesky_url',
+    'custom_css', 'favicon_url', 'feed_post_count', 'footer_text',
+    'ga_measurement_id', 'github_url', 'google_site_verification',
+    'home_intro', 'locale',
+    'mastodon_handle', 'mastodon_instance',
+    'posts_per_page', 'reply_email', 'schema_version',
+    'site_description', 'site_title', 'site_url',
+    'timezone', 'tinylytics_code', 'tinylytics_kudos_emoji',
+    'webmention_domain',
+];
+
 if ($resource === 'settings' && $method === 'GET') {
     $rows     = $db->select("SELECT key, value FROM settings");
     $settings = array_column($rows, 'value', 'key');
-    foreach (['password_hash', 'mastodon_token', 'bluesky_app_password', 'totp_secret'] as $k) {
-        unset($settings[$k]);
-    }
-    api_json($settings);
+    api_json(array_intersect_key($settings, array_flip(API_PUBLIC_SETTINGS)));
 }
 
 // No route matched.

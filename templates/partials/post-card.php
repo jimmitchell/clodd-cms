@@ -35,8 +35,11 @@ $cardClass = 'post-card h-entry post-card--'
     <?php /* The photo is the post: it leads, full-bleed to the card's edge. */ ?>
     <div class="post-card__gallery" data-count="<?= count($post->photos) ?>">
         <?php foreach ($post->photos as $photo): ?>
-        <img class="u-photo" src="<?= Helpers::e($photo['url']) ?>"
-             alt="<?= Helpers::e($photo['alt']) ?>" loading="lazy" decoding="async">
+        <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
+            'class' => 'u-photo',
+            // Cards run full-bleed to the card edge, which is the feed column.
+            'sizes' => '(max-width: 44rem) 100vw, 44rem',
+        ]) ?>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>

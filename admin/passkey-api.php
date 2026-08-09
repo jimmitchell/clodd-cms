@@ -106,6 +106,13 @@ if ($action === 'passkey_register' && $method === 'POST') {
 // ── Auth options (public) ─────────────────────────────────────────────────────
 
 if ($action === 'passkey_auth_options' && $method === 'GET') {
+    // Public and unauthenticated: metered under the same scope as the verify
+    // step so a caller cannot mint unlimited challenges.
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    if (\CMS\Auth::isLockedOutIn($db, $config, $ip, \CMS\Auth::SCOPE_PASSKEY)) {
+        passkey_error('Too many failed attempts. Try again later.', 429);
+    }
+
     try {
         passkey_json(json_decode($auth->passkeyAuthOptions()));
     } catch (\Throwable $e) {
@@ -123,6 +130,13 @@ if ($action === 'passkey_auth' && $method === 'POST') {
     $authenticatorData = b64url_decode($body['response']['authenticatorData'] ?? '');
     $signature         = b64url_decode($body['response']['signature']         ?? '');
 
+    // This endpoint is public, so without a lockout every WebAuthn assertion is
+    // an unmetered public-key verification an anonymous caller can trigger.
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    if (\CMS\Auth::isLockedOutIn($db, $config, $ip, \CMS\Auth::SCOPE_PASSKEY)) {
+        passkey_error('Too many failed attempts. Try again later.', 429);
+    }
+
     if ($credentialId === '' || $clientDataJSON === '' || $authenticatorData === '' || $signature === '') {
         passkey_error('Missing credential data.');
     }
@@ -130,10 +144,12 @@ if ($action === 'passkey_auth' && $method === 'POST') {
     try {
         $ok = $auth->passkeyAuthVerify($credentialId, $clientDataJSON, $authenticatorData, $signature);
     } catch (\Throwable $e) {
+        // A throwing assertion is still a failed attempt. Recording it here too
+        // stops malformed input from being an unmetered way past the counter.
+        \CMS\Auth::recordFailureIn($db, $ip, \CMS\Auth::SCOPE_PASSKEY);
         passkey_error($e->getMessage(), 400);
     }
 
-    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
     $db->insert('login_attempts', [
         'ip'      => $ip,
         'scope'   => \CMS\Auth::SCOPE_PASSKEY,

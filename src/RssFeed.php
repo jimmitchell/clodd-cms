@@ -23,7 +23,7 @@ class RssFeed
     {
         $this->db        = $db;
         $this->settings  = $settings;
-        $this->converter = new GithubFlavoredMarkdownConverter(['html_input' => 'allow']);
+        $this->converter = FeedMarkdown::converter();
     }
 
     public function render(): string
