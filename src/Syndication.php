@@ -51,7 +51,13 @@ final class Syndication
 
         if ($this->wants($post, 'mastodon') && $post->tooted_at === null) {
             $mastodon = $this->mastodon();
-            $result   = $mastodon?->tootPost($payload['title'], $payload['excerpt'], $payload['url'], $payload['images']);
+            $result   = $mastodon?->tootPost(
+                $payload['context'],
+                $payload['title'],
+                $payload['excerpt'],
+                $payload['url'],
+                $payload['images']
+            );
             if ($result !== null) {
                 $post->markTooted($result['url'], $result['id']);
                 $this->justCreated['mastodon'] = true;
@@ -60,7 +66,13 @@ final class Syndication
 
         if ($this->wants($post, 'bluesky') && $post->bluesky_at === null) {
             $bluesky = $this->bluesky();
-            $result  = $bluesky?->postToBluesky($payload['title'], $payload['excerpt'], $payload['url'], $payload['images']);
+            $result  = $bluesky?->postToBluesky(
+                $payload['context'],
+                $payload['title'],
+                $payload['excerpt'],
+                $payload['url'],
+                $payload['images']
+            );
             if ($result !== null) {
                 $post->markBluesky($result['url'], $result['rkey']);
                 $this->justCreated['bluesky'] = true;
@@ -86,6 +98,7 @@ final class Syndication
         if ($post->mastodon_status_id !== null && !isset($this->justCreated['mastodon'])) {
             $this->mastodon()?->editPost(
                 $post->mastodon_status_id,
+                $payload['context'],
                 $payload['title'],
                 $payload['excerpt'],
                 $payload['url'],
@@ -96,6 +109,7 @@ final class Syndication
         if ($post->bluesky_rkey !== null && !isset($this->justCreated['bluesky'])) {
             $this->bluesky()?->editPost(
                 $post->bluesky_rkey,
+                $payload['context'],
                 $payload['title'],
                 $payload['excerpt'],
                 $payload['url'],
@@ -151,7 +165,11 @@ final class Syndication
      * the note. (An aside has no title either way.) Everything else sends the
      * title and an excerpt, and links home.
      *
-     * @return array{title:string,excerpt:string,url:string,images:array<array{path:string,mime:string,alt:string}>}|null
+     * A post that replies to, likes, reposts or bookmarks something opens with
+     * the same line the page and the feeds open with — a reply that arrives on
+     * Mastodon with no sign of what it is replying to is not the reply.
+     *
+     * @return array{context:string,title:string,excerpt:string,url:string,images:array<array{path:string,mime:string,alt:string}>}|null
      */
     private function payload(Post $post): ?array
     {
@@ -162,6 +180,11 @@ final class Syndication
         }
 
         $siteUrl = rtrim($this->db->getSetting('site_url', ''), '/');
+
+        // Syndication runs from the admin, the API, Micropub, XML-RPC and the
+        // scheduler, and not all of them arrive with contexts on the object.
+        $post->loadContexts();
+        $context = Post::contextsText($post->contexts);
 
         if ($post->isNote()) {
             $url     = '';
@@ -179,15 +202,17 @@ final class Syndication
         // networks instead of arriving as a caption with no picture.
         $images = SyndicationMedia::forPost($post, $this->mediaDir, $siteUrl);
 
-        // A note syndicates with no title and no link back, so the text and the
-        // photos are all there is. Nothing to say — no excerpt and no photo —
-        // means there is no post to make; don't publish a blank status.
-        if ($post->isNote() && $excerpt === '' && $images === []) {
+        // A note syndicates with no title and no link back, so the text, its
+        // contexts and the photos are all there is. Nothing to say — no
+        // excerpt, no context and no photo — means there is no post to make;
+        // don't publish a blank status.
+        if ($post->isNote() && $excerpt === '' && $context === '' && $images === []) {
             error_log('[syndication] Skipping post ' . $post->id . ': note has no text or photo');
             return null;
         }
 
         return [
+            'context' => $context,
             'title'   => $post->title,
             'excerpt' => $excerpt,
             'url'     => $url,

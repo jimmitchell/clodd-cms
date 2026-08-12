@@ -9,6 +9,7 @@ use CMS\Database;
 use CMS\Mastodon;
 use CMS\Post;
 use CMS\Syndication;
+use CMS\SyndicationText;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -281,6 +282,171 @@ final class SyndicationTest extends TestCase
         $this->assertNull($this->payloadFor($post));
     }
 
+    // ── Contexts: replies, likes, reposts, bookmarks ──────────────────────────
+
+    /**
+     * The whole point of a reply is what it is replying to. The page and both
+     * feeds open with that line; the copies on Mastodon and Bluesky carried
+     * only the words, so a reply arrived there as a remark about nothing.
+     */
+    public function testAReplySyndicatesWhatItIsReplyingTo(): void
+    {
+        $post = $this->savedPost();
+        $post->post_kind = 'aside';
+        $post->content   = 'Quite right.';
+        $post->status    = 'published';
+        $post->saveContexts([['kind' => 'in-reply-to', 'url' => 'https://example.com/a-thought']]);
+
+        $payload = $this->payloadFor($post);
+
+        $this->assertSame('↩ In reply to https://example.com/a-thought', $payload['context']);
+        $this->assertSame('Quite right.', $payload['excerpt']);
+    }
+
+    /**
+     * Contexts hang off the post id, and syndication runs from paths that never
+     * hydrated them — Micropub updates, the scheduler, the admin. Reading them
+     * back is what stops the copy silently losing its reply line.
+     */
+    public function testContextsAreReadBackWhenTheyAreNotOnTheObject(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $post = $this->savedPost();
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+        $post->save();
+        $post->saveContexts([['kind' => 'like-of', 'url' => 'https://example.com/nice']]);
+
+        $unhydrated = Post::findById($this->db, (int) $post->id);
+        $unhydrated->contexts = [];
+
+        $this->assertSame('♥ Liked https://example.com/nice', $this->payloadFor($unhydrated)['context']);
+    }
+
+    /** Display order is the page's order — repost, like, reply, bookmark. */
+    public function testContextsTextKeepsTheDisplayOrderAndFullUrls(): void
+    {
+        $text = Post::contextsText([
+            ['kind' => 'bookmark-of', 'url' => 'https://example.com/keep'],
+            ['kind' => 'in-reply-to', 'url' => 'https://example.com/said'],
+            ['kind' => 'repost-of',   'url' => 'https://example.com/boost'],
+        ]);
+
+        $this->assertSame(
+            "♺ Reposted https://example.com/boost\n"
+            . "↩ In reply to https://example.com/said\n"
+            . '🔖 Bookmarked https://example.com/keep',
+            $text
+        );
+    }
+
+    /** An unknown kind, or a context with no target, is not a line. */
+    public function testContextsTextSkipsWhatItCannotAnnounce(): void
+    {
+        $this->assertSame('', Post::contextsText([
+            ['kind' => 'in-reply-to', 'url' => '  '],
+            ['kind' => 'rsvp',        'url' => 'https://example.com/party'],
+        ]));
+    }
+
+    // ── Laying out the words ──────────────────────────────────────────────────
+
+    /** Context first, then title, excerpt and the way home — as on the page. */
+    public function testComposeOpensWithTheContextLine(): void
+    {
+        $text = SyndicationText::compose(
+            '↩ In reply to https://example.com/said',
+            'A proper post',
+            'The short version.',
+            'https://example.com/2026/08/01/a-proper-post/',
+            500
+        );
+
+        $this->assertSame(
+            "↩ In reply to https://example.com/said\n\n"
+            . "A proper post\n\n"
+            . "The short version.\n\n"
+            . 'https://example.com/2026/08/01/a-proper-post/',
+            $text
+        );
+    }
+
+    /**
+     * Only the excerpt gives ground: a reply that dropped the line saying what
+     * it replies to, to keep a few more of its own words, would be worse.
+     */
+    public function testComposeTrimsTheExcerptToFitAroundTheContext(): void
+    {
+        $context = '↩ In reply to https://example.com/said';
+        $text    = SyndicationText::compose($context, '', str_repeat('word ', 100), '', 100);
+
+        $this->assertLessThanOrEqual(100, mb_strlen($text));
+        $this->assertStringStartsWith($context . "\n\n", $text);
+        $this->assertStringEndsWith('…', $text);
+    }
+
+    /**
+     * A long enough context and URL can leave no room at all. One character and
+     * an ellipsis is not an excerpt — send the rest rather than a bare '…'.
+     */
+    public function testComposeDropsAnExcerptThatCannotFitAtAll(): void
+    {
+        $context = '↩ In reply to https://example.com/' . str_repeat('a', 60);
+
+        $this->assertSame($context, SyndicationText::compose($context, '', 'Some words.', '', 80));
+    }
+
+    // ── Making the links clickable on Bluesky ─────────────────────────────────
+
+    /**
+     * Bluesky renders no link unless a facet points at one, by byte offset. A
+     * reply now carries two URLs, and the ↩ ahead of the first is three bytes
+     * where mb_strlen counts one — measure in the wrong units and the link
+     * lands on the wrong text.
+     */
+    public function testBlueskyLinksBothTheReplyTargetAndThePostUrl(): void
+    {
+        $context  = '↩ In reply to https://example.com/said';
+        $postUrl  = 'https://example.com/2026/08/01/a-reply/';
+        $text     = SyndicationText::compose($context, '', 'Quite right.', $postUrl, 300);
+
+        $facets = $this->facetsFor($text, $postUrl, ...SyndicationText::urlsIn($context));
+
+        $this->assertCount(2, $facets);
+        foreach ($facets as $facet) {
+            $uri   = $facet['features'][0]['uri'];
+            $start = $facet['index']['byteStart'];
+            $this->assertSame($uri, substr($text, $start, $facet['index']['byteEnd'] - $start));
+        }
+        // In the order they appear: the reply target opens the post.
+        $this->assertSame('https://example.com/said', $facets[0]['features'][0]['uri']);
+        $this->assertSame($postUrl, $facets[1]['features'][0]['uri']);
+    }
+
+    /**
+     * A bookmark of a site whose address is the opening of the post's own URL
+     * would, matched shortest-first, take the longer one's bytes and leave the
+     * post URL linking to somewhere else entirely.
+     */
+    public function testBlueskyLinksAUrlThatOpensAnotherOne(): void
+    {
+        $context = '🔖 Bookmarked https://example.com/';
+        $postUrl = 'https://example.com/2026/08/01/a-bookmark/';
+        $text    = SyndicationText::compose($context, '', 'Worth keeping.', $postUrl, 300);
+
+        $facets = $this->facetsFor($text, $postUrl, ...SyndicationText::urlsIn($context));
+
+        $this->assertCount(2, $facets);
+        foreach ($facets as $facet) {
+            $start = $facet['index']['byteStart'];
+            $this->assertSame(
+                $facet['features'][0]['uri'],
+                substr($text, $start, $facet['index']['byteEnd'] - $start)
+            );
+        }
+    }
+
     public function testAPhotoPostWithNoCaptionAndNoPictureSaysNothing(): void
     {
         $post = $this->savedPost();
@@ -304,6 +470,14 @@ final class SyndicationTest extends TestCase
         $post->save();
 
         return $post;
+    }
+
+    /** @return array<array<string,mixed>> */
+    private function facetsFor(string $text, string ...$urls): array
+    {
+        $buildFacets = new \ReflectionMethod(Bluesky::class, 'buildFacets');
+
+        return $buildFacets->invoke(new Bluesky('jim.example', 'app-password'), $text, ...$urls);
     }
 
     /** @return array<string,mixed>|null */

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.14.4] — 2026-08-12
+
+### Fixed
+
+- **A reply syndicated to Mastodon and Bluesky as a remark about nothing.** The page and all three feeds open a reply, like, repost or bookmark with the line saying what it is about — "↩ In reply to …" — because they share `Post::contextsHtml()`. The two syndication clients composed their own text out of the title, excerpt and URL and never looked at the post's contexts, so that line reached every reader except the ones on the two networks. A reply from a Micropub client is titleless, which makes it an aside, and an aside syndicates with no link home either: the copy was the author's words with nothing to attach them to. `Post::contextsText()` is now the plain-text sibling of `contextsHtml()`, both reading one label table through one sort, so the symbol, the verb and the display order cannot drift apart again. The URL goes out in full rather than trimmed the way the page trims it, because Mastodon linkifies what it finds in the status text and a shortened URL would arrive as unclickable words. Contexts are read back from the database at syndication time: they hang off the post id, and the admin, the API, Micropub, XML-RPC and the scheduler do not all arrive with them hydrated. Re-saving an already-syndicated post rewrites its copies in place, so a reply posted before this can be given its missing line without losing the likes and replies hanging off it.
+
+### Changed
+
+- **One layout for a syndicated post, instead of one per network.** `Mastodon` and `Bluesky` each held a private copy of the same text builder, identical but for the character limit — which is how they came to agree with each other and disagree with the site. Both now call `SyndicationText::compose()`, which lays out any non-empty subset of context, title, excerpt and URL, and lets only the excerpt give ground: the line saying what a post replies to, the title naming it and the URL leading back to it are all worth more than a few more of its own words. That shared version also fixes a fault the duplicated one carried, now reachable because a long reply target eats the budget — with nothing left, the excerpt was cut to a negative length, dropping its last character instead of being dropped itself.
+- **Bluesky links every URL in a post, not just the post's own.** A record renders a link only where a facet points at one by byte offset, so a reply carrying two URLs showed one of them as plain text. Facets are now built for the post URL and each context URL together, matched longest-first so a bookmark of a site root cannot claim the bytes of the post URL beneath it, and ordered by position so that rewriting a record whose links have not moved still compares equal and sends no write. They are built from named URLs rather than by scanning the finished text: the excerpt is truncated to fit, and a URL cut short by that would otherwise be linkified into a dead one.
+
+---
+
 ## [1.14.3] — 2026-08-12
 
 ### Changed

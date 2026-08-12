@@ -14,6 +14,9 @@ class Bluesky
     /** Ceiling a PDS puts on an image blob. Larger files are re-encoded to fit. */
     private const BLOB_MAX_BYTES = 976_560;
 
+    /** Characters the app.bsky.feed.post lexicon accepts in one record. */
+    private const TEXT_LIMIT = 300;
+
     private string $handle;
     private string $appPassword;
 
@@ -27,19 +30,22 @@ class Bluesky
      * Build and post to Bluesky for a newly-published post.
      * Returns ['url' => canonical bsky.app URL, 'rkey' => record key], null on failure.
      *
+     * @param  string $context
+     *         The reply/like/repost/bookmark lines this post opens with, as
+     *         plain text — see Post::contextsText().
      * @param  array<array{path:string,mime:string,alt:string}> $images
      *         Local image files to attach — see SyndicationMedia::forPost().
      * @return array{url:string,rkey:string}|null
      */
-    public function postToBluesky(string $title, string $excerpt, string $url, array $images = []): ?array
+    public function postToBluesky(string $context, string $title, string $excerpt, string $url, array $images = []): ?array
     {
         $session = $this->createSession();
         if ($session === false) {
             return null;
         }
 
-        $text   = $this->buildText($title, $excerpt, $url);
-        $facets = $this->buildFacets($text, $url);
+        $text   = $this->buildText($context, $title, $excerpt, $url);
+        $facets = $this->buildFacets($text, $url, ...SyndicationText::urlsIn($context));
         $embed  = $this->buildImageEmbed($session['jwt'], $images);
 
         // Every attachment failed on a post that had nothing but pictures to
@@ -63,8 +69,14 @@ class Bluesky
      *
      * @param array<array{path:string,mime:string,alt:string}> $images
      */
-    public function editPost(string $rkey, string $title, string $excerpt, string $url, array $images = []): bool
-    {
+    public function editPost(
+        string $rkey,
+        string $context,
+        string $title,
+        string $excerpt,
+        string $url,
+        array $images = []
+    ): bool {
         $session = $this->createSession();
         if ($session === false) {
             self::log("could not sign in to edit record {$rkey}");
@@ -77,8 +89,8 @@ class Bluesky
         }
         $record = $existing['record'];
 
-        $text   = $this->buildText($title, $excerpt, $url);
-        $facets = $this->buildFacets($text, $url);
+        $text   = $this->buildText($context, $title, $excerpt, $url);
+        $facets = $this->buildFacets($text, $url, ...SyndicationText::urlsIn($context));
 
         // Blobs already on the PDS are reused, so fixing a typo on a photo post
         // rewrites the words without pushing the pictures over the wire again.
@@ -242,54 +254,73 @@ class Bluesky
 
     /**
      * Compose post text within Bluesky's 300-grapheme limit.
-     * Layout: any non-empty subset of {title, excerpt, url} joined by blank lines.
+     * Layout: any non-empty subset of {context, title, excerpt, url} joined by
+     * blank lines.
      */
-    private function buildText(string $title, string $excerpt, string $url): string
+    private function buildText(string $context, string $title, string $excerpt, string $url): string
     {
-        $fixedParts = (int) ($title !== '') + (int) ($url !== '');
-        $hasExcerpt = $excerpt !== '';
-        $separators = max(0, $fixedParts + (int) $hasExcerpt - 1) * 2;
-        $reserved   = mb_strlen($title) + mb_strlen($url) + $separators;
-        $budget     = max(0, 300 - $reserved);
-
-        if ($hasExcerpt && mb_strlen($excerpt) > $budget) {
-            $excerpt = rtrim(mb_substr($excerpt, 0, $budget - 1)) . '…';
-        }
-
-        $parts = array_filter([$title, $excerpt, $url], static fn(string $p): bool => $p !== '');
-        return implode("\n\n", $parts);
+        return SyndicationText::compose($context, $title, $excerpt, $url, self::TEXT_LIMIT);
     }
 
     /**
-     * Build AT Protocol facets array to make the URL a clickable link.
-     * Byte offsets (not character offsets) are required by the protocol.
+     * Build the AT Protocol facets that make each URL in the text clickable —
+     * the post's own URL, and the ones the reply/like/repost/bookmark lines
+     * point at. Byte offsets (not character offsets) are what the protocol
+     * wants.
+     *
+     * The URLs are named rather than found by scanning the text, because the
+     * excerpt is truncated to fit and a URL cut short by that would otherwise
+     * be linkified into a dead one.
+     *
+     * @return array<array<string,mixed>>
      */
-    private function buildFacets(string $text, string $url): array
+    private function buildFacets(string $text, string ...$urls): array
     {
-        if ($url === '') {
-            return [];
-        }
-        $byteStart = strpos($text, $url);
-        if ($byteStart === false) {
-            return [];
-        }
-        $byteEnd = $byteStart + strlen($url);
+        $urls = array_values(array_unique(array_filter(
+            $urls,
+            static fn(string $u): bool => $u !== ''
+        )));
 
-        return [
-            [
-                'index' => [
-                    '$type'     => 'app.bsky.richtext.facet#byteSlice',
-                    'byteStart' => $byteStart,
-                    'byteEnd'   => $byteEnd,
-                ],
-                'features' => [
-                    [
-                        '$type' => 'app.bsky.richtext.facet#link',
-                        'uri'   => $url,
+        // Longest first: a URL that is the opening of another — a site root and
+        // a post beneath it — must not claim the longer one's bytes.
+        usort($urls, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        $facets = [];
+        $taken  = [];
+        foreach ($urls as $url) {
+            $from = 0;
+            while (($start = strpos($text, $url, $from)) !== false) {
+                $end = $start + strlen($url);
+                foreach ($taken as [$takenStart, $takenEnd]) {
+                    if ($start < $takenEnd && $end > $takenStart) {
+                        $from = $start + 1;
+                        continue 2;
+                    }
+                }
+
+                $taken[]  = [$start, $end];
+                $facets[] = [
+                    'index' => [
+                        '$type'     => 'app.bsky.richtext.facet#byteSlice',
+                        'byteStart' => $start,
+                        'byteEnd'   => $end,
                     ],
-                ],
-            ],
-        ];
+                    'features' => [
+                        [
+                            '$type' => 'app.bsky.richtext.facet#link',
+                            'uri'   => $url,
+                        ],
+                    ],
+                ];
+                break;
+            }
+        }
+
+        // In the order they appear, so that rewriting a record whose links have
+        // not moved compares equal and sends no pointless write.
+        usort($facets, static fn(array $a, array $b): int => $a['index']['byteStart'] <=> $b['index']['byteStart']);
+
+        return $facets;
     }
 
     /**

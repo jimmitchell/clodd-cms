@@ -398,6 +398,22 @@ class Post
             ]);
         }
 
+        $this->loadContexts();
+    }
+
+    /**
+     * Re-read this post's contexts from the database.
+     *
+     * Contexts are hydrated on some paths and not others, and syndication runs
+     * from every one of them — so the code that decides what to send reloads
+     * rather than trusting whatever happens to be on the object.
+     */
+    public function loadContexts(): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+
         $this->contexts = array_map(
             fn(array $row) => ['kind' => (string) $row['kind'], 'url' => (string) $row['url']],
             $this->db->select(
@@ -438,6 +454,20 @@ class Post
     }
 
     /**
+     * The symbol, verb and mf2 class each context kind is announced with.
+     *
+     * One table for the page, the feeds and the copies on Mastodon and Bluesky:
+     * a reply that says "In reply to" here and nothing at all there is exactly
+     * the drift this is meant to prevent.
+     */
+    private const CONTEXT_LABELS = [
+        'repost-of'   => ['♺', 'Reposted', 'u-repost-of'],
+        'like-of'     => ['♥', 'Liked', 'u-like-of'],
+        'in-reply-to' => ['↩', 'In reply to', 'u-in-reply-to'],
+        'bookmark-of' => ['🔖', 'Bookmarked', 'u-bookmark-of'],
+    ];
+
+    /**
      * Render context lines ("↩ In reply to <a>…</a>") with mf2 u-* classes.
      * Shared by the feed generators and templates.
      *
@@ -445,26 +475,8 @@ class Post
      */
     public static function contextsHtml(array $contexts): string
     {
-        static $labels = [
-            'repost-of'   => ['♺', 'Reposted', 'u-repost-of'],
-            'like-of'     => ['♥', 'Liked', 'u-like-of'],
-            'in-reply-to' => ['↩', 'In reply to', 'u-in-reply-to'],
-            'bookmark-of' => ['🔖', 'Bookmarked', 'u-bookmark-of'],
-        ];
-
-        // Display order: repost > like > reply > bookmark.
-        usort($contexts, fn($a, $b) =>
-            array_search($a['kind'] ?? '', self::CONTEXT_KINDS, true)
-            <=> array_search($b['kind'] ?? '', self::CONTEXT_KINDS, true));
-
         $html = '';
-        foreach ($contexts as $context) {
-            $kind = (string) ($context['kind'] ?? '');
-            $url  = (string) ($context['url'] ?? '');
-            if ($url === '' || !isset($labels[$kind])) {
-                continue;
-            }
-            [$symbol, $verb, $class] = $labels[$kind];
+        foreach (self::sortedContexts($contexts) as [$symbol, $verb, $class, $url]) {
             $text = preg_replace('#^https?://#', '', $url);
             if (mb_strlen($text) > 60) {
                 $text = mb_substr($text, 0, 57) . '…';
@@ -474,6 +486,51 @@ class Post
                 . '" rel="nofollow">' . htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . '</a></p>' . "\n";
         }
         return $html;
+    }
+
+    /**
+     * The same context lines as plain text ("↩ In reply to https://…"), one per
+     * line, for the copies that go to Mastodon and Bluesky.
+     *
+     * The URL is written out in full rather than trimmed the way the page trims
+     * it: Mastodon linkifies whatever it finds in the status text, so a
+     * shortened URL would arrive as unclickable words.
+     *
+     * @param array<array<string,string>> $contexts
+     */
+    public static function contextsText(array $contexts): string
+    {
+        $lines = [];
+        foreach (self::sortedContexts($contexts) as [$symbol, $verb, , $url]) {
+            $lines[] = $symbol . ' ' . $verb . ' ' . $url;
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Contexts worth rendering, in display order (repost > like > reply >
+     * bookmark), each resolved to the symbol, verb, class and URL to show.
+     *
+     * @param  array<array<string,string>> $contexts
+     * @return array<array{0:string,1:string,2:string,3:string}>
+     */
+    private static function sortedContexts(array $contexts): array
+    {
+        usort($contexts, fn($a, $b) =>
+            array_search($a['kind'] ?? '', self::CONTEXT_KINDS, true)
+            <=> array_search($b['kind'] ?? '', self::CONTEXT_KINDS, true));
+
+        $resolved = [];
+        foreach ($contexts as $context) {
+            $kind = (string) ($context['kind'] ?? '');
+            $url  = trim((string) ($context['url'] ?? ''));
+            if ($url === '' || !isset(self::CONTEXT_LABELS[$kind])) {
+                continue;
+            }
+            [$symbol, $verb, $class] = self::CONTEXT_LABELS[$kind];
+            $resolved[] = [$symbol, $verb, $class, $url];
+        }
+        return $resolved;
     }
 
     // ── Build helpers ─────────────────────────────────────────────────────────

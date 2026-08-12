@@ -6,6 +6,9 @@ namespace CMS;
 
 class Mastodon
 {
+    /** Characters a default Mastodon instance accepts in one status. */
+    private const TEXT_LIMIT = 500;
+
     /**
      * Default image cap on a Mastodon instance. Instances may configure their
      * own, but the media library here accepts files far larger than any of
@@ -26,13 +29,16 @@ class Mastodon
      * Build and post a toot for a newly-published post.
      * Returns ['url' => canonical toot URL, 'id' => status id], null on failure.
      *
+     * @param  string $context
+     *         The reply/like/repost/bookmark lines this post opens with, as
+     *         plain text — see Post::contextsText().
      * @param  array<array{path:string,mime:string,alt:string}> $images
      *         Local image files to attach — see SyndicationMedia::forPost().
      * @return array{url:string,id:string}|null
      */
-    public function tootPost(string $title, string $excerpt, string $postUrl, array $images = []): ?array
+    public function tootPost(string $context, string $title, string $excerpt, string $postUrl, array $images = []): ?array
     {
-        $text = $this->buildText($title, $excerpt, $postUrl);
+        $text = $this->buildText($context, $title, $excerpt, $postUrl);
 
         $mediaIds = $this->uploadAll($images);
 
@@ -58,9 +64,15 @@ class Mastodon
      *
      * @param array<array{path:string,mime:string,alt:string}> $images
      */
-    public function editPost(string $statusId, string $title, string $excerpt, string $postUrl, array $images = []): bool
-    {
-        $text = $this->buildText($title, $excerpt, $postUrl);
+    public function editPost(
+        string $statusId,
+        string $context,
+        string $title,
+        string $excerpt,
+        string $postUrl,
+        array $images = []
+    ): bool {
+        $text = $this->buildText($context, $title, $excerpt, $postUrl);
 
         $current = $this->fetchStatus($statusId);
         if ($current === null) {
@@ -223,22 +235,12 @@ class Mastodon
 
     /**
      * Compose toot text within Mastodon's 500-character limit.
-     * Layout: any non-empty subset of {title, excerpt, url} joined by blank lines.
+     * Layout: any non-empty subset of {context, title, excerpt, url} joined by
+     * blank lines.
      */
-    private function buildText(string $title, string $excerpt, string $url): string
+    private function buildText(string $context, string $title, string $excerpt, string $url): string
     {
-        $fixedParts = (int) ($title !== '') + (int) ($url !== '');
-        $hasExcerpt = $excerpt !== '';
-        $separators = max(0, $fixedParts + (int) $hasExcerpt - 1) * 2;
-        $reserved   = mb_strlen($title) + mb_strlen($url) + $separators;
-        $budget     = max(0, 500 - $reserved);
-
-        if ($hasExcerpt && mb_strlen($excerpt) > $budget) {
-            $excerpt = rtrim(mb_substr($excerpt, 0, $budget - 1)) . '…';
-        }
-
-        $parts = array_filter([$title, $excerpt, $url], static fn(string $p): bool => $p !== '');
-        return implode("\n\n", $parts);
+        return SyndicationText::compose($context, $title, $excerpt, $url, self::TEXT_LIMIT);
     }
 
     /**
