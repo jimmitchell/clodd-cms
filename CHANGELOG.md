@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.14.2] — 2026-08-12
+
+### Changed
+
+- **The radius and header width being run as custom CSS are now the theme's own values.** The site header's inner width goes from 652px to 800px, and the corner radius on content surfaces — cards, images, galleries, code, pills, embeds, webmentions — from 3px to 6px. Rather than nineteen literals, those rules now read a `--radius` token, so the next adjustment is one line. Small chrome keeps its tighter radius: the nav dropdown and the two icon buttons stay at 3px, the search inputs at 4px. Photo cards still zero their own radius, as they have since they stopped drawing a frame — the card there has no border, background or shadow for a radius to round, so it looks the same either way.
+
+---
+
 ## [1.14.1] — 2026-08-12
 
 ### Fixed
