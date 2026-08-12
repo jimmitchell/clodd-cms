@@ -290,6 +290,17 @@ audio { width: 100%; }
 .nav-toggle:hover { color: var(--color-text); }
 .theme-toggle svg { width: 1rem; height: 1rem; }
 
+/* Three-way toggle icon: light (sun), dark (moon), system (monitor).
+   All three glyphs are in the markup and CSS reveals the one matching the
+   preference the head script stamps on <html>, so the button is painted
+   correctly on first paint. Injecting the SVG from deferred theme.js instead
+   left the button visibly empty until the script ran. System is the default,
+   so it also shows when JS is off and no preference attribute exists. */
+.theme-toggle__glyph { display: none; }
+:root[data-theme-pref="light"] .theme-toggle__glyph--light,
+:root[data-theme-pref="dark"] .theme-toggle__glyph--dark,
+:root:not([data-theme-pref="light"]):not([data-theme-pref="dark"]) .theme-toggle__glyph--system { display: inline; }
+
 /* ── Mobile nav toggle (hamburger) ───────────────────────────────────────── */
 .nav-toggle {
     display: none;

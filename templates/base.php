@@ -131,8 +131,10 @@ if (!function_exists('_e')) {
     <link rel="indieauth-metadata" href="<?= _e($siteUrl . '/indieauth-metadata.php') ?>">
     <link rel="authorization_endpoint" href="<?= _e($siteUrl . '/indieauth.php') ?>">
     <link rel="token_endpoint" href="<?= _e($siteUrl . '/token.php') ?>">
-    <!-- Anti-FOUC: apply saved/system theme before CSS renders to avoid flash -->
-    <script>(function(){var t=localStorage.getItem('theme');var sys=window.matchMedia('(prefers-color-scheme:dark)').matches;if(t==='dark'||(t!=='light'&&sys)){document.documentElement.setAttribute('data-theme','dark');}else{document.documentElement.setAttribute('data-theme','light');}})();</script>
+    <!-- Anti-FOUC: apply saved/system theme before CSS renders to avoid flash.
+         data-theme-pref carries the three-way preference so CSS can pick the
+         toggle's icon on first paint, without waiting for deferred theme.js. -->
+    <script>(function(){var d=document.documentElement;var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='light'){t='system';}d.setAttribute('data-theme-pref',t);var dark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);d.setAttribute('data-theme',dark?'dark':'light');})();</script>
     <?php if (!empty($criticalCss)): ?>
     <style><?= $criticalCss ?></style>
     <link rel="preload" href="/theme.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -192,7 +194,28 @@ if (!function_exists('_e')) {
                     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
             </a>
-            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode"></button>
+            <!-- All three glyphs ship in the markup; CSS shows the one matching
+                 data-theme-pref. theme.js only refines the aria-label. -->
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                <svg class="theme-toggle__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <g class="theme-toggle__glyph theme-toggle__glyph--light">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </g>
+                    <g class="theme-toggle__glyph theme-toggle__glyph--dark">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </g>
+                    <g class="theme-toggle__glyph theme-toggle__glyph--system">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                    </g>
+                </svg>
+            </button>
         </div>
     </div>
 </header>

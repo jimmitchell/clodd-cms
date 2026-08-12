@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.14.1] — 2026-08-12
+
+### Fixed
+
+- **The theme toggle appeared a moment after the rest of the header, on every page load.** Moving the public JavaScript out of the page and into a cached, deferred `theme.js` in 1.14.0 took the toggle's icon with it: the button shipped empty and stayed empty until that script ran, so the header painted with a hole in it where the icon belonged and then filled it in. The head script that sets the theme before first paint now also records the three-way preference on `<html>` as `data-theme-pref`; all three glyphs — sun, moon, monitor — ship in the markup, and CSS shows the one that matches. The icon is therefore correct in the first frame, and `theme.js` no longer touches the button's contents, only its `aria-label`. With JavaScript off the monitor icon shows, which is what the default preference has always been.
+
+---
+
 ## [1.14.0] — 2026-08-09
 
 A security and performance pass. Six of the security items are real bugs rather
