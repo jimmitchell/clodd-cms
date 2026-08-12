@@ -27,6 +27,7 @@ if ($introText === '') {
 // Buffered so the wrapper — and its margin — disappear entirely when no social
 // profiles are configured, rather than leaving an empty gap under the greeting.
 ob_start();
+$socialNames = true;
 include __DIR__ . '/social-links.php';
 $introSocial = trim(ob_get_clean());
 
@@ -40,10 +41,12 @@ if ($introName !== ''):
         <span class="p-note"><?= Helpers::e($introText) ?></span><?php
         endif; ?>
     </p>
-    <?php /* The same icons as the footer, minus the feed — the home page already
-             advertises that through <link rel="alternate">. They sit inside the
-             h-card so their rel="me" is found on the representative h-card, not
-             only down in the footer. */ ?>
+    <?php /* The same links as the footer, minus the feed — the home page already
+             advertises that through <link rel="alternate">. Here they are named
+             rather than icons alone: this is a first-time visitor's first look at
+             where else to find the author. They sit inside the h-card so their
+             rel="me" is found on the representative h-card, not only down in the
+             footer. */ ?>
     <?php if ($introSocial !== ''): ?>
     <div class="home-intro__social"><?= $introSocial ?></div>
     <?php endif; ?>

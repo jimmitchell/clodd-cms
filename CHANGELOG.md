@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.14.3] — 2026-08-12
+
+### Changed
+
+- **The home page's social links are named, not icons alone.** Mastodon, Bluesky and GitHub now print their names beside their glyphs in the h-card above the feed, at a smaller size than before so the row reads as a caption under the greeting. The footer is unchanged — the shared partial takes a `$socialNames` flag, set only by the home intro. Where the name is visible it labels the link, so the `aria-label` is dropped rather than having a screen reader announce the network twice.
+
+---
+
 ## [1.14.2] — 2026-08-12
 
 ### Changed

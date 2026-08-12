@@ -667,18 +667,24 @@ audio { width: 100%; }
 .home-intro__text .p-note { color: var(--color-muted); }
 
 /* The links that go somewhere sit on their own line, so the eye lands on them
-   after the sentence rather than competing with it. The same icons as the
-   footer, a shade larger: up here they carry the line on their own instead of
-   sitting beside a copyright notice, and they need to be worth aiming at. */
+   after the sentence rather than competing with it. Unlike the footer these are
+   named, not icons alone — a first-time visitor should not have to recognise a
+   glyph to know where a link goes. The type is small enough that the row still
+   reads as a caption under the greeting rather than a second sentence. */
 .home-intro__social {
     margin-top: .8rem;
     display: flex;
     align-items: center;
     gap: 1.1rem;
+    font-size: .8rem;
 }
 
 .home-intro__social .social-link { padding: .15rem 0; }
-.home-intro__social .social-link svg { width: 1.05rem; height: 1.05rem; }
+.home-intro__social .social-link svg {
+    width: .95rem;
+    height: .95rem;
+    margin-right: .3rem;
+}
 
 /* ── Post list / index ────────────────────────────────────────────────────── */
 .post-list {

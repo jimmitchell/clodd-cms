@@ -14,17 +14,21 @@
  *
  * Required in scope: $settings, $siteUrl
  * Optional in scope:
- *   $socialFeed — true to append the RSS link (footer only; the home page
- *                 already discovers the feed via <link rel="alternate">)
+ *   $socialFeed  — true to append the RSS link (footer only; the home page
+ *                  already discovers the feed via <link rel="alternate">)
+ *   $socialNames — true to print each network's name beside its icon (home page
+ *                  only; the footer keeps icons alone). The name then labels the
+ *                  link, so aria-label is dropped rather than saying it twice.
  *
- * The option is read once and unset, so an earlier include cannot leak its
- * setting into a later one.
+ * The options are read once and unset, so an earlier include cannot leak its
+ * settings into a later one.
  */
 
 use CMS\Helpers;
 
-$socialShowFeed = !empty($socialFeed);
-unset($socialFeed);
+$socialShowFeed  = !empty($socialFeed);
+$socialShowNames = !empty($socialNames);
+unset($socialFeed, $socialNames);
 
 $socialMastodon = Helpers::mastodonProfileUrl($settings['mastodon_handle'] ?? '') ?? '';
 $socialBluesky  = $settings['bluesky_url'] ?? '';
@@ -60,7 +64,10 @@ foreach ($socialLinks as $socialKey => [$socialName, $socialUrl, $socialIcon]):
     ));
 ?>
 <a href="<?= Helpers::e($socialUrl) ?>" class="social-link social-link--<?= Helpers::e($socialKey) ?>"
-   rel="<?= Helpers::e($socialRel) ?>" target="_blank" aria-label="<?= Helpers::e($socialName) ?>"><?= $socialIcon ?></a>
+   rel="<?= Helpers::e($socialRel) ?>" target="_blank"<?php
+   if (!$socialShowNames): ?> aria-label="<?= Helpers::e($socialName) ?>"<?php
+   endif; ?>><?= $socialIcon
+   ?><?php if ($socialShowNames): ?><span class="social-link__name"><?= Helpers::e($socialName) ?></span><?php endif; ?></a>
 <?php endforeach; ?>
 <?php if ($socialShowFeed): ?>
 <a href="<?= Helpers::e(rtrim($siteUrl, '/') . '/feed.rss') ?>" class="social-link social-link--feed" aria-label="RSS feed">
