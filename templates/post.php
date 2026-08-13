@@ -89,13 +89,12 @@ ob_start();
     <div class="post__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
     <?php endif; ?>
     <?php if (!empty($post->photos)): ?>
-    <?php /* Contract: data-gallery + data-gallery-item are what gallery.js binds
-             the lightbox to, and what Builder looks for to load the script at
-             all. The href is the full-size original, so the link still works
-             without JS. Attached photos are shown at the column width, and a
-             reader who came for the pictures should be able to open them —
-             the same affordance an inline body image already has. */ ?>
-    <div class="post__photos" data-count="<?= count($post->photos) ?>" data-gallery>
+    <?php /* Contract: data-gallery-item is what theme.js binds the lightbox to.
+             The href is the full-size original, so the link still works without
+             JS. Attached photos are shown at the column width, and a reader who
+             came for the pictures should be able to open them — the same
+             affordance an image written into the body has. */ ?>
+    <div class="post__photos" data-count="<?= count($post->photos) ?>">
         <?php foreach ($post->photos as $photo): ?>
         <figure class="post__photo">
             <a href="<?= Helpers::e($photo['url']) ?>" class="post__photo-link" data-gallery-item>
@@ -187,5 +186,5 @@ $bodyContent = ob_get_clean();
 
 echo $render('base.php', compact(
     'pageTitle', 'description', 'canonical', 'ogType', 'ogImageUrl', 'bodyContent',
-    'jsonLd', 'settings', 'navPages', 'siteUrl', 'render', 'hasGallery', 'criticalCss'
+    'jsonLd', 'settings', 'navPages', 'siteUrl', 'render', 'criticalCss'
 ));

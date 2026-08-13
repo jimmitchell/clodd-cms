@@ -259,9 +259,6 @@ if (!function_exists('_e')) {
 </div>
 
 <script src="/theme.js" defer></script>
-<?php if (!empty($hasGallery)): ?>
-<script src="/gallery.js" defer></script>
-<?php endif; ?>
 <?php if (($settings['webmention_domain'] ?? '') !== ''): ?>
 <script src="/webmentions.js" defer></script>
 <?php endif; ?>

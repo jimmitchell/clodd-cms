@@ -419,7 +419,7 @@ audio { width: 100%; }
 .post__photo { margin: 0; }
 
 /* The picture is the point of a photo post, so it opens. The link carries the
-   full-size original and gallery.js lifts it into the lightbox — same zoom-in
+   full-size original and theme.js lifts it into the lightbox — same zoom-in
    cursor and hover fade as the tiled gallery, so both answer the pointer alike. */
 .post__photo-link {
     display: block;
@@ -1148,7 +1148,7 @@ audio { width: 100%; }
 .search-overlay {
     position: fixed;
     inset: 0;
-    z-index: 900; /* above the header (100), below the lightboxes (1000/1100) */
+    z-index: 900; /* above the header (100), below the lightbox (1100) */
     background: color-mix(in srgb, var(--color-bg) 55%, transparent);
     backdrop-filter: blur(10px) saturate(70%);
     -webkit-backdrop-filter: blur(10px) saturate(70%);
@@ -1644,46 +1644,14 @@ audio { width: 100%; }
 }
 
 
-/* ── Lightbox ─────────────────────────────────────────────────────────────── */
-.lightbox {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background: rgba(20,15,12,.88);
-    align-items: center;
-    justify-content: center;
-    padding: 1.5rem;
-    cursor: zoom-out;
-}
-
-.lightbox.is-open { display: flex; }
-
-.lightbox__img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    cursor: default;
-    box-shadow: 0 8px 40px rgba(0,0,0,.6);
-}
-
-.lightbox__close {
-    position: fixed;
-    top: 1rem;
-    right: 1.25rem;
-    background: none;
-    border: none;
-    color: #fff;
-    font-size: 2rem;
-    line-height: 1;
-    cursor: pointer;
-    opacity: .8;
-    padding: .25rem .5rem;
-}
-
-.lightbox__close:hover { opacity: 1; }
-
+/* An image written into a post's body opens in the lightbox — see theme.js,
+   which collects these alongside the marked-up gallery items. */
 .prose img { cursor: zoom-in; }
+
+/* Except one the author linked somewhere: that link wins, and the pointer
+   should say so. Inside a gallery item the anchor is itself zoom-in, so
+   inheriting is right in both cases. */
+.prose a img { cursor: inherit; }
 
 
 /* ── Tiled gallery ────────────────────────────────────────────────────────── */
@@ -1792,7 +1760,11 @@ audio { width: 100%; }
     }
 }
 
-/* ── Gallery lightbox ─────────────────────────────────────────────────────── */
+/* ── Lightbox ─────────────────────────────────────────────────────────────── */
+
+/* The one lightbox: tiled galleries, a photo post's attached pictures, and
+   images written into a post's body all open here. The class names predate
+   the other two joining. */
 
 .gallery-lightbox {
     display: none;
@@ -1803,6 +1775,7 @@ audio { width: 100%; }
     align-items: center;
     justify-content: center;
     padding: 1.5rem 4rem;
+    cursor: zoom-out;
 }
 
 .gallery-lightbox.is-open { display: flex; }

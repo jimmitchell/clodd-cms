@@ -39,66 +39,126 @@
     });
 
     // ── Lightbox ────────────────────────────────────────────────────────────
-    // Only wire up the lightbox when the page actually contains prose images.
-    var _proseImgs = Array.from(document.querySelectorAll('.prose img')).filter(function (el) {
-        return !el.closest('[data-gallery-item]');
+    // One lightbox for every picture on the site. Three things open into it:
+    // a tiled [gallery]'s items and a photo post's attached u-photo rows, both
+    // of which the templates mark with data-gallery-item, and an image written
+    // into a post's body, which has no wrapper of its own. Those were two
+    // separate implementations, and the body image got the poorer one: no way
+    // to step to the next picture. So a photo post written in the admin, where
+    // the picture goes in the body, behaved differently from one sent by
+    // Micropub, where it arrives as an attachment — a distinction no reader can
+    // see, since both are the same picture on the same kind of post.
+    //
+    // Items group by the post they belong to, so the arrows walk that post's
+    // own pictures and stop there. On an archive page each card is its own
+    // group; a gallery the server split into sibling chunks stays one, because
+    // the chunks share an article.
+    var lbGroups = new Map();
+
+    // One pass in document order over both kinds, so a post's attached photos
+    // and its body images fall into one sequence in the order they are read.
+    document.querySelectorAll('[data-gallery-item], .prose img').forEach(function (el) {
+        var item;
+
+        if (el.matches('[data-gallery-item]')) {
+            var inner = el.querySelector('img');
+            item = { href: el.href, alt: (inner && inner.alt) || '', link: true };
+        } else {
+            // The anchor above already collected this one.
+            if (el.closest('[data-gallery-item]')) { return; }
+            // An image the author linked somewhere: that link is the intent.
+            if (el.closest('a')) { return; }
+            item = { href: el.src, alt: el.alt, link: false };
+        }
+
+        var owner = el.closest('article') || document.body;
+        var group = lbGroups.get(owner);
+        if (!group) { group = []; lbGroups.set(owner, group); }
+
+        var index = group.length;
+        group.push(item);
+
+        el.addEventListener('click', function (e) {
+            if (item.link) { e.preventDefault(); }
+            lbOpen(group, index);
+        });
     });
 
-    if (_proseImgs.length) {
-        var overlay = document.createElement('div');
-        overlay.className = 'lightbox';
-        overlay.setAttribute('role', 'dialog');
-        overlay.setAttribute('aria-modal', 'true');
-        overlay.setAttribute('aria-label', 'Image lightbox');
+    var lbItems   = [];
+    var lbCursor  = 0;
+    var lbOverlay = null;
+    var lbImg, lbClose, lbPrev, lbNext;
 
-        var img = document.createElement('img');
-        img.className = 'lightbox__img';
-        img.setAttribute('alt', '');
+    function lbBuild() {
+        lbOverlay = document.createElement('div');
+        lbOverlay.className = 'gallery-lightbox';
+        lbOverlay.setAttribute('role', 'dialog');
+        lbOverlay.setAttribute('aria-modal', 'true');
+        lbOverlay.setAttribute('aria-label', 'Image lightbox');
 
-        var closeBtn = document.createElement('button');
-        closeBtn.className = 'lightbox__close';
-        closeBtn.setAttribute('aria-label', 'Close lightbox');
-        closeBtn.textContent = '×';
+        lbImg = document.createElement('img');
+        lbImg.className = 'gallery-lightbox__img';
+        lbImg.setAttribute('alt', '');
 
-        overlay.appendChild(img);
-        overlay.appendChild(closeBtn);
-        document.body.appendChild(overlay);
+        lbClose = document.createElement('button');
+        lbClose.className = 'gallery-lightbox__btn gallery-lightbox__close';
+        lbClose.setAttribute('aria-label', 'Close');
+        lbClose.innerHTML = '&times;';
 
-        function openLightbox(src, alt, naturalW, naturalH) {
-            img.src = src;
-            img.alt = alt || '';
-            img.style.maxWidth  = naturalW > 0 ? 'min(' + naturalW + 'px, 100%)' : '';
-            img.style.maxHeight = naturalH > 0 ? 'min(' + naturalH + 'px, 100%)' : '';
-            overlay.classList.add('is-open');
-            document.body.style.overflow = 'hidden';
-            closeBtn.focus();
-        }
+        lbPrev = document.createElement('button');
+        lbPrev.className = 'gallery-lightbox__btn gallery-lightbox__prev';
+        lbPrev.setAttribute('aria-label', 'Previous image');
+        lbPrev.innerHTML = '&#8249;';
 
-        function closeLightbox() {
-            overlay.classList.remove('is-open');
-            document.body.style.overflow = '';
-            img.src = '';
-            img.style.maxWidth  = '';
-            img.style.maxHeight = '';
-        }
+        lbNext = document.createElement('button');
+        lbNext.className = 'gallery-lightbox__btn gallery-lightbox__next';
+        lbNext.setAttribute('aria-label', 'Next image');
+        lbNext.innerHTML = '&#8250;';
 
-        _proseImgs.forEach(function (el) {
-            el.addEventListener('click', function () {
-                openLightbox(el.src, el.alt, el.naturalWidth, el.naturalHeight);
-            });
-        });
+        lbOverlay.appendChild(lbImg);
+        lbOverlay.appendChild(lbClose);
+        lbOverlay.appendChild(lbPrev);
+        lbOverlay.appendChild(lbNext);
+        document.body.appendChild(lbOverlay);
 
-        closeBtn.addEventListener('click', closeLightbox);
+        lbClose.addEventListener('click', lbHide);
+        lbPrev.addEventListener('click', function () { lbShow(lbCursor - 1); });
+        lbNext.addEventListener('click', function () { lbShow(lbCursor + 1); });
 
-        overlay.addEventListener('click', function (e) {
-            if (e.target === overlay) { closeLightbox(); }
+        lbOverlay.addEventListener('click', function (e) {
+            if (e.target === lbOverlay) { lbHide(); }
         });
 
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
-                closeLightbox();
-            }
+            if (!lbOverlay.classList.contains('is-open')) { return; }
+            if (e.key === 'Escape')     { lbHide(); }
+            if (e.key === 'ArrowLeft')  { lbShow(lbCursor - 1); }
+            if (e.key === 'ArrowRight') { lbShow(lbCursor + 1); }
         });
+    }
+
+    function lbOpen(group, index) {
+        if (!lbOverlay) { lbBuild(); }
+        lbItems = group;
+        // A post with a single picture has nowhere to step to, so the arrows
+        // would only lead back to it. Each group answers this for itself.
+        lbPrev.hidden = lbNext.hidden = group.length < 2;
+        lbShow(index);
+        lbOverlay.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+        lbClose.focus();
+    }
+
+    function lbShow(index) {
+        lbCursor  = (index + lbItems.length) % lbItems.length;
+        lbImg.src = lbItems[lbCursor].href;
+        lbImg.alt = lbItems[lbCursor].alt;
+    }
+
+    function lbHide() {
+        lbOverlay.classList.remove('is-open');
+        document.body.style.overflow = '';
+        lbImg.src = '';
     }
 
     // ── Mobile nav toggle ────────────────────────────────────────────────────

@@ -89,20 +89,13 @@ class Builder
         // Generate OG image first so the URL is available to the HTML template.
         $ogImageUrl = $this->buildOgImage($post);
 
-        $html       = $this->md->convert($post->content)->getContent();
-        $html       = $this->shortcodes->render($html);
-        // Contract: gallery wrappers must include data-gallery so the lightbox JS
-        // in base.php is loaded. Preserve this attribute if changing
-        // ShortcodeRenderer::renderGallery(). A post's attached u-photo rows are
-        // the other wrapper: they are emitted by post.php, not by the Markdown,
-        // so $html cannot see them.
-        $hasGallery = str_contains($html, 'data-gallery') || !empty($post->photos);
-        $prevPost   = Post::findPrev($this->db, $post);
-        $nextPost   = Post::findNext($this->db, $post);
-        $rendered   = $this->render('post.php', [
+        $html     = $this->md->convert($post->content)->getContent();
+        $html     = $this->shortcodes->render($html);
+        $prevPost = Post::findPrev($this->db, $post);
+        $nextPost = Post::findNext($this->db, $post);
+        $rendered = $this->render('post.php', [
             'post'        => $post,
             'html'        => $html,
-            'hasGallery'  => $hasGallery,
             'prevPost'    => $prevPost,
             'nextPost'    => $nextPost,
             'ogImageUrl'  => $ogImageUrl,
@@ -809,17 +802,12 @@ class Builder
             $post->published_at = date('Y-m-d H:i:s');
         }
 
-        $html       = $this->md->convert($post->content)->getContent();
-        $html       = $this->shortcodes->render($html);
-        // Contract: gallery wrappers must include data-gallery so the lightbox JS
-        // in base.php is loaded. Preserve this attribute if changing
-        // ShortcodeRenderer::renderGallery().
-        $hasGallery = str_contains($html, 'data-gallery');
+        $html = $this->md->convert($post->content)->getContent();
+        $html = $this->shortcodes->render($html);
 
         $rendered = $this->render('post.php', [
             'post'       => $post,
             'html'       => $html,
-            'hasGallery' => $hasGallery,
             'prevPost'   => null,
             'nextPost'   => null,
             'ogImageUrl' => '',

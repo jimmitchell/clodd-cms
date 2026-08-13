@@ -152,7 +152,7 @@ server {
     # ── Theme assets at site root ─────────────────────────────────────────────
     # Non-fingerprinted, so must-revalidate ensures edits propagate via 304
     # once the 7d window expires.
-    location ~* ^/(theme[^/]*\.(css|js)|gallery\.js|webmentions\.js|favicon\.(svg|ico))$ {
+    location ~* ^/(theme[^/]*\.(css|js)|webmentions\.js|favicon\.(svg|ico))$ {
         expires 7d;
         add_header Cache-Control          "public, must-revalidate" always;
         add_header X-Content-Type-Options "nosniff" always;

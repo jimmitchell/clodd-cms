@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.16.0] — 2026-08-13
+
+### Changed
+
+- **One lightbox, for every picture on the site.** There were two, and which one a picture got depended on how it had been written rather than on anything a reader could see. An image typed into a post's body — how the admin writes a photo post — opened a bare overlay with no way to step to the next picture. Attached `u-photo` rows and the tiled `[gallery]` shortcode opened a second one with arrows and keyboard navigation. A post written in the admin and the same post sent by Micropub therefore behaved differently. The second implementation is now the only one: `theme.js` collects body images alongside the marked-up gallery items in a single pass, and `gallery.js` is gone. Items group by the article they sit in, so the arrows walk one post's pictures and stop there — on an archive page each card is its own group, and a gallery the server split into sibling chunks stays one sequence because the chunks share an article. An image the author wrapped in a link keeps the link: that was the intent, and the old code hijacked the click while following it anyway.
+- **The lightbox no longer has to be asked for.** `gallery.js` was loaded only when `Builder` found `data-gallery` in the rendered Markdown, which is why a photo post's attached pictures had no lightbox at all — the template emits those, so the scan could never see them. The same gap was open wider than that: only `post.php` ever forwarded the flag, so a tiled gallery on a Page, a taxonomy archive or the homepage was equally inert. Folding the code into `theme.js`, which every page already loads, removes the detection instead of correcting it — a page's own markup decides what opens, and there is nothing left for the server to get wrong. `data-gallery` on the wrappers went with it; `data-gallery-item` is now the single attribute the lightbox binds to.
+
+---
+
 ## [1.15.2] — 2026-08-13
 
 ### Fixed

@@ -219,9 +219,9 @@ class ShortcodeRenderer
      *
      * Renders a Mondrian-style tiled gallery: images cropped to fit pre-designed
      * CSS Grid templates per image count. Galleries with 8+ images are split into
-     * sibling chunks (e.g. 11 → 6+5). The lightbox JS in base.php collects items
-     * across all .gallery[data-gallery] blocks on the page, so chunking is invisible
-     * to navigation.
+     * sibling chunks (e.g. 11 → 6+5). The lightbox in theme.js groups items by the
+     * article they sit in, so sibling chunks stay one sequence and chunking is
+     * invisible to navigation.
      *
      * @param int[] $ids  Ordered list of media IDs.
      */
@@ -288,7 +288,9 @@ class ShortcodeRenderer
         $count = count($items);
         $x     = fn(string $v): string => htmlspecialchars($v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-        $html = '<div class="gallery gallery--tiles-' . $count . '" data-gallery>' . "\n";
+        // Contract: each item keeps data-gallery-item — that attribute, and only
+        // that attribute, is what theme.js opens into the lightbox.
+        $html = '<div class="gallery gallery--tiles-' . $count . '">' . "\n";
 
         foreach ($items as $i => $item) {
             $url     = '/media/' . rawurlencode($item['filename']);
