@@ -465,6 +465,104 @@ class Post
         return $map;
     }
 
+    // ── Effective photos (attached rows, or the body's images) ────────────────
+
+    /**
+     * Pull src/alt pairs out of a post body, in document order.
+     *
+     * Bodies are Markdown with HTML allowed, so both an image written as
+     * ![alt](/media/photo.jpg) and one written as an <img> tag count. A
+     * [gallery ids="…"] shortcode names no URLs and yields nothing.
+     *
+     * @return array<array{url:string,alt:string}>
+     */
+    public static function imagesInBody(string $body): array
+    {
+        if ($body === '') {
+            return [];
+        }
+
+        $pattern = '/!\[(?P<mdalt>[^\]]*)\]\(\s*<?(?P<mdsrc>[^)\s>]+)>?[^)]*\)'
+                 . '|<img\b(?P<tag>[^>]*)>/is';
+        if (!preg_match_all($pattern, $body, $matches, PREG_SET_ORDER)) {
+            return [];
+        }
+
+        $images = [];
+        foreach ($matches as $match) {
+            if (($match['mdsrc'] ?? '') !== '') {
+                $url = $match['mdsrc'];
+                $alt = $match['mdalt'];
+            } else {
+                $tag = $match['tag'] ?? '';
+                if (!preg_match('/\bsrc\s*=\s*(["\'])(.*?)\1/is', $tag, $src)) {
+                    continue;
+                }
+                $url = $src[2];
+                $alt = preg_match('/\balt\s*=\s*(["\'])(.*?)\1/is', $tag, $altMatch) ? $altMatch[2] : '';
+            }
+
+            $images[] = [
+                'url' => html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                'alt' => html_entity_decode($alt, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+            ];
+        }
+
+        return $images;
+    }
+
+    /**
+     * The photos a post *has*, whichever way it was written.
+     *
+     * Micropub stores the picture as post_photos rows (the u-photo property).
+     * A photo post written in the admin keeps it in the body instead — that is
+     * the documented convention in the editor, image in the content and caption
+     * in the excerpt — so the body's images are the fallback.
+     *
+     * Only `photo` posts fall back: an article with inline illustrations must
+     * not start advertising them as its photo property, which would change how
+     * a client reads its type.
+     *
+     * **This is for consumers that report a post's photos as data** — the
+     * Micropub source representation, JSON Feed's item.image, syndication
+     * attachments. Anything that renders photos *next to* the body must keep
+     * reading `$post->photos` directly, or a derived image is drawn twice: once
+     * in the photos block and once in the content it was parsed out of.
+     *
+     * Static, and taking raw values, because JsonFeed::render() works from
+     * database rows rather than Post objects.
+     *
+     * @param array<array<string,mixed>> $photos
+     * @return array<array<string,mixed>>
+     */
+    public static function photosOrBodyImages(array $photos, string $content, ?string $postKind): array
+    {
+        if ($photos !== []) {
+            return $photos;
+        }
+        if ($postKind !== 'photo') {
+            return [];
+        }
+
+        $derived = [];
+        foreach (self::imagesInBody($content) as $i => $image) {
+            $derived[] = [
+                'id'         => null,
+                'url'        => $image['url'],
+                'alt'        => $image['alt'],
+                'sort_order' => $i,
+                'media_id'   => null,
+            ];
+        }
+        return $derived;
+    }
+
+    /** photosOrBodyImages() for this post. */
+    public function effectivePhotos(): array
+    {
+        return self::photosOrBodyImages($this->photos, $this->content, $this->post_kind);
+    }
+
     /**
      * Render photos as h-entry figures (u-photo). Used by the feed generators;
      * templates render their own markup.

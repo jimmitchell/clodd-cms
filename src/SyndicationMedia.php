@@ -34,14 +34,11 @@ final class SyndicationMedia
         int $limit = self::MAX_ATTACHMENTS
     ): array {
         $candidates = [];
-        foreach ($post->photos as $photo) {
+        foreach ($post->effectivePhotos() as $photo) {
             $candidates[] = [
                 'url' => (string) ($photo['url'] ?? ''),
                 'alt' => (string) ($photo['alt'] ?? ''),
             ];
-        }
-        if ($candidates === [] && $post->isPhoto()) {
-            $candidates = self::imagesInBody($post->content);
         }
 
         $finfo  = new \finfo(FILEINFO_MIME_TYPE);
@@ -159,49 +156,6 @@ final class SyndicationMedia
         // basename() keeps a crafted url from walking out of the media dir.
         $file = rtrim($mediaDir, '/\\') . '/' . basename(rawurldecode($path));
         return is_file($file) ? $file : null;
-    }
-
-    /**
-     * Pull src/alt pairs out of a post body, in document order.
-     *
-     * Bodies are Markdown with HTML allowed, so both an image written as
-     * ![alt](/media/photo.jpg) and one written as an <img> tag count.
-     *
-     * @return array<array{url:string,alt:string}>
-     */
-    private static function imagesInBody(string $body): array
-    {
-        if ($body === '') {
-            return [];
-        }
-
-        $pattern = '/!\[(?P<mdalt>[^\]]*)\]\(\s*<?(?P<mdsrc>[^)\s>]+)>?[^)]*\)'
-                 . '|<img\b(?P<tag>[^>]*)>/is';
-        if (!preg_match_all($pattern, $body, $matches, PREG_SET_ORDER)) {
-            return [];
-        }
-
-        $images = [];
-        foreach ($matches as $match) {
-            if (($match['mdsrc'] ?? '') !== '') {
-                $url = $match['mdsrc'];
-                $alt = $match['mdalt'];
-            } else {
-                $tag = $match['tag'] ?? '';
-                if (!preg_match('/\bsrc\s*=\s*(["\'])(.*?)\1/is', $tag, $src)) {
-                    continue;
-                }
-                $url = $src[2];
-                $alt = preg_match('/\balt\s*=\s*(["\'])(.*?)\1/is', $tag, $altMatch) ? $altMatch[2] : '';
-            }
-
-            $images[] = [
-                'url' => html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
-                'alt' => html_entity_decode($alt, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
-            ];
-        }
-
-        return $images;
     }
 
     /** Composite an image onto a white background, dropping any alpha channel. */

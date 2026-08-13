@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.15.1] — 2026-08-13
+
+### Fixed
+
+- **A photo post written in the admin said it had no photo.** Only Micropub ever wrote to `post_photos`, and the admin's convention is the opposite one — picture in the body, caption in the excerpt — so of the fourteen photo posts on the site, exactly one reported a `photo` property through `q=source`, and the other thirteen shipped no `image` in the JSON feed. A client offering a photo picker got one thumbnail out of fourteen. The photos a post reports are now read through `Post::effectivePhotos()`, which returns the attached rows and, for a photo post that has none, the images in its body — the rule syndication has used to find pictures for Mastodon and Bluesky all along, lifted out of `SyndicationMedia` so there is one definition of it rather than two drifting ones. Nothing was migrated and nothing about the stored posts changed. Only the two places that *report* photos as data moved over: the Micropub source representation and JSON Feed's `item.image`. Everything that renders photos beside the body still reads the raw rows, because a derived photo was parsed out of that body and would otherwise be drawn twice — once in the photos block and once in the content it came from. The fallback is deliberately limited to photo posts: an article with inline illustrations must not start advertising them as its photo property, which would change how a client reads its type.
+
+---
+
 ## [1.15.0] — 2026-08-12
 
 ### Added

@@ -269,14 +269,18 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
         }
     }
 
-    if ($post->photos !== []) {
+    // effectivePhotos(), not ->photos: a photo post written in the admin keeps
+    // its picture in the body rather than in post_photos, and a client asking
+    // for the source still needs to be told the post has one.
+    $sourcePhotos = $post->effectivePhotos();
+    if ($sourcePhotos !== []) {
         $props['photo'] = array_map(function ($p) use ($siteUrl) {
             $url = (string) $p['url'];
             if ($siteUrl !== '' && str_starts_with($url, '/')) {
                 $url = $siteUrl . $url;
             }
             return ((string) $p['alt'] === '') ? $url : ['value' => $url, 'alt' => (string) $p['alt']];
-        }, $post->photos);
+        }, $sourcePhotos);
     }
 
     foreach (\CMS\Post::CONTEXT_KINDS as $kind) {

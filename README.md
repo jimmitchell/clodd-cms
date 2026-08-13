@@ -490,6 +490,8 @@ An unrecognised `post-type` or `post-status` returns `400`, rather than quietly 
 
 Every item carries a `url`, published or not: the date permalink once the post has a publish date, the bare slug before. That is the same value the create and update responses return in `Location:`, so a client can send it straight back as `url=` on a later `q=source`, `update` or `delete`. An unpublished post has no page on disk, so its URL 404s for visitors until it goes live.
 
+A photo post reports a `photo` property whichever way it was written. Micropub stores the picture as a `post_photos` row; a photo post written in the admin keeps it in the body instead — the editor's convention is image in the content, caption in the excerpt — so for those the body's images are read back as the property. Only `photo` posts do this: an article with inline illustrations does not advertise them as its photos. A `[gallery ids="…"]` body names ids rather than URLs, so it reports no photos.
+
 Ordering is newest first by publish date, falling back to creation date for undated drafts, with a stable tiebreak so paging never repeats or skips a post. Soft-deleted posts never appear.
 
 ### Update and delete

@@ -75,8 +75,13 @@ class JsonFeed
             if (!$isNote) {
                 $item['title'] = $post['title'];
             }
-            if ($photos !== []) {
-                $imageUrl = (string) $photos[0]['url'];
+            // The image is reported from the effective photos, which fall back
+            // to the body for an admin-written photo post. $photos above stays
+            // the raw rows: photosHtml() prepends them to the content, so a
+            // body-derived image would render twice in content_html.
+            $itemPhotos = Post::photosOrBodyImages($photos, (string) $post['content'], $post['post_kind'] ?? null);
+            if ($itemPhotos !== []) {
+                $imageUrl = (string) $itemPhotos[0]['url'];
                 $item['image'] = str_starts_with($imageUrl, '/') ? $siteUrl . $imageUrl : $imageUrl;
             }
 
@@ -141,8 +146,11 @@ class JsonFeed
             if (!$post->isNote()) {
                 $item['title'] = $post->title;
             }
-            if ($post->photos !== []) {
-                $imageUrl = (string) $post->photos[0]['url'];
+            // See render() above: reported from the effective photos, while
+            // photosHtml() at :135 keeps the raw rows so nothing renders twice.
+            $itemPhotos = $post->effectivePhotos();
+            if ($itemPhotos !== []) {
+                $imageUrl = (string) $itemPhotos[0]['url'];
                 $item['image'] = str_starts_with($imageUrl, '/') ? $siteUrl . $imageUrl : $imageUrl;
             }
 
