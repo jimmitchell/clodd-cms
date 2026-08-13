@@ -194,6 +194,7 @@ audio { width: 100%; }
 .site-header__title {
     font-size: 1rem;
     font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--color-text);
     text-decoration: none;
     display: inline-flex;
