@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.17.2] — 2026-08-13
+
+### Fixed
+
+- **The Bridgy Fed `rel="me"` pointed at a host that does not exist.** The head carried `<link rel="me" href="https://jimmitchell.org.web.brid.gy">`, and that hostname refuses to connect — curl gets no response at all. The string is real, but it is a *handle*: Bridgy Fed's translation table lists `[domain].web.brid.gy` as the atproto handle for a bridged web site, alongside `@[domain]@web.brid.gy` for the fediverse. Neither is addressable over HTTP, so the verification round-trip had nothing to fetch and the link had been doing nothing for as long as it had been there. It now points at the redirector Bridgy Fed actually documents, `https://web.brid.gy/r/<site>/`, which bounces back to the home page — that bounce is what proves the two ends belong to the same owner. The domain comes from `$siteUrl` rather than being written out again, matching the `micropub` and `indieauth-metadata` tags three lines below it, which have always been derived.
+
+---
+
 ## [1.17.1] — 2026-08-13
 
 ### Fixed

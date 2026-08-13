@@ -136,8 +136,11 @@ if (!function_exists('_e')) {
     <link rel="webmention" href="https://webmention.io/<?= _e($webmentionDomain) ?>/webmention">
     <link rel="pingback" href="https://webmention.io/xmlrpc">
     <?php endif; ?>
-    <!-- Bridgy Fed verification -->
-    <link rel="me" href="https://jimmitchell.org.web.brid.gy">
+    <!-- Bridgy Fed verification. The href is the redirector Bridgy Fed documents
+         for a bridged web site, not the bare *.web.brid.gy handle — that string
+         is the fediverse/atproto handle and does not resolve over HTTP, so a
+         rel="me" pointing at it verifies nothing. -->
+    <link rel="me" href="<?= _e('https://web.brid.gy/r/' . rtrim($siteUrl, '/') . '/') ?>">
     <!-- Micropub + IndieAuth discovery -->
     <link rel="micropub" href="<?= _e($siteUrl . '/micropub.php') ?>">
     <link rel="indieauth-metadata" href="<?= _e($siteUrl . '/indieauth-metadata.php') ?>">
