@@ -55,25 +55,29 @@ function prompt(string $question, string $default = ''): string
 }
 
 /**
- * POST a form to the instance and decode the JSON that comes back.
+ * POST a form to the instance.
+ *
+ * @param  array<string,string> $fields
+ * @return array{status:int,headers:string,body:string,url:string,content_type:string}|null
+ */
+function post_raw(string $url, array $fields): ?array
+{
+    return SafeHttp::request($url, [
+        CURLOPT_POST       => true,
+        CURLOPT_POSTFIELDS => http_build_query($fields),
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ]);
+}
+
+/**
+ * POST a form and decode the JSON that comes back, failing on anything else.
  *
  * @param  array<string,string> $fields
  * @return array<string,mixed>
  */
-function post_form(string $url, array $fields, ?string $token = null): array
+function post_form(string $url, array $fields): array
 {
-    $headers = ['Accept: application/json'];
-    if ($token !== null) {
-        $headers[] = 'Authorization: Bearer ' . $token;
-    }
-
-    $response = SafeHttp::request($url, [
-        CURLOPT_POST       => true,
-        CURLOPT_POSTFIELDS => http_build_query($fields),
-        CURLOPT_HTTPHEADER => $headers,
-    ]);
-
-    return decode($response, $url);
+    return decode(post_raw($url, $fields), $url);
 }
 
 /** @return array<string,mixed> */
@@ -84,6 +88,39 @@ function get_json(string $url, string $token): array
     ]);
 
     return decode($response, $url);
+}
+
+/**
+ * The authorization code out of whatever the approval screen gave you.
+ *
+ * Pixelfed's out-of-band screen answers with a JSON object —
+ * `{"code":"def502…","state":null}` — rather than the bare string Mastodon
+ * displays, and the whole blob is what lands on the clipboard. Pasting it
+ * verbatim reaches the token endpoint as a code that cannot be decrypted, and
+ * the error it comes back with ("Cannot validate the provided authorization
+ * code") describes a wrong code, not a malformed request, so there is nothing
+ * in it to suggest the paste was the problem.
+ *
+ * A pasted redirect URL is read too, for an instance configured to send one.
+ */
+function extract_code(string $input): string
+{
+    $input = trim($input, " \t\n\r\0\x0B\"'");
+
+    $decoded = json_decode($input, true);
+    if (is_array($decoded) && isset($decoded['code']) && is_string($decoded['code'])) {
+        return trim($decoded['code']);
+    }
+
+    $query = parse_url($input, PHP_URL_QUERY);
+    if (is_string($query)) {
+        parse_str($query, $params);
+        if (isset($params['code']) && is_string($params['code'])) {
+            return trim($params['code']);
+        }
+    }
+
+    return $input;
 }
 
 /**
@@ -147,26 +184,48 @@ Open this while signed in to Pixelfed, and approve the application:
 
 {$authorizeUrl}
 
-Pixelfed then shows a long authorization code. Copy it.
+Pixelfed answers with something like {"code":"def502…","state":null}. Paste the
+whole thing — the code is picked out of it.
 
 
 TEXT);
 
-$code = prompt('Authorization code');
-if ($code === '') {
-    fail('No code given, so there is nothing to exchange.');
-}
-
 // ── 3. Trade the code for a token ───────────────────────────────────────────
 
-$token = post_form($instance . '/oauth/token', [
-    'grant_type'    => 'authorization_code',
-    'client_id'     => $clientId,
-    'client_secret' => $clientSecret,
-    'redirect_uri'  => OOB_REDIRECT,
-    'code'          => $code,
-    'scope'         => SCOPES,
-]);
+// A code is single use and lives about ten minutes, so a failed exchange is
+// worth another go — with the same registered application, which is why this
+// loops here rather than exiting and making you re-register.
+$token = [];
+for ($attempt = 1; $attempt <= 3; $attempt++) {
+    $code = extract_code(prompt('Authorization code'));
+    if ($code === '') {
+        fail('No code given, so there is nothing to exchange.');
+    }
+
+    $response = post_raw($instance . '/oauth/token', [
+        'grant_type'    => 'authorization_code',
+        'client_id'     => $clientId,
+        'client_secret' => $clientSecret,
+        'redirect_uri'  => OOB_REDIRECT,
+        'code'          => $code,
+        'scope'         => SCOPES,
+    ]);
+
+    if ($response !== null && $response['status'] >= 200 && $response['status'] < 300) {
+        $token = json_decode($response['body'], true);
+        $token = is_array($token) ? $token : [];
+        break;
+    }
+
+    $detail = $response === null ? 'the instance could not be reached' : trim($response['body']);
+    fwrite(STDOUT, "\nThat code was refused:\n{$detail}\n");
+
+    if ($attempt === 3) {
+        fail('Three attempts is enough — run the script again for a fresh application.');
+    }
+
+    fwrite(STDOUT, "\nApprove the application again at the URL above for a fresh code, then paste it.\n\n");
+}
 
 $accessToken = (string) ($token['access_token'] ?? '');
 if ($accessToken === '') {
