@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.18.1] — 2026-08-13
+
+### Changed
+
+- **Headings are tracked in by `-0.02em`.** DM Sans sets a little loose above body size, and the gap was widest on the two titles that carry the most weight on a page — the post title and the card titles on the index. The rule sits on the elements (`h1`–`h6`), so the uppercase micro-labels that are headings — `.webmentions__title`, the taxonomy eyebrow — keep the positive tracking their own class sets, which is what uppercase at `.75rem` wants. `.post-card__title` was the one heading already carrying a negative value, at `-0.01em`, and now matches the rest.
+
+---
+
 ## [1.18.0] — 2026-08-13
 
 ### Added
