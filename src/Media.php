@@ -528,6 +528,77 @@ class Media
      *
      * @param \GdImage $image
      */
+    /**
+     * Encode a square thumbnail of $sourcePath as a base64 WebP data URI.
+     *
+     * For images small enough to inline, which is the point: the caller puts the
+     * result straight in a src, so the picture arrives with the markup and there
+     * is no second request to wait on. Only worth it at avatar sizes — an $edge
+     * of 64 lands around 1.5KB encoded.
+     *
+     * Crops the largest centred square before scaling, matching what CSS
+     * `object-fit: cover` would have done to the original.
+     *
+     * Returns null when GD cannot help or the source is not a still image; the
+     * caller is expected to fall back to a plain URL.
+     */
+    public static function squareWebpDataUri(string $sourcePath, int $edge): ?string
+    {
+        if (!extension_loaded('gd') || !function_exists('imagewebp') || $edge < 1) {
+            return null;
+        }
+
+        $ext   = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
+        $image = match ($ext) {
+            'jpg', 'jpeg' => @imagecreatefromjpeg($sourcePath),
+            'png'         => @imagecreatefrompng($sourcePath),
+            'webp'        => @imagecreatefromwebp($sourcePath),
+            'gif'         => @imagecreatefromgif($sourcePath),
+            default       => false,
+        };
+
+        if ($image === false) {
+            return null;
+        }
+
+        try {
+            $srcW = imagesx($image);
+            $srcH = imagesy($image);
+            if ($srcW < 1 || $srcH < 1) {
+                return null;
+            }
+
+            $side = min($srcW, $srcH);
+            $srcX = (int) (($srcW - $side) / 2);
+            $srcY = (int) (($srcH - $side) / 2);
+
+            $target = imagecreatetruecolor($edge, $edge);
+            if ($target === false) {
+                return null;
+            }
+
+            try {
+                imagealphablending($target, false);
+                imagesavealpha($target, true);
+                imagecopyresampled($target, $image, 0, 0, $srcX, $srcY, $edge, $edge, $side, $side);
+
+                ob_start();
+                $ok = @imagewebp($target, null, self::WEBP_QUALITY);
+                $blob = (string) ob_get_clean();
+            } finally {
+                imagedestroy($target);
+            }
+
+            if (!$ok || $blob === '') {
+                return null;
+            }
+
+            return 'data:image/webp;base64,' . base64_encode($blob);
+        } finally {
+            imagedestroy($image);
+        }
+    }
+
     private function writeWebpAtWidth(\GdImage $image, string $ext, string $destPath, int $maxEdge): bool
     {
         $srcW = imagesx($image);

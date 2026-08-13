@@ -29,6 +29,12 @@ class Builder
     private array              $navPages;
     private string             $criticalCss = '';
 
+    /** Display size of the header avatar in CSS pixels; see .site-header__avatar. */
+    private const AVATAR_CSS_PX = 32;
+
+    /** Encoded header avatar, memoised per build. Empty string = none, null = not yet resolved. */
+    private ?string $headerAvatar = null;
+
     /**
      * When non-null, buildCategoryArchive()/buildTagArchive() record the term
      * instead of rebuilding it. buildPost() rebuilds the archives of every term
@@ -936,6 +942,74 @@ class Builder
      *
      * @param array<string,mixed> $vars
      */
+    /**
+     * The header avatar, inlined as a data URI.
+     *
+     * The setting holds a full-size upload — Jim's is a 768px PNG at 856KB — and
+     * the header draws it at 32px. Fetching that to fill a circle the size of a
+     * word left the placeholder background visible while it downloaded, which
+     * read as a flash on every page load. Encoding a 64px square (2x for retina)
+     * into the markup costs about 1.5KB a page and removes the request, so the
+     * avatar is there in the first paint alongside the inlined critical CSS.
+     *
+     * Only local uploads qualify: a remote avatar would mean fetching an
+     * arbitrary URL during the build. Returns '' when that is the case or when
+     * GD cannot encode it, and base.php falls back to the plain URL.
+     */
+    private function headerAvatar(): string
+    {
+        if ($this->headerAvatar !== null) {
+            return $this->headerAvatar;
+        }
+
+        $this->headerAvatar = '';
+
+        $source = $this->localMediaPath((string) ($this->settings['author_avatar_url'] ?? ''));
+        if ($source === null) {
+            return $this->headerAvatar;
+        }
+
+        $encoded = Media::squareWebpDataUri($source, self::AVATAR_CSS_PX * 2);
+
+        return $this->headerAvatar = $encoded ?? '';
+    }
+
+    /**
+     * Resolve a URL to the file it names inside the media directory, or null if
+     * it names anything else. Public /media/ is an alias for that directory, so
+     * a URL is local when its path sits under it — the host is not checked,
+     * because site_url changes between dev and prod while the uploads do not.
+     *
+     * The filename is taken with basename() and the result confirmed to be
+     * inside the media root, so no encoded traversal in the setting can walk out
+     * of it.
+     */
+    private function localMediaPath(string $url): ?string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return null;
+        }
+
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        if ($path === '' || !str_starts_with($path, '/media/')) {
+            return null;
+        }
+
+        $name = basename(rawurldecode($path));
+        if ($name === '' || $name === '.' || $name === '..') {
+            return null;
+        }
+
+        $real = realpath($this->mediaDir . '/' . $name);
+        $root = realpath($this->mediaDir);
+        if ($real === false || $root === false || !str_starts_with($real, $root . DIRECTORY_SEPARATOR)) {
+            return null;
+        }
+
+        return is_file($real) ? $real : null;
+    }
+
     private function render(string $template, array $vars): string
     {
         // Make shared context available inside the template scope.
@@ -958,6 +1032,7 @@ class Builder
         // Photo templates build their <img>/<picture> through ImageTag, which
         // needs the media directory to find dimensions and WebP companions.
         $vars['mediaDir']    = $this->mediaDir;
+        $vars['headerAvatar'] = $this->headerAvatar();
 
         return $render($template, $vars);
     }

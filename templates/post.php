@@ -186,5 +186,5 @@ $bodyContent = ob_get_clean();
 
 echo $render('base.php', compact(
     'pageTitle', 'description', 'canonical', 'ogType', 'ogImageUrl', 'bodyContent',
-    'jsonLd', 'settings', 'navPages', 'siteUrl', 'render', 'criticalCss'
+    'jsonLd', 'settings', 'navPages', 'siteUrl', 'render', 'criticalCss', 'headerAvatar'
 ));

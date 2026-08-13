@@ -91,5 +91,5 @@ $bodyContent = ob_get_clean();
 
 echo $render('base.php', compact(
     'pageTitle', 'description', 'canonical', 'ogType', 'ogImageUrl', 'bodyContent',
-    'settings', 'navPages', 'siteUrl', 'render', 'extraFeedLinks', 'criticalCss'
+    'settings', 'navPages', 'siteUrl', 'render', 'extraFeedLinks', 'criticalCss', 'headerAvatar'
 ));

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.17.1] — 2026-08-13
+
+### Fixed
+
+- **The header avatar flashed on every page load.** The circle sat empty for a moment before the face appeared, and the reason was the file behind it: the Settings value points at the original upload — 768×768, 856KB as a PNG — and the header draws it at 32px. Every page was fetching most of a megabyte to fill a circle the width of a word, and the placeholder background was what the reader saw while it arrived. `Builder` now encodes a 64px square (2× for retina) as a WebP data URI and inlines it, so the avatar ships with the markup and there is no request to wait on: about 1.5KB a page, against 856KB fetched once and then cached but paid in full on a first visit. The crop is centred to match what `object-fit: cover` was doing to the original. Only local uploads are inlined — a remote avatar would mean fetching an arbitrary URL during a build — and anything that cannot be encoded falls back to the URL as written, so the setting keeps working when GD is missing.
+- **Six templates had to be told about the new variable.** `base.php` reads what `Builder::render()` supplies, but each template forwards an explicit `compact()` list, so a variable not named there never arrives — the same trap that kept `criticalCss` from reaching the page for as long as it existed. The avatar would have silently fallen back to the full-size URL on every page, which is exactly the bug being fixed, and it would have looked like it worked.
+
+---
+
 ## [1.17.0] — 2026-08-13
 
 ### Added

@@ -28,5 +28,5 @@ $bodyContent = ob_get_clean();
 
 echo $render('base.php', compact(
     'pageTitle', 'description', 'canonical', 'ogType', 'bodyContent',
-    'settings', 'navPages', 'siteUrl', 'render', 'criticalCss'
+    'settings', 'navPages', 'siteUrl', 'render', 'criticalCss', 'headerAvatar'
 ));
