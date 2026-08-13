@@ -124,7 +124,7 @@ ob_start();
     $replyEmail = $settings['reply_email'] ?? '';
     $showEmail  = $replyEmail !== '';
     ?>
-    <?php if ($showKudos || $post->mastodon_url || $post->bluesky_url || $showEmail): ?>
+    <?php if ($showKudos || $post->mastodon_url || $post->bluesky_url || $post->pixelfed_url || $showEmail): ?>
     <footer class="post__syndication">
         <?php if ($showEmail):
             $emailSubject = $isNote
@@ -141,6 +141,10 @@ ob_start();
         <?php if ($post->bluesky_url): ?>
         <a href="<?= htmlspecialchars($post->bluesky_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
            class="u-syndication" target="_blank" rel="noopener noreferrer">Bluesky</a>
+        <?php endif; ?>
+        <?php if ($post->pixelfed_url): ?>
+        <a href="<?= htmlspecialchars($post->pixelfed_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
+           class="u-syndication" target="_blank" rel="noopener noreferrer">Pixelfed</a>
         <?php endif; ?>
         <?php if ($showKudos): ?>
         <button class="tinylytics_kudos" data-path="<?= htmlspecialchars($kudosPath, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"></button>

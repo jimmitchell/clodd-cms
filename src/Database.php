@@ -29,7 +29,7 @@ class Database
     private array $settingsCache = [];
 
     // Increment this whenever the schema changes.
-    private const SCHEMA_VERSION = 27;
+    private const SCHEMA_VERSION = 28;
 
     public function __construct(string $dbPath)
     {
@@ -635,6 +635,18 @@ class Database
         if ($stored !== '' && !str_starts_with($stored, MicropubAuth::LEGACY_TOKEN_PREFIX)) {
             $this->upsertSetting('micropub_token', MicropubAuth::hashLegacyToken($stored));
         }
+    }
+
+    private function applySchemaV28(): void
+    {
+        // Track Pixelfed crossposting — mirrors the Mastodon columns exactly,
+        // because Pixelfed speaks the Mastodon API and a copy there is
+        // addressed the same way: a status id to edit or delete by, and a
+        // canonical URL for the post page to link to.
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN pixelfed_at        DATETIME");
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN pixelfed_url       TEXT");
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN pixelfed_status_id TEXT");
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN pixelfed_skip      INTEGER NOT NULL DEFAULT 0");
     }
 
     /** Insert or update a single settings row. */

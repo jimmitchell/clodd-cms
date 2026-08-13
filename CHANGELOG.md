@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.18.0] — 2026-08-13
+
+### Added
+
+- **Photo posts now syndicate to Pixelfed.** A third POSSE target, set up in **Settings → Pixelfed** with an instance URL and an access token, and gated to one kind of post: `post_kind = photo`. Articles, asides and replies never go, and neither does a titled post that happens to carry images — that is an `article` here, and an article with a screenshot in it is not a photo post. A photo post whose pictures are not in the media library resolves to no attachments and is skipped as well, which is the same thing the server would have said: `statusCreate` refuses a status with no `media_ids` outright. The checkbox in the editor follows the **Post kind** select rather than waiting for a save to reveal itself, and `pixelfed` joins the `syndicate-to` targets Micropub advertises, so an Obsidian or Quill compose screen can pick it too.
+- **`bin/pixelfed-token.php`** walks the OAuth flow: it registers the application, prints the authorize URL, exchanges the code you paste back, and verifies the token by naming the account it belongs to. It prints the token rather than saving it — a CLI writing to the database as the wrong user leaves SQLite's WAL sidecars owned by that user, which takes the site down, and that is not a trade worth making to save a copy-paste.
+
+### Changed
+
+- **`Mastodon` is now the shared client for Mastodon-API servers**, with `Pixelfed` extending it. Pixelfed implements every endpoint syndication uses, so the alternative was a second copy of the DNS-pinned request, the `media_ids[]` encoding quirk and the oversize-image re-encode — three things that have each been a bug once and are not worth having twice. Four hooks carry the differences: the caption limit, the image cap, how a status's text is read back, and how it is compared.
+- **Every request to a Mastodon-API server now sends `Accept: application/json`.** Pixelfed is a Laravel application, and Laravel answers a failed validation with a redirect to the web UI unless the request asked for JSON — so a 422 naming the field that was wrong arrived as an opaque 302, in the one place where the log line is all there is to go on. Mastodon was already answering with JSON regardless.
+
+### Fixed
+
+- **A scheduled or Micropub-published post now rebuilds after syndication of any kind.** Both paths compare the syndication URLs before and after publishing to decide whether the page on disk is a version behind, and both compared a pair — Mastodon and Bluesky. A post whose only new copy was the Pixelfed one would have been left with a page that had no link to it until something else rebuilt the post. Found while adding the third network rather than after shipping it, but the pattern is the bug: the tuple has to grow with the list.
+
+### Schema
+
+- **v28** adds `pixelfed_at`, `pixelfed_url`, `pixelfed_status_id` and `pixelfed_skip` to `posts`, mirroring the Mastodon columns exactly — Pixelfed addresses a status the same way, so an edit or a delete follows the same id.
+
+---
+
 ## [1.17.2] — 2026-08-13
 
 ### Fixed

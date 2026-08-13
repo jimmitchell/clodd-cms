@@ -25,7 +25,7 @@ A lightweight flat-file CMS with a PHP/SQLite admin panel and a fully static HTM
 - **JSON-LD structured data** — `BlogPosting` schema.org markup in every post's `<head>` for richer search results; author name configurable in Settings
 - **Reading time** — estimated minutes-to-read displayed inline with the post date
 - **Microformats2 (h-entry)** — posts and index items carry MF2 classes for IndieWeb parsers and readers
-- **Mastodon & Bluesky** — optional auto-post on first publish, with the copies kept in step afterwards: editing the post rewrites them, deleting or unpublishing it takes them down; the URL of the remote post is stored and displayed as an "Also on:" link at the bottom of each post; per-post skip checkbox for each platform. Aside notes use [POSSE](https://indieweb.org/POSSE) — they syndicate as native-looking notes (full plaintext body, no title, no link back), with a live Bluesky-grapheme/Mastodon-character counter and over-limit warning under the editor
+- **Mastodon, Bluesky & Pixelfed** — optional auto-post on first publish (Pixelfed takes photo posts only), with the copies kept in step afterwards: editing the post rewrites them, deleting or unpublishing it takes them down; the URL of the remote post is stored and displayed as an "Also on:" link at the bottom of each post; per-post skip checkbox for each platform. Aside notes use [POSSE](https://indieweb.org/POSSE) — they syndicate as native-looking notes (full plaintext body, no title, no link back), with a live Bluesky-grapheme/Mastodon-character counter and over-limit warning under the editor
 - **Incoming webmentions** — display likes, reposts, and replies on posts via webmention.io; client-side fetch with avatar grid for reactions and threaded reply cards
 - **Outgoing webmentions** — CLI script (`bin/send-webmentions.php`) discovers endpoints and sends pings for all external links in published posts; safe to schedule via cron
 - **WordPress XML export** — download all posts (with categories, tags, and optional drafts) as a WXR file importable via WordPress Tools → Import
@@ -143,6 +143,7 @@ Runtime settings are stored in the SQLite `settings` table and edited through **
 | Content | Posts per page, feed post count |
 | Mastodon | Handle, instance URL, access token |
 | Bluesky | Profile URL, handle, app password |
+| Pixelfed | Profile URL, instance URL, access token |
 | Email reply | Reply-to email address for post footer pill |
 | IndieWeb | webmention.io domain |
 | Analytics | Tinylytics site ID, Tinylytics Kudos emoji, Google Analytics measurement ID |
@@ -351,7 +352,7 @@ The font files at `fonts/og/` must be present. The Docker image includes FreeTyp
 
 ---
 
-## Mastodon & Bluesky Integration
+## Mastodon, Bluesky & Pixelfed Integration
 
 ### Mastodon
 
@@ -363,7 +364,15 @@ The handle also adds a `fediverse:creator` meta tag to every page and renders a 
 
 Set your Bluesky handle and an app password in **Settings → Bluesky**. New posts are automatically cross-posted on first publish. Individual posts have a **Skip Bluesky** checkbox.
 
-Both platforms are independent — you can enable one, both, or neither.
+### Pixelfed
+
+Set the instance URL and an access token in **Settings → Pixelfed**. Run `php bin/pixelfed-token.php` to get a token — it registers the application, sends you to the browser to approve it, and trades the code you get back. The token needs the `write` scope, which on Pixelfed covers both the caption and the pictures. (Pixelfed's own personal-access-token screen has a history of issuing tokens with the wrong scopes; approving an application is also known to fail on accounts with 2FA enabled.)
+
+**Pixelfed only receives photo posts** — posts with **Post kind** set to *Photo*. Articles, asides, and replies never go there: it is a photo account, and the Pixelfed API rejects a status with no picture on it. A photo post whose images are not in the media library has nothing to attach and is skipped too. The **Post to Pixelfed on publish** checkbox appears in the editor only when the post kind is *Photo*.
+
+Pixelfed speaks the Mastodon API, so the copy is created, edited and deleted exactly as a toot is — with one limit worth knowing: **a Pixelfed post can be edited ten times, ever**. Because Pixelfed does not serve the endpoint that returns a status's original text, the caption is read back out of the rendered post to compare against; a save that only changes line breaks is treated as no change, and does not spend an edit.
+
+All three platforms are independent — enable any, all, or none.
 
 ### Keeping the copies in step
 
@@ -377,13 +386,13 @@ Photos are only re-uploaded when their number has changed, so editing the words 
 
 Editing and deleting need no scope beyond the `write:statuses` and `write:media` the Mastodon token already has, and Bluesky uses the same app password. Adding `read:statuses` is worth it though: it lets the toot be read back before an edit is sent, so a save that changed nothing a reader can see stops marking the toot as edited. Without it every save of a published post sends its edit and the instance decides what to do with it.
 
-Copies made before this existed are still reachable: the ids are recovered from the stored URLs on upgrade. The **Toot URL** and **Bluesky post URL** fields in the post editor are what an edit or delete follows, so pointing one at a different status re-points both.
+Copies made before this existed are still reachable: the ids are recovered from the stored URLs on upgrade. The **Toot URL**, **Bluesky post URL** and **Pixelfed post URL** fields in the post editor are what an edit or delete follows, so pointing one at a different status re-points both.
 
 ### GitHub
 
 Set your GitHub profile URL in **Settings → GitHub** (e.g. `https://github.com/username`). When set, a GitHub icon link appears in the site footer between the Bluesky icon and the RSS icon, with `rel="me noopener"` for IndieAuth compatibility.
 
-When a post is syndicated, the URL of the Mastodon toot or Bluesky post is stored and displayed at the bottom of the public post page. Pills appear in this order: **Mastodon**, **Bluesky**, **Email**, then the Tinylytics Kudo button.
+When a post is syndicated, the URL of the Mastodon toot, Bluesky post or Pixelfed post is stored and displayed at the bottom of the public post page. Pills appear in this order: **Mastodon**, **Bluesky**, **Pixelfed**, **Email**, then the Tinylytics Kudo button.
 
 ### POSSE for asides
 

@@ -4,20 +4,30 @@ declare(strict_types=1);
 
 namespace CMS;
 
+/**
+ * A client for the Mastodon API — and, through {@see Pixelfed}, for the other
+ * servers that speak it. The pieces an implementation is allowed to differ on
+ * are the protected hooks below; everything else (the DNS-pinned request, the
+ * `media_ids[]` encoding, re-encoding an oversize photo) is shared, because
+ * each of those has been a bug once and is not worth having twice.
+ */
 class Mastodon
 {
     /** Characters a default Mastodon instance accepts in one status. */
-    private const TEXT_LIMIT = 500;
+    protected const TEXT_LIMIT = 500;
 
     /**
      * Default image cap on a Mastodon instance. Instances may configure their
      * own, but the media library here accepts files far larger than any of
      * them, so an oversize photo is re-encoded rather than refused on upload.
      */
-    private const IMAGE_MAX_BYTES = 16_777_216;
+    protected const IMAGE_MAX_BYTES = 16_777_216;
 
-    private string $instanceUrl;
-    private string $token;
+    /** Names this client in the error log. */
+    protected const LOG_PREFIX = 'mastodon';
+
+    protected string $instanceUrl;
+    protected string $token;
 
     public function __construct(string $instanceUrl, string $token)
     {
@@ -94,7 +104,7 @@ class Mastodon
         // An edit that changes nothing still marks the toot as edited for every
         // reader, so a save that didn't touch the syndicated text stays quiet —
         // when the text could be read back to know that.
-        if ($current['text'] !== null && $text === $current['text'] && $mediaIds === $current['media_ids']) {
+        if ($this->sameText($text, $current['text']) && $mediaIds === $current['media_ids']) {
             return true;
         }
 
@@ -146,7 +156,7 @@ class Mastodon
      * @param  array<array{path:string,mime:string,alt:string}> $images
      * @return string[]
      */
-    private function uploadAll(array $images): array
+    protected function uploadAll(array $images): array
     {
         $mediaIds = [];
         foreach ($images as $image) {
@@ -170,7 +180,7 @@ class Mastodon
      *
      * @return array{text:?string,media_ids:string[]}|null
      */
-    private function fetchStatus(string $statusId): ?array
+    protected function fetchStatus(string $statusId): ?array
     {
         $id = rawurlencode($statusId);
 
@@ -181,7 +191,8 @@ class Mastodon
             return null;
         }
         $statusData  = json_decode($status['body'], true);
-        $attachments = is_array($statusData) && is_array($statusData['media_attachments'] ?? null)
+        $statusData  = is_array($statusData) ? $statusData : [];
+        $attachments = is_array($statusData['media_attachments'] ?? null)
             ? $statusData['media_attachments']
             : [];
 
@@ -192,7 +203,19 @@ class Mastodon
             }
         }
 
-        return ['text' => $this->fetchSource($statusId), 'media_ids' => $mediaIds];
+        return ['text' => $this->sourceText($statusId, $statusData), 'media_ids' => $mediaIds];
+    }
+
+    /**
+     * Whether the text now composed is the text the copy already carries.
+     *
+     * Exact here, because /source returns what was submitted, character for
+     * character. A server without that endpoint has to compare something
+     * looser — see Pixelfed.
+     */
+    protected function sameText(string $text, ?string $remote): bool
+    {
+        return $remote !== null && $text === $remote;
     }
 
     /**
@@ -205,8 +228,13 @@ class Mastodon
      * which a token minted only to post does not carry. Without it there is no
      * way to tell an edit that changes something from one that changes nothing,
      * so every save sends its edit and the instance decides.
+     *
+     * $status is the already-fetched status object, for implementations that
+     * can answer from it rather than spending a second request.
+     *
+     * @param array<string,mixed> $status
      */
-    private function fetchSource(string $statusId): ?string
+    protected function sourceText(string $statusId, array $status = []): ?string
     {
         $response = $this->request('GET', '/api/v1/statuses/' . rawurlencode($statusId) . '/source');
         if ($response === null) {
@@ -238,9 +266,9 @@ class Mastodon
      * Layout: any non-empty subset of {context, title, excerpt, url} joined by
      * blank lines.
      */
-    private function buildText(string $context, string $title, string $excerpt, string $url): string
+    protected function buildText(string $context, string $title, string $excerpt, string $url): string
     {
-        return SyndicationText::compose($context, $title, $excerpt, $url, self::TEXT_LIMIT);
+        return SyndicationText::compose($context, $title, $excerpt, $url, static::TEXT_LIMIT);
     }
 
     /**
@@ -253,8 +281,8 @@ class Mastodon
         // instead of the whole photo passing through PHP's memory.
         $name   = basename($path);
         $shrunk = null;
-        if ((@filesize($path) ?: 0) > self::IMAGE_MAX_BYTES) {
-            $shrunk = self::spoolShrunk($path, $mime);
+        if ((@filesize($path) ?: 0) > static::IMAGE_MAX_BYTES) {
+            $shrunk = self::spoolShrunk($path, $mime, static::IMAGE_MAX_BYTES);
             if ($shrunk === null) {
                 return null;
             }
@@ -317,9 +345,9 @@ class Mastodon
      *
      * @return array{0:string,1:string}|null
      */
-    private static function spoolShrunk(string $path, string $mime): ?array
+    private static function spoolShrunk(string $path, string $mime, int $maxBytes): ?array
     {
-        $fitted = SyndicationMedia::fit($path, $mime, self::IMAGE_MAX_BYTES);
+        $fitted = SyndicationMedia::fit($path, $mime, $maxBytes);
         if ($fitted === null) {
             return null;
         }
@@ -355,7 +383,7 @@ class Mastodon
      * @param  string[] $mediaIds
      * @return array{url:string,id:string}|null
      */
-    private function post(string $text, array $mediaIds = []): ?array
+    protected function post(string $text, array $mediaIds = []): ?array
     {
         $response = $this->request('POST', '/api/v1/statuses', self::statusBody($text, $mediaIds));
         if ($response === null) {
@@ -425,7 +453,7 @@ class Mastodon
      * @param  array<string,mixed>|string|null $body  array → multipart, string → form-encoded
      * @return array{code:int,body:string}|null
      */
-    private function request(string $method, string $path, array|string|null $body = null, int $timeout = 10): ?array
+    protected function request(string $method, string $path, array|string|null $body = null, int $timeout = 10): ?array
     {
         $parsed = parse_url($this->instanceUrl);
         $host   = $parsed['host'] ?? '';
@@ -438,7 +466,14 @@ class Mastodon
         }
 
         $options = [
-            CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $this->token],
+            // Accept matters on the error path: a Laravel-backed server (which
+            // is what Pixelfed is) answers a failed validation with a redirect
+            // to the web UI unless the request asked for JSON, so a 422 that
+            // says which field was wrong arrives as an opaque 302 instead.
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $this->token,
+                'Accept: application/json',
+            ],
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => $timeout,
             CURLOPT_RESOLVE        => ["{$host}:{$port}:{$resolvedIp}"],
@@ -481,13 +516,13 @@ class Mastodon
      * therefore swallowed — so each one says what happened on the way past,
      * because otherwise a copy that never arrived leaves nothing to read.
      */
-    private static function log(string $message): void
+    protected static function log(string $message): void
     {
-        error_log('[mastodon] ' . $message);
+        error_log('[' . static::LOG_PREFIX . '] ' . $message);
     }
 
     /** A response body cut to something a log line can carry. */
-    private static function snippet(string $body, int $max = 300): string
+    protected static function snippet(string $body, int $max = 300): string
     {
         $body = trim(preg_replace('/\s+/', ' ', $body) ?? '');
         return mb_strlen($body) > $max ? mb_substr($body, 0, $max) . '…' : $body;

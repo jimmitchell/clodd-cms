@@ -160,6 +160,19 @@ class Helpers
     }
 
     /**
+     * The status id in a Pixelfed post URL, e.g.
+     * https://pixelfed.social/p/username/812345678901234567 → the number.
+     *
+     * The same shape as a Mastodon status id — Pixelfed puts the id last too —
+     * but named for the caller, since the two are stored in different columns
+     * and nothing says the shapes must stay alike.
+     */
+    public static function pixelfedStatusId(string $url): ?string
+    {
+        return self::trailingSegment($url, '/^\d+$/');
+    }
+
+    /**
      * The record key in a Bluesky post URL, e.g.
      * https://bsky.app/profile/me.example/post/3kabc123 → "3kabc123".
      *

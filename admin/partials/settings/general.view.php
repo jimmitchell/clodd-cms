@@ -191,6 +191,42 @@ use CMS\Helpers;
     </div>
 
     <div class="panel">
+        <h2>Pixelfed</h2>
+
+        <label for="pixelfed_url">Your Pixelfed profile URL</label>
+        <input type="url" id="pixelfed_url" name="pixelfed_url"
+               value="<?= Helpers::e($_POST['pixelfed_url'] ?? $settings['pixelfed_url'] ?? '') ?>"
+               placeholder="https://pixelfed.social/username"
+               style="max-width:400px">
+        <p class="form-hint">
+            When set, a Pixelfed link is shown in the site footer.
+        </p>
+
+        <label for="pixelfed_instance">Instance URL</label>
+        <input type="url" id="pixelfed_instance" name="pixelfed_instance"
+               value="<?= Helpers::e($_POST['pixelfed_instance'] ?? $settings['pixelfed_instance'] ?? '') ?>"
+               placeholder="https://pixelfed.social"
+               style="max-width:320px">
+
+        <label for="pixelfed_token">Access token</label>
+        <input type="password" id="pixelfed_token" name="pixelfed_token"
+               value=""
+               placeholder="<?= ($settings['pixelfed_token'] ?? '') !== '' ? '(saved — leave blank to keep)' : 'Paste your token here' ?>"
+               autocomplete="new-password"
+               style="max-width:360px">
+        <p class="form-hint">
+            Run <code>php bin/pixelfed-token.php</code> to get one — it walks through
+            registering the app and exchanging the code. The token needs the
+            <code>write</code> scope, which covers both the caption and the pictures.
+        </p>
+        <p class="form-hint">
+            <strong>Photo posts only.</strong> When both fields are set, a photo post
+            goes to Pixelfed on first publish. Articles, asides, and replies do not:
+            Pixelfed is a photo account, and its API rejects a post with no picture.
+        </p>
+    </div>
+
+    <div class="panel">
         <h2>Email Reply</h2>
 
         <label for="reply_email">Reply-to email address</label>

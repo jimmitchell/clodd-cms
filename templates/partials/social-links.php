@@ -32,6 +32,7 @@ unset($socialFeed, $socialNames);
 
 $socialMastodon = Helpers::mastodonProfileUrl($settings['mastodon_handle'] ?? '') ?? '';
 $socialBluesky  = $settings['bluesky_url'] ?? '';
+$socialPixelfed = $settings['pixelfed_url'] ?? '';
 $socialGithub   = $settings['github_url']  ?? '';
 
 /**
@@ -46,6 +47,10 @@ if ($socialMastodon !== '') {
 if ($socialBluesky !== '') {
     $socialLinks['bluesky'] = ['Bluesky', $socialBluesky,
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.206-.659-.298-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8Z" fill="currentColor"/></svg>'];
+}
+if ($socialPixelfed !== '') {
+    $socialLinks['pixelfed'] = ['Pixelfed', $socialPixelfed,
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12 24C5.3726 24 0 18.6274 0 12S5.3726 0 12 0s12 5.3726 12 12-5.3726 12-12 12m-.9526-9.3802h2.2014c2.0738 0 3.7549-1.6366 3.7549-3.6554S15.3226 7.309 13.2488 7.309h-3.1772c-1.1964 0-2.1663.9442-2.1663 2.1089v8.208z" fill="currentColor"/></svg>'];
 }
 if ($socialGithub !== '') {
     $socialLinks['github'] = ['GitHub', $socialGithub,

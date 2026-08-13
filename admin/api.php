@@ -566,6 +566,7 @@ const API_PUBLIC_SETTINGS = [
     'ga_measurement_id', 'github_url', 'google_site_verification',
     'home_intro', 'locale',
     'mastodon_handle', 'mastodon_instance',
+    'pixelfed_instance', 'pixelfed_url',
     'posts_per_page', 'reply_email', 'schema_version',
     'site_description', 'site_title', 'site_url',
     'timezone', 'tinylytics_code', 'tinylytics_kudos_emoji',

@@ -7,6 +7,7 @@ namespace CMS\Tests;
 use CMS\Bluesky;
 use CMS\Database;
 use CMS\Mastodon;
+use CMS\Pixelfed;
 use CMS\Post;
 use CMS\Syndication;
 use CMS\SyndicationText;
@@ -459,7 +460,131 @@ final class SyndicationTest extends TestCase
         $this->assertNull($this->payloadFor($post));
     }
 
+    // ── Pixelfed: what is allowed through ─────────────────────────────────────
+
+    /**
+     * The whole point of the Pixelfed copy: a photo post, and only a photo post.
+     */
+    public function testPixelfedTakesAPhotoPostWithAPicture(): void
+    {
+        $this->configurePixelfed();
+
+        $post            = $this->savedPost();
+        $post->post_kind = 'photo';
+
+        $this->assertTrue($this->wantsPixelfed($post, [self::AN_IMAGE]));
+    }
+
+    /**
+     * A titled post carrying images is an `article` here (Post::micropubType()),
+     * and an article with a screenshot in it is not a photo post.
+     */
+    public function testPixelfedRefusesAnArticleEvenWhenItHasImages(): void
+    {
+        $this->configurePixelfed();
+
+        $post            = $this->savedPost();
+        $post->post_kind = 'standard';
+
+        $this->assertFalse($this->wantsPixelfed($post, [self::AN_IMAGE]));
+    }
+
+    /**
+     * A photo post whose pictures live outside the media library resolves to no
+     * attachments, and Pixelfed answers a status with no media with a 403.
+     */
+    public function testPixelfedRefusesAPhotoPostWithNothingToAttach(): void
+    {
+        $this->configurePixelfed();
+
+        $post            = $this->savedPost();
+        $post->post_kind = 'photo';
+
+        $this->assertFalse($this->wantsPixelfed($post, []));
+    }
+
+    public function testPixelfedRespectsTheOptOut(): void
+    {
+        $this->configurePixelfed();
+
+        $post                = $this->savedPost();
+        $post->post_kind     = 'photo';
+        $post->pixelfed_skip = 1;
+
+        $this->assertFalse($this->wantsPixelfed($post, [self::AN_IMAGE]));
+    }
+
+    /** No instance, no token, no copy — however photographic the post is. */
+    public function testPixelfedIsSkippedWhenItIsNotConfigured(): void
+    {
+        $post            = $this->savedPost();
+        $post->post_kind = 'photo';
+
+        $this->assertFalse($this->wantsPixelfed($post, [self::AN_IMAGE]));
+    }
+
+    // ── Pixelfed: reading a caption back ──────────────────────────────────────
+
+    /**
+     * Pixelfed does not route /api/v1/statuses/{id}/source, so the caption has
+     * to be recovered from the status's rendered HTML. Markup that separates
+     * words must become whitespace on the way, or every save looks like a
+     * change — and a status can only be edited ten times, ever.
+     */
+    public function testPixelfedReadsTheCaptionOutOfTheRenderedStatus(): void
+    {
+        $sourceText = new \ReflectionMethod(Pixelfed::class, 'sourceText');
+
+        $text = $sourceText->invoke(
+            new Pixelfed('https://pixelfed.social', 'token'),
+            '123',
+            ['content' => '<p>Low tide<br>at dawn &amp; alone</p>']
+        );
+
+        $this->assertSame('Low tide at dawn & alone', trim((string) $text));
+    }
+
+    /**
+     * The recovered caption has been through a renderer, so the comparison that
+     * decides whether to spend one of ten edits ignores whitespace.
+     */
+    public function testPixelfedRecognisesACaptionItAlreadyPosted(): void
+    {
+        $sameText = new \ReflectionMethod(Pixelfed::class, 'sameText');
+        $pixelfed = new Pixelfed('https://pixelfed.social', 'token');
+
+        $this->assertTrue($sameText->invoke($pixelfed, "Low tide\nat dawn", 'Low tide at dawn'));
+        $this->assertFalse($sameText->invoke($pixelfed, 'Low tide at dusk', 'Low tide at dawn'));
+        $this->assertFalse($sameText->invoke($pixelfed, 'Low tide at dawn', null));
+    }
+
+    /** Pixelfed rejects a status with no media, so there is no post to make. */
+    public function testPixelfedDoesNotPostACaptionOnItsOwn(): void
+    {
+        $pixelfed = new Pixelfed('https://pixelfed.social', 'token');
+
+        $this->assertNull($pixelfed->tootPost('', '', 'Just words', '', []));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Stands in for a resolved attachment; nothing here reads the file. */
+    private const AN_IMAGE = ['path' => '/tmp/photo.jpg', 'mime' => 'image/jpeg', 'alt' => ''];
+
+    private function configurePixelfed(): void
+    {
+        $this->db->upsertSetting('pixelfed_instance', 'https://pixelfed.social');
+        $this->db->upsertSetting('pixelfed_token', 'a-token');
+    }
+
+    /** @param array<array{path:string,mime:string,alt:string}> $images */
+    private function wantsPixelfed(Post $post, array $images): bool
+    {
+        $syndication = new Syndication($this->db, ['paths' => ['content' => sys_get_temp_dir()]]);
+        $wants       = new \ReflectionMethod(Syndication::class, 'wantsPixelfed');
+
+        return (bool) $wants->invoke($syndication, $post, $images);
+    }
 
     private function savedPost(): Post
     {

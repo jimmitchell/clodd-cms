@@ -25,6 +25,10 @@ class Post
     public ?string $bluesky_url  = null;
     public ?string $bluesky_rkey = null;
     public int     $bluesky_skip  = 0;
+    public ?string $pixelfed_at   = null;
+    public ?string $pixelfed_url  = null;
+    public ?string $pixelfed_status_id = null;
+    public int     $pixelfed_skip = 0;
     public ?string $og_image_hash      = null;
     public ?string $webmentions_sent_at = null;
     public string  $post_kind    = 'standard';
@@ -293,6 +297,7 @@ class Post
             'published_at'  => $this->published_at,
             'mastodon_skip' => $this->mastodon_skip,
             'bluesky_skip'  => $this->bluesky_skip,
+            'pixelfed_skip' => $this->pixelfed_skip,
             'post_kind'     => $this->post_kind,
             'updated_at'    => date('Y-m-d H:i:s'),
         ];
@@ -839,15 +844,39 @@ class Post
     }
 
     /**
-     * Forget every trace of a syndicated copy, for one network or both.
+     * Record that this post was successfully posted to Pixelfed.
+     *
+     * The Pixelfed copy is addressed by status id exactly as the Mastodon one
+     * is — Pixelfed speaks the Mastodon API — so this mirrors markTooted().
+     */
+    public function markPixelfed(string $url = '', string $statusId = ''): void
+    {
+        $now                = date('Y-m-d H:i:s');
+        $this->pixelfed_at  = $now;
+        $cols = ['pixelfed_at' => $now];
+
+        if ($url !== '') {
+            $this->pixelfed_url = $url;
+            $cols['pixelfed_url'] = $url;
+        }
+        if ($statusId !== '') {
+            $this->pixelfed_status_id = $statusId;
+            $cols['pixelfed_status_id'] = $statusId;
+        }
+
+        $this->db->update('posts', $cols, 'id = :id', ['id' => $this->id]);
+    }
+
+    /**
+     * Forget every trace of a syndicated copy, for one network or any subset.
      *
      * Called once the remote copy is gone: the post page links to
-     * mastodon_url / bluesky_url, so leaving them behind would publish a link
-     * to a status that no longer exists. Clearing tooted_at / bluesky_at also
-     * re-arms first-publish syndication, which is what an unpublish-then-
-     * republish should do.
+     * mastodon_url / bluesky_url / pixelfed_url, so leaving them behind would
+     * publish a link to a status that no longer exists. Clearing tooted_at /
+     * bluesky_at / pixelfed_at also re-arms first-publish syndication, which is
+     * what an unpublish-then-republish should do.
      */
-    public function clearSyndication(bool $mastodon = true, bool $bluesky = true): void
+    public function clearSyndication(bool $mastodon = true, bool $bluesky = true, bool $pixelfed = true): void
     {
         if ($this->id === null) {
             return;
@@ -861,6 +890,10 @@ class Post
         if ($bluesky) {
             $this->bluesky_at = $this->bluesky_url = $this->bluesky_rkey = null;
             $cols += ['bluesky_at' => null, 'bluesky_url' => null, 'bluesky_rkey' => null];
+        }
+        if ($pixelfed) {
+            $this->pixelfed_at = $this->pixelfed_url = $this->pixelfed_status_id = null;
+            $cols += ['pixelfed_at' => null, 'pixelfed_url' => null, 'pixelfed_status_id' => null];
         }
         if ($cols === []) {
             return;
@@ -1163,6 +1196,10 @@ class Post
         $post->bluesky_url   = $row['bluesky_url']  ?? null;
         $post->bluesky_rkey  = $row['bluesky_rkey'] ?? null;
         $post->bluesky_skip  = (int) ($row['bluesky_skip']  ?? 0);
+        $post->pixelfed_at        = $row['pixelfed_at']        ?? null;
+        $post->pixelfed_url       = $row['pixelfed_url']       ?? null;
+        $post->pixelfed_status_id = $row['pixelfed_status_id'] ?? null;
+        $post->pixelfed_skip      = (int) ($row['pixelfed_skip'] ?? 0);
         $post->og_image_hash       = $row['og_image_hash']       ?? null;
         $post->webmentions_sent_at = $row['webmentions_sent_at'] ?? null;
         $post->post_kind           = $row['post_kind']           ?? 'standard';

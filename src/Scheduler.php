@@ -53,10 +53,10 @@ final class Scheduler
             // syndication that recorded a URL leaves the page a version behind
             // — rebuild it. Only post.php renders these URLs, so the shared
             // pages below need no second pass.
-            $syndicationBefore = [$post->mastodon_url, $post->bluesky_url];
+            $syndicationBefore = [$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url];
             $this->syndication->publish($post);
 
-            if ([$post->mastodon_url, $post->bluesky_url] !== $syndicationBefore) {
+            if ([$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url] !== $syndicationBefore) {
                 $this->builder->buildPost($post);
             }
         }

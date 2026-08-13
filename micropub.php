@@ -107,8 +107,13 @@ function mp_resolve_post_by_url(\CMS\Database $db, string $url): ?\CMS\Post
 // ── Syndication targets ─────────────────────────────────────────────────────
 
 /**
- * The syndicate-to targets advertised in q=config / q=syndicate-to: Mastodon
- * and Bluesky, each present only when its credentials are configured.
+ * The syndicate-to targets advertised in q=config / q=syndicate-to: Mastodon,
+ * Bluesky and Pixelfed, each present only when its credentials are configured.
+ *
+ * Pixelfed is advertised to every client, not only the ones about to send a
+ * photo — the targets are read once when a client opens its composer, long
+ * before it knows what is being posted. Selecting it on something that is not a
+ * photo post is simply ignored (see Syndication::wantsPixelfed()).
  */
 function mp_syndication_targets(\CMS\Database $db): array
 {
@@ -123,6 +128,12 @@ function mp_syndication_targets(\CMS\Database $db): array
     $handle = $db->getSetting('bluesky_handle');
     if ($handle !== '' && $db->getSetting('bluesky_app_password') !== '') {
         $targets[] = ['uid' => 'bluesky', 'name' => 'Bluesky (@' . ltrim($handle, '@') . ')'];
+    }
+
+    $pixelfed = $db->getSetting('pixelfed_instance');
+    if ($pixelfed !== '' && $db->getSetting('pixelfed_token') !== '') {
+        $host = parse_url($pixelfed, PHP_URL_HOST) ?: trim($pixelfed);
+        $targets[] = ['uid' => 'pixelfed', 'name' => 'Pixelfed (' . $host . ', photos only)'];
     }
 
     return $targets;
@@ -1079,6 +1090,7 @@ if (array_key_exists('mp-syndicate-to', $properties)) {
     $requested = array_map('strval', $properties['mp-syndicate-to']);
     $post->mastodon_skip = in_array('mastodon', $requested, true) ? 0 : 1;
     $post->bluesky_skip  = in_array('bluesky', $requested, true) ? 0 : 1;
+    $post->pixelfed_skip = in_array('pixelfed', $requested, true) ? 0 : 1;
 }
 
 if (!$post->save()) {
@@ -1109,19 +1121,19 @@ if ($status === 'published') {
     $builder->rebuildSharedResources();
 }
 
-// ── Syndicate to Mastodon / Bluesky on first publish ────────────────────────
+// ── Syndicate to Mastodon / Bluesky / Pixelfed on first publish ─────────────
 
-// Deliberately after the build: both networks fetch the permalink to make a
+// Deliberately after the build: the networks fetch the permalink to make a
 // preview card, so a copy created before the page is on disk links to a 404.
 // The post page shows the copies it made, though, so a syndication that
 // recorded a URL leaves the page just written a version behind — rebuild it.
 // Only post.php renders these URLs; the feeds and index don't, so nothing else
 // needs the second pass.
 if ($status === 'published') {
-    $syndicationBefore = [$post->mastodon_url, $post->bluesky_url];
+    $syndicationBefore = [$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url];
     $syndication->publish($post);
 
-    if ([$post->mastodon_url, $post->bluesky_url] !== $syndicationBefore) {
+    if ([$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url] !== $syndicationBefore) {
         $builder->buildPost($post);
     }
 }

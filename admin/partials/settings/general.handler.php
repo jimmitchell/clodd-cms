@@ -26,6 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'bluesky_url'          => rtrim(trim($_POST['bluesky_url']          ?? ''), '/'),
         'bluesky_handle'       => trim($_POST['bluesky_handle']       ?? ''),
         'bluesky_app_password' => trim($_POST['bluesky_app_password'] ?? ''),
+        'pixelfed_url'         => rtrim(trim($_POST['pixelfed_url']      ?? ''), '/'),
+        'pixelfed_instance'    => rtrim(trim($_POST['pixelfed_instance'] ?? ''), '/'),
+        'pixelfed_token'       => trim($_POST['pixelfed_token']       ?? ''),
         'reply_email'          => trim($_POST['reply_email']          ?? ''),
         'github_url'           => rtrim(trim($_POST['github_url']           ?? ''), '/'),
         'tinylytics_code'        => trim($_POST['tinylytics_code']        ?? ''),
@@ -76,9 +79,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($fields['pixelfed_instance'] !== '') {
+        $parsedPixelfed = parse_url($fields['pixelfed_instance']);
+        if (!$parsedPixelfed || ($parsedPixelfed['scheme'] ?? '') !== 'https' || empty($parsedPixelfed['host'])) {
+            $errors[] = 'Pixelfed instance URL must use https:// (e.g. https://pixelfed.social).';
+        } else {
+            $resolvedIp = gethostbyname($parsedPixelfed['host']);
+            if (filter_var($resolvedIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                $errors[] = 'Pixelfed instance URL must resolve to a public IP address.';
+            }
+        }
+    }
+
     if (empty($errors)) {
         // Secret fields are left blank to keep the saved value — skip them when empty.
-        $secretFields = ['mastodon_token', 'bluesky_app_password'];
+        $secretFields = ['mastodon_token', 'bluesky_app_password', 'pixelfed_token'];
         foreach ($fields as $key => $value) {
             if (in_array($key, $secretFields, true) && $value === '') {
                 continue;

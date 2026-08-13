@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace CMS;
 
 /**
- * POSSE: the copies of a post that live on Mastodon and Bluesky, for the whole
- * of their lives — created on first publish, rewritten when the post is edited,
- * removed when it is deleted or unpublished.
+ * POSSE: the copies of a post that live on Mastodon, Bluesky and Pixelfed, for
+ * the whole of their lives — created on first publish, rewritten when the post
+ * is edited, removed when it is deleted or unpublished.
+ *
+ * Mastodon and Bluesky take everything. Pixelfed takes photo posts only: it is
+ * a photo account, and its API refuses a status with no picture on it anyway.
  *
  * Composing what to send is the same work whichever door the post came in by,
  * so the admin form, the REST API and the Micropub endpoint all call through
@@ -78,6 +81,21 @@ final class Syndication
                 $this->justCreated['bluesky'] = true;
             }
         }
+
+        if ($this->wantsPixelfed($post, $payload['images']) && $post->pixelfed_at === null) {
+            $pixelfed = $this->pixelfed();
+            $result   = $pixelfed?->tootPost(
+                $payload['context'],
+                $payload['title'],
+                $payload['excerpt'],
+                $payload['url'],
+                $payload['images']
+            );
+            if ($result !== null) {
+                $post->markPixelfed($result['url'], $result['id']);
+                $this->justCreated['pixelfed'] = true;
+            }
+        }
     }
 
     /**
@@ -116,6 +134,20 @@ final class Syndication
                 $payload['images']
             );
         }
+
+        // An existing Pixelfed copy is kept current whatever the post has since
+        // become: the gate decides what gets *sent* there, not what gets left
+        // stale once it is.
+        if ($post->pixelfed_status_id !== null && !isset($this->justCreated['pixelfed'])) {
+            $this->pixelfed()?->editPost(
+                $post->pixelfed_status_id,
+                $payload['context'],
+                $payload['title'],
+                $payload['excerpt'],
+                $payload['url'],
+                $payload['images']
+            );
+        }
     }
 
     /**
@@ -135,6 +167,7 @@ final class Syndication
         if (
             $post->tooted_at === null && $post->mastodon_url === null
             && $post->bluesky_at === null && $post->bluesky_url === null
+            && $post->pixelfed_at === null && $post->pixelfed_url === null
         ) {
             return;
         }
@@ -151,7 +184,13 @@ final class Syndication
             $blueskyGone = $bluesky !== null && $bluesky->deletePost($post->bluesky_rkey);
         }
 
-        $post->clearSyndication($mastodonGone, $blueskyGone);
+        $pixelfedGone = true;
+        if ($post->pixelfed_status_id !== null) {
+            $pixelfed     = $this->pixelfed();
+            $pixelfedGone = $pixelfed !== null && $pixelfed->deletePost($post->pixelfed_status_id);
+        }
+
+        $post->clearSyndication($mastodonGone, $blueskyGone, $pixelfedGone);
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
@@ -198,8 +237,13 @@ final class Syndication
             $excerpt   = $effective !== null ? strip_tags($effective) : Helpers::truncate($post->content, 280);
         }
 
-        // Photos ride along with the text so a photo post looks native on both
-        // networks instead of arriving as a caption with no picture.
+        // Photos ride along with the text so a photo post looks native on every
+        // network instead of arriving as a caption with no picture.
+        //
+        // One set, resolved once, capped at the smallest limit any of the three
+        // imposes (four). Pixelfed allows twenty: raising it there means
+        // resolving up to the largest limit here and having each client take
+        // the slice it can send.
         $images = SyndicationMedia::forPost($post, $this->mediaDir, $siteUrl);
 
         // A note syndicates with no title and no link back, so the text, its
@@ -227,6 +271,27 @@ final class Syndication
         return $skip === 0 && ($network === 'mastodon' ? $this->mastodon() : $this->bluesky()) !== null;
     }
 
+    /**
+     * Whether $post should go to Pixelfed — configured and not opted out, as
+     * for the others, and additionally a photo post with a picture to show.
+     *
+     * `post_kind === 'photo'` and not "has photos": a *titled* post carrying
+     * images is an `article` here (see Post::micropubType()), and an article
+     * with a screenshot in it is not a photo post. The images have to have
+     * resolved to files on disk as well — a photo post whose pictures live
+     * outside the media directory has nothing to attach, and Pixelfed refuses
+     * a status with no media.
+     *
+     * @param array<array{path:string,mime:string,alt:string}> $images
+     */
+    private function wantsPixelfed(Post $post, array $images): bool
+    {
+        return $post->pixelfed_skip === 0
+            && $post->isPhoto()
+            && $images !== []
+            && $this->pixelfed() !== null;
+    }
+
     /** A configured Mastodon client, or null when the settings are incomplete. */
     private function mastodon(): ?Mastodon
     {
@@ -243,5 +308,14 @@ final class Syndication
         $appPassword = $this->db->getSetting('bluesky_app_password');
 
         return ($handle !== '' && $appPassword !== '') ? new Bluesky($handle, $appPassword) : null;
+    }
+
+    /** A configured Pixelfed client, or null when the settings are incomplete. */
+    private function pixelfed(): ?Pixelfed
+    {
+        $instance = $this->db->getSetting('pixelfed_instance');
+        $token    = $this->db->getSetting('pixelfed_token');
+
+        return ($instance !== '' && $token !== '') ? new Pixelfed($instance, $token) : null;
     }
 }

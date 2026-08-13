@@ -23,6 +23,11 @@ $blueskyHandle      = $db->getSetting('bluesky_handle');
 $blueskyAppPassword = $db->getSetting('bluesky_app_password');
 $hasBluesky         = $blueskyHandle !== '' && $blueskyAppPassword !== '';
 
+// Pixelfed config — loaded once, used in POST handler and template.
+$pixelfedInstance = $db->getSetting('pixelfed_instance');
+$pixelfedToken    = $db->getSetting('pixelfed_token');
+$hasPixelfed      = $pixelfedInstance !== '' && $pixelfedToken !== '';
+
 // Timezone — loaded once, used in POST handler and template.
 $cfgTz = $db->getSetting('timezone', '');
 
@@ -172,6 +177,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $post->mastodon_skip = empty($_POST['send_to_mastodon']) ? 1 : 0;
         $post->bluesky_skip  = empty($_POST['send_to_bluesky'])  ? 1 : 0;
 
+        // The Pixelfed checkbox is only rendered for photo posts, so an absent
+        // field on any other kind means "not offered", not "opted out" — read it
+        // only when it was on the form, or changing a photo post to an article
+        // and back would silently leave it skipped.
+        if ($post->isPhoto()) {
+            $post->pixelfed_skip = empty($_POST['send_to_pixelfed']) ? 1 : 0;
+        }
+
         // Only toot on first publish (not when the result is 'scheduled').
         $isFirstPublish = $post->status === 'published'
             && $action === 'publish'
@@ -185,6 +198,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             && $post->bluesky_at === null
             && $hasBluesky
             && $post->bluesky_skip === 0;
+
+        // Same again for Pixelfed, which additionally only ever takes photo
+        // posts. Syndication::wantsPixelfed() is the authority on that; this is
+        // only deciding whether to call it at all.
+        $isFirstPixelfed = $post->status === 'published'
+            && $action === 'publish'
+            && $post->pixelfed_at === null
+            && $hasPixelfed
+            && $post->pixelfed_skip === 0
+            && $post->isPhoto();
 
         $wasNew = $isNew || !$post->id;
         $post->save();
@@ -250,9 +273,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ], 'id = :id', ['id' => $post->id]);
             }
         }
+        if (isset($_POST['pixelfed_url'])) {
+            $newPixelfedUrl = trim($_POST['pixelfed_url']) ?: null;
+            if ($newPixelfedUrl !== $post->pixelfed_url) {
+                $post->pixelfed_url       = $newPixelfedUrl;
+                $post->pixelfed_status_id = $newPixelfedUrl !== null
+                    ? Helpers::pixelfedStatusId($newPixelfedUrl)
+                    : null;
+                $db->update('posts', [
+                    'pixelfed_url'       => $post->pixelfed_url,
+                    'pixelfed_status_id' => $post->pixelfed_status_id,
+                ], 'id = :id', ['id' => $post->id]);
+            }
+        }
 
-        // Syndicate to Mastodon and/or Bluesky on first publish (unless opted out).
-        if ($isFirstPublish || $isFirstBluesky) {
+        // Syndicate on first publish (unless opted out). One call covers every
+        // network — each branch inside is guarded by its own timestamp.
+        if ($isFirstPublish || $isFirstBluesky || $isFirstPixelfed) {
             $syndication->publish($post);
         }
 
@@ -546,6 +583,39 @@ if ($post->published_at) {
                     </div>
                     <?php endif; ?>
 
+                    <?php if ($hasPixelfed && $post->pixelfed_at === null): ?>
+                    <?php $pixelfedDisabled = $post->status === 'published'; ?>
+                    <!-- Photo posts only, so this follows the Post kind select above
+                         rather than waiting for a save to reveal itself. -->
+                    <div id="pixelfed-block" <?= $post->isPhoto() ? '' : 'hidden' ?>>
+                        <label for="send_to_pixelfed" style="display:flex;gap:.5rem;align-items:center;font-size:.875rem;font-weight:400;margin-bottom:.75rem;<?= $pixelfedDisabled ? 'opacity:.45;cursor:not-allowed' : '' ?>">
+                            <input type="checkbox" id="send_to_pixelfed" name="send_to_pixelfed" value="1"
+                                   <?= $post->pixelfed_skip === 0 ? 'checked' : '' ?>
+                                   <?= $pixelfedDisabled ? 'disabled title="Post is already published — syndication only happens on first publish"' : '' ?>>
+                            Post to Pixelfed on publish
+                        </label>
+                        <?php if ($pixelfedDisabled): ?>
+                        <div style="margin-bottom:.75rem">
+                            <label for="pixelfed_url" style="font-size:.8rem;font-weight:400;color:var(--color-muted)">Pixelfed post URL</label>
+                            <input type="url" id="pixelfed_url" name="pixelfed_url"
+                                   value="<?= Helpers::e($post->pixelfed_url ?? '') ?>"
+                                   placeholder="https://pixelfed.social/p/user/123456"
+                                   style="font-size:.8rem;margin-top:.15rem">
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php elseif ($hasPixelfed && $post->pixelfed_at !== null): ?>
+                    <div style="margin-bottom:.75rem">
+                        <p class="form-hint" style="margin-bottom:.25rem">&#10003; Shared to Pixelfed</p>
+                        <p class="form-hint" style="margin-bottom:.5rem">Saving updates the Pixelfed post. Unpublishing or deleting removes it.</p>
+                        <label for="pixelfed_url" style="font-size:.8rem;font-weight:400;color:var(--color-muted)">Pixelfed post URL</label>
+                        <input type="url" id="pixelfed_url" name="pixelfed_url"
+                               value="<?= Helpers::e($post->pixelfed_url ?? '') ?>"
+                               placeholder="https://pixelfed.social/p/user/123456"
+                               style="font-size:.8rem;margin-top:.15rem">
+                    </div>
+                    <?php endif; ?>
+
                     <label for="publish_date" style="margin-top:0">Publish date<?php if ($cfgTz !== ''): ?> <span style="font-weight:400;color:var(--color-muted)">(<?= Helpers::e($cfgTz) ?>)</span><?php endif; ?></label>
                     <input type="datetime-local" id="publish_date" name="publish_date"
                            value="<?= Helpers::e($pubInputVal) ?>"
@@ -672,6 +742,19 @@ if ($post->published_at) {
 
 <script>
 window._existingTags = <?= json_encode(array_values(array_map(fn($t) => ['name' => $t['name']], $allTags)), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+
+// Pixelfed only takes photo posts, so its checkbox follows the kind select.
+// The server decides too — an unchecked box on a post saved as an article is
+// never read — so this is presentation, not enforcement.
+(function () {
+    var kind  = document.getElementById('post_kind');
+    var block = document.getElementById('pixelfed-block');
+    if (!kind || !block) return;
+
+    kind.addEventListener('change', function () {
+        block.hidden = kind.value !== 'photo';
+    });
+})();
 </script>
 <script src="/admin/assets/easymde.min.js"></script>
 <script src="/admin/assets/admin.js"></script>
