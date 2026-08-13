@@ -85,6 +85,123 @@ class Post
         return (int) ($row['c'] ?? 0);
     }
 
+    // ── Micropub post list (q=source with no url) ─────────────────────────────
+
+    /**
+     * The Post Type Discovery names this server can list and filter by, in the
+     * order q=config advertises them.
+     */
+    public const MICROPUB_TYPES = ['note', 'article', 'photo', 'reply', 'repost', 'like', 'bookmark'];
+
+    /** Micropub post-status values a client may send or receive. */
+    public const MICROPUB_STATUSES = ['published', 'draft'];
+
+    /**
+     * The Post Type Discovery name for this post.
+     *
+     * PTD precedence: an interaction wins over article/note, so a titled reply
+     * is a `reply`. Reads the hydrated contexts, so it costs no query.
+     *
+     * One deviation from strict PTD: a *titled* post carrying photos is
+     * `article` here rather than `photo`, because `post_kind` is what the site
+     * actually renders from and Micropub only assigns 'photo' to titleless
+     * posts.
+     *
+     * findForMicropub() filters with SQL that mirrors this ladder exactly —
+     * change one and you must change the other, or the list will hide posts a
+     * client can see elsewhere.
+     */
+    public function micropubType(): string
+    {
+        $kinds = array_map(fn($c) => (string) ($c['kind'] ?? ''), $this->contexts);
+
+        foreach (['in-reply-to' => 'reply', 'repost-of' => 'repost', 'like-of' => 'like', 'bookmark-of' => 'bookmark'] as $kind => $type) {
+            if (in_array($kind, $kinds, true)) {
+                return $type;
+            }
+        }
+
+        if ($this->post_kind === 'photo') {
+            return 'photo';
+        }
+
+        return $this->title !== '' ? 'article' : 'note';
+    }
+
+    /**
+     * SQL predicate selecting posts of one Post Type Discovery type, against a
+     * `posts` row aliased `p`. Mirrors micropubType() — see the note there.
+     */
+    private static function micropubTypePredicate(string $type): string
+    {
+        $has    = fn(string $kind) => "EXISTS (SELECT 1 FROM post_contexts pc WHERE pc.post_id = p.id AND pc.kind = '{$kind}')";
+        $anyCtx = "EXISTS (SELECT 1 FROM post_contexts pc WHERE pc.post_id = p.id)";
+
+        // Each interaction excludes the ones above it, matching the ladder's
+        // first-match-wins order.
+        return match ($type) {
+            'reply'    => $has('in-reply-to'),
+            'repost'   => 'NOT ' . $has('in-reply-to') . ' AND ' . $has('repost-of'),
+            'like'     => 'NOT ' . $has('in-reply-to') . ' AND NOT ' . $has('repost-of') . ' AND ' . $has('like-of'),
+            'bookmark' => 'NOT ' . $has('in-reply-to') . ' AND NOT ' . $has('repost-of')
+                          . ' AND NOT ' . $has('like-of') . ' AND ' . $has('bookmark-of'),
+            'photo'    => 'NOT ' . $anyCtx . " AND p.post_kind = 'photo'",
+            'article'  => 'NOT ' . $anyCtx . " AND p.post_kind <> 'photo' AND p.title <> ''",
+            'note'     => 'NOT ' . $anyCtx . " AND p.post_kind <> 'photo' AND p.title = ''",
+            default    => '1 = 1',
+        };
+    }
+
+    /**
+     * Posts for the Micropub "Query for Post List" extension — newest first,
+     * optionally filtered by Post Type Discovery type and by post-status.
+     *
+     * `$postStatus` is the Micropub value, not the column: 'draft' covers both
+     * our 'draft' and 'scheduled' rows, because that is what the source
+     * representation reports for a post that has not gone live yet. Filtering
+     * and reporting have to agree or a client's draft list loses its scheduled
+     * posts.
+     *
+     * @return self[]
+     */
+    public static function findForMicropub(
+        Database $db,
+        ?string $postType = null,
+        ?string $postStatus = null,
+        int $limit = 20,
+        int $offset = 0
+    ): array {
+        $where  = ['p.deleted_at IS NULL'];
+        $params = [];
+
+        if ($postStatus === 'published') {
+            $where[] = "p.status = 'published'";
+        } elseif ($postStatus === 'draft') {
+            $where[] = "p.status IN ('draft', 'scheduled')";
+        }
+
+        if ($postType !== null && in_array($postType, self::MICROPUB_TYPES, true)) {
+            $where[] = '(' . self::micropubTypePredicate($postType) . ')';
+        }
+
+        // Undated drafts have a NULL published_at, which SQLite sorts last under
+        // DESC — the opposite of useful for a list whose point is showing recent
+        // work, so fall back to created_at. The id tiebreak keeps offset paging
+        // stable when two posts share a timestamp.
+        $sql = 'SELECT p.* FROM posts p WHERE ' . implode(' AND ', $where)
+             . ' ORDER BY COALESCE(p.published_at, p.created_at) DESC, p.id DESC';
+
+        // LIMIT/OFFSET are interpolated rather than bound: PDO's SQLite driver
+        // binds them as strings by default, which SQLite rejects in this
+        // position. Both are cast to int by the signature, so there is nothing
+        // here an argument could inject.
+        $sql .= ' LIMIT ' . max(0, $limit) . ' OFFSET ' . max(0, $offset);
+
+        $posts = array_map(fn($row) => self::fromRow($db, $row), $db->select($sql, $params));
+        self::hydrateManyTerms($db, $posts);
+        return $posts;
+    }
+
     /**
      * All soft-deleted posts, most recently deleted first.
      *

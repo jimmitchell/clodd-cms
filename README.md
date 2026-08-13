@@ -472,6 +472,25 @@ A client-supplied `summary` is stored as the post's excerpt and used verbatim by
 | `?q=config` | Configuration object including `media-endpoint` and `syndicate-to` |
 | `?q=syndicate-to` | Configured syndication targets (currently empty) |
 | `?q=source&url=<post URL>` | Full h-entry source: `{type:["h-entry"], properties:{name, content, summary, mp-slug, post-status, published, category, url}}`. Add `&properties[]=name&properties[]=content` to limit the response to specific properties (in which case the `type` wrapper is omitted). Use this to load an existing post into a client's editor for round-trip editing. |
+| `?q=source` (no `url`) | Post list: `{items:[{type:["h-entry"], properties:{…}}, …]}`, newest first, drafts and scheduled posts included. See below. |
+
+#### Post list
+
+Omitting `url` from `q=source` returns a list of posts — the [Query for Post List](https://indieweb.org/Micropub-extensions#Query_for_Post_List) extension — so a client can offer a picker of existing posts to edit instead of asking for a URL.
+
+| Parameter | Effect |
+|-----------|--------|
+| `limit` | Page size. Defaults to `20`, capped at `100`. A missing or unparseable value falls back to the default. |
+| `offset` | Rows to skip. Usable on its own, since a default `limit` always applies. |
+| `post-type` | Post Type Discovery filter: `note`, `article`, `photo`, `reply`, `repost`, `like`, `bookmark` — the same list `q=config` advertises under `post-types`. An interaction wins over `article`/`note`, so a titled reply filters as `reply`. |
+| `post-status` | `published`, or `draft` (which also covers scheduled posts, matching the `post-status` each item reports). |
+| `properties[]` | Applied per item. Unlike the single-post response, list items keep their `type` wrapper — a list of bare property bags is not parseable mf2. |
+
+An unrecognised `post-type` or `post-status` returns `400`, rather than quietly answering with the whole archive.
+
+Every item carries a `url`, published or not: the date permalink once the post has a publish date, the bare slug before. That is the same value the create and update responses return in `Location:`, so a client can send it straight back as `url=` on a later `q=source`, `update` or `delete`. An unpublished post has no page on disk, so its URL 404s for visitors until it goes live.
+
+Ordering is newest first by publish date, falling back to creation date for undated drafts, with a stable tiebreak so paging never repeats or skips a post. Soft-deleted posts never appear.
 
 ### Update and delete
 

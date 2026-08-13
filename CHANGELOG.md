@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.15.0] — 2026-08-12
+
+### Added
+
+- **A Micropub client can list the posts it is allowed to edit, instead of asking for a URL.** `?q=source` with no `url` now returns `{items: […]}` — the [Query for Post List](https://indieweb.org/Micropub-extensions#Query_for_Post_List) extension, which IndiePass, Micro.blog and Together already consume — so a client can show a picker of recent posts. Until now the only way to reach an existing post through this endpoint was to paste its address in by hand, which meant the edit and delete actions were effectively unreachable from a phone. Each item is a full h-entry built by the same mapper the single-post response uses, so the two can never describe a post differently. The stable `limit` parameter is supported alongside `offset`, and `post-type` and `post-status` filter the list — the first by Post Type Discovery name, using the same seven names `q=config` already advertises. An unrecognised filter value is a `400` rather than the whole archive returned as though the filter matched everything: a typo that silently answers with every draft is worse than one that fails. Page size defaults to 20 and is capped at 100, because each item carries its post's full body. Ordering is newest first, falling back to the creation date for a draft with no publish date yet — SQLite sorts those last under a plain date sort, which would have buried exactly the posts a client opens the list to find — with a stable tiebreak so paging cannot repeat or skip a post. Soft-deleted posts never appear, and the list sits behind the same scope gate as every other query on this endpoint: a token holding only `profile` gets a `403`, not a directory of unpublished work.
+
+### Changed
+
+- **A draft's source now carries the URL a client needs to edit it.** `q=source` gave a post a `url` property only once it was published, on the reasoning that an unpublished post has no page. But `url` is also the handle a client sends back to identify a post, so a draft loaded into an editor could not be saved again — and the create response had already handed the client exactly such a handle in its `Location:` header. Both now come from `Post::addressablePath()`: the date permalink once there is a publish date, the bare slug before it. The URL still 404s for visitors until the post goes live; that is when it starts resolving, not a broken link.
+
+---
+
 ## [1.14.4] — 2026-08-12
 
 ### Fixed

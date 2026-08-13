@@ -12,6 +12,8 @@ declare(strict_types=1);
  *
  * Supported requests:
  *   GET  ?q=config|source|syndicate-to|category   discovery queries
+ *                         ?q=source with no url lists posts (Post List
+ *                         extension) — limit/offset/post-type/post-status
  *   POST (form-encoded)   h=entry create; action=delete|undelete
  *   POST (JSON)           {type:["h-entry"], properties:{…}} create;
  *                         {action: update|delete|undelete, url, …}
@@ -57,6 +59,11 @@ function mp_error(string $code, string $description = '', int $status = 400): ne
 {
     \CMS\MicropubAuth::error($code, $description, $status);
 }
+
+// Page size for the q=source post list. Each item carries the post's full body,
+// so an unbounded list would serve the entire archive in one response.
+const MP_LIST_DEFAULT_LIMIT = 20;
+const MP_LIST_MAX_LIMIT     = 100;
 
 // ── Post resolution by URL ──────────────────────────────────────────────────
 
@@ -289,11 +296,38 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
         $props['category'] = $allTerms;
     }
 
-    if ($post->status === 'published' && $post->published_at !== null && $siteUrl !== '') {
-        $props['url'] = [$siteUrl . '/' . \CMS\Post::datePath($post->published_at, $post->slug, $cfgTz) . '/'];
+    // Every post gets a url, published or not. addressablePath() returns the
+    // date permalink once there is a publish date and the bare slug before —
+    // the same value the create/update response puts in Location:, so a client
+    // that stored one can send it straight back as ?url=. An unpublished post
+    // has no page on disk yet, so this URL 404s for visitors until it goes
+    // live; that is the point at which it starts resolving, not a broken link.
+    if ($siteUrl !== '') {
+        $props['url'] = [$siteUrl . '/' . $post->addressablePath($cfgTz) . '/'];
     }
 
     return $props;
+}
+
+/**
+ * Apply the optional `properties[]` query filter to a source representation.
+ *
+ * Returns null when the caller sent no filter, so a caller can tell "no filter"
+ * from "filter matched nothing".
+ */
+function mp_filter_properties(array $all, mixed $requested): ?array
+{
+    if (!is_array($requested) || $requested === []) {
+        return null;
+    }
+
+    $filtered = [];
+    foreach ($requested as $prop) {
+        if (is_string($prop) && isset($all[$prop])) {
+            $filtered[$prop] = $all[$prop];
+        }
+    }
+    return $filtered;
 }
 
 // ── GET: configuration queries ──────────────────────────────────────────────
@@ -327,26 +361,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'HEAD
 
     if ($q === 'source') {
         $targetUrl = $_GET['url'] ?? '';
+        $cfgTz     = $db->getSetting('timezone', '');
+        $requested = $_GET['properties'] ?? null;
+
+        // ── Post List extension: no url means "list my posts" ───────────────
+        // https://indieweb.org/Micropub-extensions#Query_for_Post_List
         if (!is_string($targetUrl) || $targetUrl === '') {
-            mp_error('invalid_request', 'url is required');
+            $postType   = $_GET['post-type']   ?? null;
+            $postStatus = $_GET['post-status'] ?? null;
+
+            // A typo answered with the whole archive looks like a working
+            // filter that matched everything, so reject unknown values.
+            if ($postType !== null && !in_array($postType, \CMS\Post::MICROPUB_TYPES, true)) {
+                mp_error('invalid_request', 'unsupported post-type: ' . (is_string($postType) ? $postType : ''));
+            }
+            if ($postStatus !== null && !in_array($postStatus, \CMS\Post::MICROPUB_STATUSES, true)) {
+                mp_error('invalid_request', 'unsupported post-status: ' . (is_string($postStatus) ? $postStatus : ''));
+            }
+
+            // limit/offset fall back rather than error — they are hints about
+            // page size, and a client sending nonsense still wants its first
+            // page. Validate before casting: (int) 'abc' is 0, which would
+            // clamp to a one-post page rather than the default one.
+            $limit  = filter_var($_GET['limit']  ?? null, FILTER_VALIDATE_INT);
+            $offset = filter_var($_GET['offset'] ?? null, FILTER_VALIDATE_INT);
+            $limit  = $limit  === false ? MP_LIST_DEFAULT_LIMIT : max(1, min(MP_LIST_MAX_LIMIT, $limit));
+            $offset = $offset === false ? 0 : max(0, $offset);
+
+            $posts = \CMS\Post::findForMicropub($db, $postType, $postStatus, $limit, $offset);
+
+            $items = [];
+            foreach ($posts as $listPost) {
+                $props = mp_post_source_properties($listPost, $cfgTz, $siteUrl);
+                // Unlike the single-post response below, list items keep their
+                // type wrapper even when filtered: a bare property bag is still
+                // readable on its own, but a list of them is not parseable mf2.
+                $items[] = [
+                    'type'       => ['h-entry'],
+                    'properties' => mp_filter_properties($props, $requested) ?? $props,
+                ];
+            }
+
+            mp_json(['items' => $items]);
         }
+
         $post = mp_resolve_post_by_url($db, $targetUrl);
         if (!$post || $post->deleted_at !== null) {
             mp_error('invalid_request', 'post not found for url', 404);
         }
 
-        $cfgTz = $db->getSetting('timezone', '');
-        $all   = mp_post_source_properties($post, $cfgTz, $siteUrl);
+        $all = mp_post_source_properties($post, $cfgTz, $siteUrl);
 
         // Optional properties[] filter — when present, omit the type wrapper.
-        $requested = $_GET['properties'] ?? null;
-        if (is_array($requested) && $requested !== []) {
-            $filtered = [];
-            foreach ($requested as $prop) {
-                if (is_string($prop) && isset($all[$prop])) {
-                    $filtered[$prop] = $all[$prop];
-                }
-            }
+        $filtered = mp_filter_properties($all, $requested);
+        if ($filtered !== null) {
             mp_json(['properties' => $filtered]);
         }
 

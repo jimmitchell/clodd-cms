@@ -88,6 +88,24 @@ check "q=source → 200" 200 "$(status -H "$AUTHZ" "$MP?q=source&url=$URL")"
 grep -q '"h-entry"' "$TMP/body" && check "source has h-entry type" y y || check "source has h-entry type" y n
 check "q=source unknown url → 404" 404 "$(status -H "$AUTHZ" "$MP?q=source&url=$BASE_URL/2020/01/01/nope/")"
 
+echo "== q=source post list"
+check "q=source no url → 200" 200 "$(status -H "$AUTHZ" "$MP?q=source")"
+grep -q '"items"' "$TMP/body" && check "list wrapped in items" y y || check "list wrapped in items" y n "$(body)"
+grep -q '"h-entry"' "$TMP/body" && check "list items are h-entries" y y || check "list items are h-entries" y n
+status -H "$AUTHZ" "$MP?q=source&limit=1" > /dev/null
+COUNT=$(grep -o '"h-entry"' "$TMP/body" | wc -l | tr -d ' ')
+check "limit=1 returns one item" 1 "$COUNT" "$(body)"
+# Page two must start somewhere else — compare the mp-slug of each page's only
+# item rather than naming a post, so this holds whatever else is on the site.
+FIRST=$(grep -o '"mp-slug":\["[^"]*"' "$TMP/body" | head -1)
+status -H "$AUTHZ" "$MP?q=source&limit=1&offset=1" > /dev/null
+SECOND=$(grep -o '"mp-slug":\["[^"]*"' "$TMP/body" | head -1)
+check "offset=1 starts a different page" y "$([ -n "$FIRST" ] && [ "$FIRST" != "$SECOND" ] && echo y || echo n)" "$FIRST vs $SECOND"
+check "post-type filter → 200"        200 "$(status -H "$AUTHZ" "$MP?q=source&post-type=article")"
+check "post-status filter → 200"      200 "$(status -H "$AUTHZ" "$MP?q=source&post-status=published")"
+check "unknown post-type → 400"       400 "$(status -H "$AUTHZ" "$MP?q=source&post-type=nope")"
+check "unknown post-status → 400"     400 "$(status -H "$AUTHZ" "$MP?q=source&post-status=trash")"
+
 echo "== Update"
 # NOTE: JSON payloads are pre-assigned to variables — bash 3.2 (macOS default)
 # misparses \" escapes inside nested "$(…)" and brace-expands the payload.
