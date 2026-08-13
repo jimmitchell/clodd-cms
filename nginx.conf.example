@@ -296,6 +296,16 @@ server {
         return 302 https://fed.brid.gy/.well-known/atproto-did?protocol=web&id=example.com;
     }
 
+    # Bridgy Fed fediverse handle resolution, which is what makes the handle
+    # @example.com@example.com instead of @example.com@web.brid.gy. Both paths
+    # have to forward their query string — that is what $request_uri carries,
+    # unlike $uri. Written as a regex so it also catches host-meta.json and
+    # host-meta.xrd, and it must stay above the dotfile deny: regex locations
+    # are tested in the order they appear, and the first match wins.
+    location ~ ^/\.well-known/(host-meta|webfinger) {
+        return 302 https://fed.brid.gy$request_uri;
+    }
+
     # Deny hidden files
     location ~ /\. {
         deny all;
