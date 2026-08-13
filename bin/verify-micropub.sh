@@ -21,7 +21,7 @@ ADMIN_PASS="${ADMIN_PASS:-}"
 PASS=0
 FAIL=0
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+trap 'cleanup_posts; rm -rf "$TMP"' EXIT
 
 if [ -z "$TOKEN" ]; then
     echo "TOKEN is required (Settings → Micropub → Generate token)." >&2
@@ -38,12 +38,55 @@ check() {
     fi
 }
 
-status() { curl -s -o "$TMP/body" -w '%{http_code}' "$@"; }
-body()   { cat "$TMP/body"; }
-loc()    { curl -s -o "$TMP/body" -D "$TMP/headers" "$@" >/dev/null; grep -i '^location:' "$TMP/headers" | tr -d '\r' | awk '{print $2}' | tail -1; }
+body() { cat "$TMP/body"; }
+
+# Every Location either helper is handed is appended to $TMP/created, so the
+# cleanup pass below can take the posts down again. Recording happens inside
+# the helpers rather than at the call sites: each call site already sits in a
+# subshell, so a variable would not survive, and wrapping them in another
+# $(…) layer trips the bash 3.2 quoting bug noted further down.
+record_location() {
+    local url
+    url=$(grep -i '^location:' "$TMP/headers" 2>/dev/null | tr -d '\r' | awk '{print $2}' | tail -1)
+    [ -n "$url" ] && echo "$url" >> "$TMP/created"
+    printf '%s' "$url"
+}
+
+# status() captures headers too, so a create made through it — the duplicate-slug
+# one — is tracked as well.
+status() { curl -s -o "$TMP/body" -D "$TMP/headers" -w '%{http_code}' "$@"; record_location >/dev/null; }
+loc()    { curl -s -o "$TMP/body" -D "$TMP/headers" "$@" >/dev/null; record_location; }
 
 MP="$BASE_URL/micropub.php"
 AUTHZ="Authorization: Bearer $TOKEN"
+
+# This script creates a dozen real posts and BASE_URL can point at a live site,
+# so every post it created comes down on exit — including when the run dies
+# partway, which is exactly when leftovers would be published and forgotten.
+# Deletes are soft, so anything caught by mistake is recoverable from
+# Admin → Posts → Deleted.
+cleanup_posts() {
+    [ -s "$TMP/created" ] || return 0
+    echo
+    echo "== Cleanup"
+    local url code stripped left=0
+    # Sort -u: an update that renames a post hands back a second Location for
+    # the same post, and the stale one would just 404.
+    while IFS= read -r url; do
+        [ -z "$url" ] && continue
+        code=$(status -H "$AUTHZ" -H 'Content-Type: application/json' \
+            -d "{\"action\":\"delete\",\"url\":\"$url\"}" "$MP")
+        stripped="${url%/}"
+        if [ "$code" = "204" ] || [ "$code" = "404" ]; then
+            printf 'ok   %-58s %s\n' "removed ${stripped##*/}" "$code"
+        else
+            left=$((left+1))
+            printf 'FAIL %-58s %s\n' "still live: $url" "$code"
+        fi
+    done < <(sort -u "$TMP/created")
+    [ "$left" -gt 0 ] && echo "  ⚠ $left post(s) left on the site — remove them in Admin → Posts."
+    return 0
+}
 
 echo "== Error handling"
 check "no token → 401"                 401 "$(status "$MP?q=config")"
@@ -73,14 +116,17 @@ URL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{
     \"mp-syndicate-to\": []
   }
 }" "$MP")
-CODE=$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"content\":[\"x\"],\"mp-slug\":[\"$SLUG\"]}}" "$MP")
+CODE=$(status -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"content\":[\"x\"],\"mp-slug\":[\"$SLUG\"],\"mp-syndicate-to\":[]}}" "$MP")
 check "create → Location returned" y "$([ -n "$URL" ] && echo y || echo n)" "$URL"
 check "duplicate slug auto-suffixes (201)" 201 "$CODE"
-DUP_URL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"content\":[\"cleanup me\"],\"mp-slug\":[\"$SLUG-cleanup\"]}}" "$MP")
+DUP_URL=$(loc -H "$AUTHZ" -H 'Content-Type: application/json' -d "{\"type\":[\"h-entry\"],\"properties\":{\"content\":[\"cleanup me\"],\"mp-slug\":[\"$SLUG-cleanup\"],\"mp-syndicate-to\":[]}}" "$MP")
 check "created page is live" 200 "$(status "$URL")"
 
 echo "== Create (form-encoded)"
-FORM_URL=$(loc -H "$AUTHZ" --data-urlencode "h=entry" --data-urlencode "content=Form-encoded note from verify script" --data-urlencode "mp-slug=$SLUG-form" "$MP")
+# mp-syndicate-to must be present on every create, even empty: absent means
+# "default auto-syndication" (micropub.php), which against a live site posts
+# the test note to the real Mastodon and Bluesky accounts.
+FORM_URL=$(loc -H "$AUTHZ" --data-urlencode "h=entry" --data-urlencode "content=Form-encoded note from verify script" --data-urlencode "mp-slug=$SLUG-form" --data-urlencode "mp-syndicate-to=" "$MP")
 check "form create → Location" y "$([ -n "$FORM_URL" ] && echo y || echo n)"
 
 echo "== q=source"
