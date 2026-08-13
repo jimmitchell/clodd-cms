@@ -1315,6 +1315,12 @@ audio { width: 100%; }
 .social-link--feed:hover     { color: #f26522; }
 .social-link--mastodon:hover { color: #6364ff; }
 .social-link--bluesky:hover  { color: #0085ff; }
+/* Pixelfed's mark is a six-stop rainbow, so there is no flat brand colour to
+   take. This is the magenta from its own gradient rather than the #6366f1 the
+   icon sets flatten it to — that value is three hex digits from the Mastodon
+   indigo directly above, and two neighbouring icons that light up the same
+   colour defeat the point of the rule. */
+.social-link--pixelfed:hover { color: #eb0256; }
 .social-link--github:hover   { color: var(--color-text); }
 
 /* =END CRITICAL= */
