@@ -540,7 +540,7 @@ audio { width: 100%; }
     border: none;
     border-top: 1px solid var(--color-border);
     margin: 3.5em 0;
-    max-width: 100px
+    max-width: 100px;
 }
 
 .prose strong { font-weight: 600; }
