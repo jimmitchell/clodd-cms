@@ -36,13 +36,13 @@ class OgImage
         }
 
         if (
-            file_exists($fontDir . '/Figtree-Regular.ttf') &&
-            file_exists($fontDir . '/Figtree-Bold.ttf')
+            file_exists($fontDir . '/DMSans-Regular.ttf') &&
+            file_exists($fontDir . '/DMSans-Bold.ttf')
         ) {
-            $this->fontRegular = $fontDir . '/Figtree-Regular.ttf';
-            $this->fontBold    = $fontDir . '/Figtree-Bold.ttf';
+            $this->fontRegular = $fontDir . '/DMSans-Regular.ttf';
+            $this->fontBold    = $fontDir . '/DMSans-Bold.ttf';
         } else {
-            throw new RuntimeException('Figtree-Regular.ttf and Figtree-Bold.ttf not found in ' . $fontDir);
+            throw new RuntimeException('DMSans-Regular.ttf and DMSans-Bold.ttf not found in ' . $fontDir);
         }
     }
 

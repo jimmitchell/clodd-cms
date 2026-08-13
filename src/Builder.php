@@ -853,7 +853,7 @@ class Builder
         }
 
         $siteTitle  = $this->settings['site_title'] ?? '';
-        $fontStamp  = (string) (@filemtime($this->fontDir . '/Figtree-Bold.ttf') ?: 0);
+        $fontStamp  = (string) (@filemtime($this->fontDir . '/DMSans-Bold.ttf') ?: 0);
         $ogHash     = hash('sha256', $fontStamp . '|' . $siteTitle . '|' . $post->title);
 
         if ($ogHash !== $post->og_image_hash || !file_exists($ogPath)) {

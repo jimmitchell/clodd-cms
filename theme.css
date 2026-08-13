@@ -1,36 +1,24 @@
 /* ── Clodd CMS — Public Theme ─────────────────────────────────────────────── */
 
-/* ── Figtree — self-hosted variable font (Google Fonts, OFL license) ─────────── */
+/* ── DM Sans — self-hosted variable font (Google Fonts, OFL license) ─────────
+   Sets everything on the site: UI, prose, and headings. Subset to latin +
+   latin-ext; the weight axis is clamped to 200–800, the range the theme
+   actually asks for. DM Sans also ships an optical-size axis — it is pinned
+   at 14 here rather than kept live, because carrying it costs 29 KB on the
+   preloaded critical path for an adjustment nothing on the page is large
+   enough to show. */
 
 @font-face {
-    font-family: 'Figtree';
-    src: url('/fonts/Figtree-Variable.woff2') format('woff2');
-    font-weight: 300 900;
-    font-style:  normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Figtree';
-    src: url('/fonts/Figtree-Variable-Italic.woff2') format('woff2');
-    font-weight: 300 900;
-    font-style:  italic;
-    font-display: swap;
-}
-
-/* ── Atkinson Hyperlegible Next — self-hosted variable font (Google Fonts, OFL license) ── */
-
-@font-face {
-    font-family: 'Atkinson Hyperlegible Next';
-    src: url('/fonts/AtkinsonHyperlegibleNext-Variable.woff2') format('woff2');
+    font-family: 'DM Sans';
+    src: url('/fonts/DMSans-Variable.woff2') format('woff2');
     font-weight: 200 800;
     font-style:  normal;
     font-display: swap;
 }
 
 @font-face {
-    font-family: 'Atkinson Hyperlegible Next';
-    src: url('/fonts/AtkinsonHyperlegibleNext-Variable-Italic.woff2') format('woff2');
+    font-family: 'DM Sans';
+    src: url('/fonts/DMSans-Variable-Italic.woff2') format('woff2');
     font-weight: 200 800;
     font-style:  italic;
     font-display: swap;
@@ -142,7 +130,7 @@ html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
 
 
 body {
-    font-family: 'Figtree', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     line-height: 1.6667;
     color: var(--color-text);
     background: var(--color-bg);
@@ -497,7 +485,7 @@ audio { width: 100%; }
 
 /* ── Prose styles ─────────────────────────────────────────────────────────── */
 .prose {
-    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 1rem;
     /* line-height: 1.6; */
 }
@@ -510,7 +498,7 @@ audio { width: 100%; }
 .prose h4,
 .prose h5,
 .prose h6 {
-    font-family: 'Figtree', system-ui, -apple-system, sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     line-height: 1.25;
     margin-top: 2em;
     margin-bottom: .5em;
@@ -661,7 +649,7 @@ audio { width: 100%; }
 }
 
 .home-intro__text {
-    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 1.1rem;
     line-height: 1.55;
     text-wrap: pretty;
@@ -760,7 +748,7 @@ audio { width: 100%; }
 }
 
 .post-card__title {
-    font-family: 'Figtree', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 1.3rem;
     font-weight: 700;
     line-height: 1.2;
@@ -802,7 +790,7 @@ audio { width: 100%; }
 }
 
 .post-card__excerpt {
-    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--color-muted);
     font-size: .95rem;
     flex: 1;
@@ -1201,7 +1189,7 @@ audio { width: 100%; }
     outline: none;
     color: var(--color-text);
     /* The reading face, so the query looks like the prose it searches. */
-    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 1.5rem;
     line-height: 1.3;
     padding: 0;
@@ -1481,7 +1469,7 @@ audio { width: 100%; }
 .footnotes {
     font-size: .85rem;
     color: var(--color-muted);
-    font-family: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .footnotes ol { padding-left: 1.5em; }

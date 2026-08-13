@@ -93,15 +93,13 @@ if (!function_exists('_e')) {
     <?php if ($googleSiteVerification !== '' && ($isHomepage ?? false)): ?>
     <meta name="google-site-verification" content="<?= _e($googleSiteVerification) ?>">
     <?php endif; ?>
-    <!-- Font preloads — must come before the stylesheet.
-         Roman faces only: they set essentially all the text on a page, so they
-         are on the critical path. The italics (57 KB together) are for the
-         occasional <em>, and preloading them competed for bandwidth with the
-         faces actually needed to paint. They still load from @font-face the
-         moment something italic is encountered. -->
-    <link rel="preload" href="/fonts/Figtree-Variable.woff2"
-          as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/AtkinsonHyperlegibleNext-Variable.woff2"
+    <!-- Font preload — must come before the stylesheet.
+         Roman face only: it sets essentially all the text on a page, so it is
+         on the critical path. The italic (46 KB) is for the occasional <em>,
+         and preloading it competed for bandwidth with the face actually needed
+         to paint. It still loads from @font-face the moment something italic is
+         encountered. -->
+    <link rel="preload" href="/fonts/DMSans-Variable.woff2"
           as="font" type="font/woff2" crossorigin>
     <!-- Feeds -->
     <link rel="alternate" type="application/atom+xml"
