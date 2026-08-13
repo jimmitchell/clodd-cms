@@ -191,9 +191,25 @@ audio { width: 100%; }
     font-weight: 700;
     color: var(--color-text);
     text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: .6rem;
 }
 
 .site-header__title:hover { color: var(--color-link); }
+
+/* The avatar lives inside the home link so the whole lockup is one target.
+   Same treatment as the webmention avatars (.wm-avatar): a bare circle, cropped
+   to fill, with the code background standing in until the image arrives. */
+.site-header__avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--color-code-bg);
+    display: block;
+    flex-shrink: 0;
+}
 
 .site-nav {
     display: flex;

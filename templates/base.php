@@ -21,6 +21,15 @@ $siteTitle   = $settings['site_title']       ?? 'My CMS';
 $footerText  = $settings['footer_text']      ?? '';
 $ogImageUrl  = $ogImageUrl  ?? '';
 
+// The author avatar sits beside the site title in the header. Settings are
+// owner-written, but the header ships on every public page, so hold the value
+// to the two shapes an avatar can legitimately take: absolute http(s), or a
+// path rooted on this site.
+$headerAvatar = trim((string) ($settings['author_avatar_url'] ?? ''));
+if ($headerAvatar !== '' && !preg_match('#^(https?://|/[^/])#i', $headerAvatar)) {
+    $headerAvatar = '';
+}
+
 // Mastodon: the handle only reaches the head as a meta value here. The profile
 // links themselves live in partials/social-links.php, which resolves its own URLs.
 $rawHandle    = $settings['mastodon_handle'] ?? '';
@@ -152,7 +161,13 @@ if (!function_exists('_e')) {
 
 <header class="site-header">
     <div class="site-header__inner">
-        <a href="/" class="site-header__title"><?= _e($siteTitle) ?></a>
+        <a href="/" class="site-header__title">
+            <?php if ($headerAvatar !== ''): ?>
+            <img class="site-header__avatar" src="<?= _e($headerAvatar) ?>" alt=""
+                 width="32" height="32" decoding="async">
+            <?php endif; ?>
+            <span><?= _e($siteTitle) ?></span>
+        </a>
 
         <div class="site-header__right">
             <?php if (!empty($navPages)): ?>

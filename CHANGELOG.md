@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.17.0] — 2026-08-13
+
+### Added
+
+- **The author avatar now sits beside the site title.** The picture was already in Settings and already went out in feeds as `<byline:avatar>`, but the site itself never showed it — a reader arriving from a feed reader saw a face there and a bare line of text here. It renders inside the existing home link rather than next to it, so the avatar and the title are one target instead of two adjacent ones, and it carries an empty `alt` because the title names the link already; a second reading of the same words is noise to a screen reader. The treatment is the one the webmention avatars use — a 32px circle, cropped to fill, with the code background standing in until the image arrives — so a face in the header and a face under a post are recognisably the same kind of thing. Nothing appears when the setting is empty. The URL is held to absolute `http(s)` or a site-rooted path before it reaches `src`: Settings is owner-written, but this markup is on every public page, and the header is a poor place to discover that a value was never constrained.
+
+### Changed
+
+- **The site is set in DM Sans throughout**, replacing Figtree for the interface and Atkinson Hyperlegible Next for prose. Two families were doing the work of one and the seam showed wherever they met — a card's title in one face above an excerpt in the other. The OG image generator moves with it, so a shared link matches the page it opens.
+
+---
+
 ## [1.16.0] — 2026-08-13
 
 ### Changed
