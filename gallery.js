@@ -52,8 +52,10 @@ function glClose_() {
     glImg.src = '';
 }
 
-// Collect all gallery items across all galleries on the page.
-document.querySelectorAll('.gallery[data-gallery] [data-gallery-item]').forEach(function (a) {
+// Collect all gallery items across all galleries on the page. Two blocks carry
+// data-gallery: the tiled [gallery] shortcode, and a photo post's attached
+// u-photo rows (.post__photos), which lay out differently but light up the same.
+document.querySelectorAll('[data-gallery] [data-gallery-item]').forEach(function (a) {
     glItems.push({ href: a.href, alt: (a.querySelector('img') || {}).alt || '' });
     var idx = glItems.length - 1;
     a.addEventListener('click', function (e) {
@@ -61,6 +63,13 @@ document.querySelectorAll('.gallery[data-gallery] [data-gallery-item]').forEach(
         glShow(idx);
     });
 });
+
+// A lone picture has nowhere to step to, so the arrows would only wrap onto
+// itself. Photo posts routinely carry one photo; the tiled gallery can too.
+if (glItems.length < 2) {
+    glPrev.hidden = true;
+    glNext.hidden = true;
+}
 
 glClose.addEventListener('click', glClose_);
 glPrev.addEventListener('click', function () { glShow(glCursor - 1); });

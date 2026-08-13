@@ -89,13 +89,21 @@ ob_start();
     <div class="post__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
     <?php endif; ?>
     <?php if (!empty($post->photos)): ?>
-    <div class="post__photos" data-count="<?= count($post->photos) ?>">
+    <?php /* Contract: data-gallery + data-gallery-item are what gallery.js binds
+             the lightbox to, and what Builder looks for to load the script at
+             all. The href is the full-size original, so the link still works
+             without JS. Attached photos are shown at the column width, and a
+             reader who came for the pictures should be able to open them —
+             the same affordance an inline body image already has. */ ?>
+    <div class="post__photos" data-count="<?= count($post->photos) ?>" data-gallery>
         <?php foreach ($post->photos as $photo): ?>
         <figure class="post__photo">
-            <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
-                'class' => 'u-photo',
-                'sizes' => '(max-width: 44rem) 100vw, 44rem',
-            ]) ?>
+            <a href="<?= Helpers::e($photo['url']) ?>" class="post__photo-link" data-gallery-item>
+                <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
+                    'class' => 'u-photo',
+                    'sizes' => '(max-width: 44rem) 100vw, 44rem',
+                ]) ?>
+            </a>
         </figure>
         <?php endforeach; ?>
     </div>

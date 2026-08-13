@@ -93,8 +93,10 @@ class Builder
         $html       = $this->shortcodes->render($html);
         // Contract: gallery wrappers must include data-gallery so the lightbox JS
         // in base.php is loaded. Preserve this attribute if changing
-        // ShortcodeRenderer::renderGallery().
-        $hasGallery = str_contains($html, 'data-gallery');
+        // ShortcodeRenderer::renderGallery(). A post's attached u-photo rows are
+        // the other wrapper: they are emitted by post.php, not by the Markdown,
+        // so $html cannot see them.
+        $hasGallery = str_contains($html, 'data-gallery') || !empty($post->photos);
         $prevPost   = Post::findPrev($this->db, $post);
         $nextPost   = Post::findNext($this->db, $post);
         $rendered   = $this->render('post.php', [

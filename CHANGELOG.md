@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.15.2] — 2026-08-13
+
+### Fixed
+
+- **A photo post's pictures could not be opened.** Click an image written into a post's body and it fills the screen; click one on a photo post from Micropub and nothing happened at all. The difference was never visible to a reader — both are the same picture on the same kind of post — but the two arrive by different routes. A body image lands inside `.prose`, which is what `theme.js` binds its lightbox to. Attached `u-photo` rows are emitted by `post.php` into `.post__photos` above the body, outside the reach of that selector and of the gallery lightbox too, which looks for `data-gallery-item`. Each photo is now a link to its full-size original carrying that attribute, so a photo post opens into the gallery lightbox rather than the single-image one: with several pictures — which is the case a photo post is for — the arrow keys step between them instead of making the reader close and click again. The link is real, so the picture still opens without JavaScript. `Builder` decides whether to load `gallery.js` by looking for `data-gallery`, and it looked only at the rendered Markdown; attached photos never appear there, so the script has to be asked for from the post's photo rows instead. The lightbox's arrows now hide themselves when there is only one picture on the page, since a lone photo — the common shape for these posts — had two controls that led back to itself.
+
+---
+
 ## [1.15.1] — 2026-08-13
 
 ### Fixed

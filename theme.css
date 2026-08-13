@@ -418,6 +418,18 @@ audio { width: 100%; }
 
 .post__photo { margin: 0; }
 
+/* The picture is the point of a photo post, so it opens. The link carries the
+   full-size original and gallery.js lifts it into the lightbox — same zoom-in
+   cursor and hover fade as the tiled gallery, so both answer the pointer alike. */
+.post__photo-link {
+    display: block;
+    border-radius: var(--radius);
+    cursor: zoom-in;
+}
+
+.post__photo-link img { transition: opacity .15s; }
+.post__photo-link:hover img { opacity: .88; }
+
 .post__photo img {
     display: block;
     width: 100%;
