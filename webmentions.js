@@ -85,6 +85,12 @@
                 if (pub) {
                     try { dateStr = new Date(pub).toLocaleDateString('en', { year: 'numeric', month: 'short', day: 'numeric' }); } catch (e) {}
                 }
+                // Emoji here sometimes arrive as runs of "?" \u2014 that corruption is
+                // already in what webmention.io serves, not something we introduce.
+                // Their column is utf8mb3, so 4-byte characters are replaced on
+                // insert while 3-byte ones (curly quotes, dashes) survive intact.
+                // The bytes never reached their database, so nothing on this side
+                // can recover them. Upstream: aaronpk/webmention.io#203.
                 var text = (m.content && m.content.text) ? m.content.text : '';
                 if (text.length > 300) text = text.slice(0, 300) + '\u2026';
 
