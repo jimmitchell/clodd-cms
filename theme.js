@@ -11,12 +11,19 @@
     var CHECK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
     document.querySelectorAll('.prose pre').forEach(function (pre) {
-        // Wrap the <pre> in a div so the copy button is outside the
-        // scroll container and stays fixed at the top-right corner.
-        var wrap = document.createElement('div');
-        wrap.className = 'code-block' + (pre.classList.contains('syntax-hl') ? ' code-block--dark' : '');
-        pre.parentNode.insertBefore(wrap, pre);
-        wrap.appendChild(pre);
+        // The copy button lives outside the scroll container so it stays fixed
+        // at the top-right corner, which means the <pre> needs a positioned
+        // wrapper. Fenced code arrives with one already (see
+        // HighlightFencedCodeRenderer) — wrapping it here instead reflowed the
+        // page as soon as this ran. Anything else — an indented block, a <pre>
+        // written as raw HTML in a post body — still gets wrapped on the fly.
+        var wrap = pre.parentNode;
+        if (!wrap.classList.contains('code-block')) {
+            wrap = document.createElement('div');
+            wrap.className = 'code-block' + (pre.classList.contains('syntax-hl') ? ' code-block--dark' : '');
+            pre.parentNode.insertBefore(wrap, pre);
+            wrap.appendChild(pre);
+        }
 
         var btn = document.createElement('button');
         btn.className = 'code-copy';

@@ -612,12 +612,20 @@ audio { width: 100%; }
     font-size: 1.1rem;
 }
 
-/* Wrapper injected by JS — provides the positioning context for the copy
+/* Wrapper around every <pre> — provides the positioning context for the copy
    button so it stays anchored to the visible corner even when the <pre>
-   scrolls horizontally. */
+   scrolls horizontally. Fenced code ships with it already in place; theme.js
+   adds it to the rest (indented blocks, raw HTML in a post body).
+   .prose > * + * sets margins in em, so the wrapper — which takes the <pre>'s
+   place as the .prose child and leaves the <pre> with no margin of its own —
+   has to be sized like the <pre> or those margins come out 1.3 × 1rem instead
+   of 1.3 × 1.1rem. That is the ~5px per code block the page used to shift by
+   the moment theme.js ran. */
 .code-block {
     position: relative;
 }
+
+.prose > .code-block { font-size: 1.1rem; }
 
 .code-copy {
     position: absolute;

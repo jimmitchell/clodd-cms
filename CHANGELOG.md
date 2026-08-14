@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.18.2] — 2026-08-14
+
+### Fixed
+
+- **A page with a code block no longer shifts as it loads.** `theme.js` wrapped every `<pre>` in a `.code-block` div to anchor the copy button, and doing that on load moved the `<pre>` a step down the tree. `.prose > * + *` sets its margins in `em`, so they stopped resolving against the `<pre>`'s `1.1rem` and started resolving against the wrapper's inherited `1rem` — 25.74px became 23.4px top and bottom, and everything below jumped up about 5px per block the moment the deferred script ran. Fenced code now ships with the wrapper already in place from `HighlightFencedCodeRenderer`, so there is nothing to mutate; `theme.js` reuses it and still wraps the cases the renderer does not cover — indented blocks and a `<pre>` written as raw HTML in a post body. `.prose > .code-block` is sized like the `<pre>` so either wrapper carries the same margins.
+
+---
+
 ## [1.18.1] — 2026-08-13
 
 ### Changed

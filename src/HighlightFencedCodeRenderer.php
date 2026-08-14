@@ -44,13 +44,19 @@ class HighlightFencedCodeRenderer implements NodeRendererInterface
             }
         } catch (\Exception) {
             // Unknown language — fall back to plain escaped output.
-            return '<pre><code class="language-' . htmlspecialchars($lang, ENT_QUOTES, 'UTF-8') . '">'
+            return '<div class="code-block"><pre><code class="language-'
+                . htmlspecialchars($lang, ENT_QUOTES, 'UTF-8') . '">'
                 . Xml::escape($code)
-                . "</code></pre>\n";
+                . "</code></pre></div>\n";
         }
 
-        return '<pre class="syntax-hl"><code class="hljs ' . $langClass . '">'
+        // The .code-block wrapper is emitted here rather than left to theme.js.
+        // Inserting it on load moved the <pre> a step down the tree, which
+        // changed which element the .prose > * + * margin landed on and reflowed
+        // everything below by a few pixels. theme.js reuses this wrapper.
+        return '<div class="code-block code-block--dark"><pre class="syntax-hl"><code class="hljs '
+            . $langClass . '">'
             . $inner
-            . "</code></pre>\n";
+            . "</code></pre></div>\n";
     }
 }
