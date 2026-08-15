@@ -103,7 +103,23 @@ class Auth
     /** Destroy the session and redirect to login. */
     public function logout(): void
     {
+        $this->destroySession();
+        header('Location: /admin/');
+        exit;
+    }
+
+    /** Clear the session and its cookie, without redirecting. */
+    private function destroySession(): void
+    {
         $_SESSION = [];
+
+        // session_destroy() warns when no session is active, which is reachable
+        // from sessionIsLive() on a CLI/test path that never called
+        // startSession(). Clearing $_SESSION above is the part that matters.
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return;
+        }
+
         if (ini_get('session.use_cookies')) {
             $params = session_get_cookie_params();
             setcookie(
@@ -117,8 +133,6 @@ class Auth
             );
         }
         session_destroy();
-        header('Location: /admin/');
-        exit;
     }
 
     /**
@@ -127,9 +141,30 @@ class Auth
      */
     public function check(): void
     {
-        if (empty($_SESSION['authenticated'])) {
+        if (!$this->sessionIsLive()) {
             header('Location: /admin/');
             exit;
+        }
+    }
+
+    /**
+     * True when the session is authenticated *and* has not gone idle; false
+     * otherwise, having destroyed an expired one on the way out.
+     *
+     * This is the single copy of the idle-timeout rule. It used to live inside
+     * check(), which redirects — so the endpoints that answer differently when
+     * signed out could not reuse it and called isAuthenticated() instead,
+     * skipping the timeout entirely. indieauth.php did exactly that on both the
+     * consent render and the approval POST, which are the two requests that mint
+     * `create`-scope tokens. Callers keep their own response; the rule is shared.
+     *
+     * Destroying the session here rather than merely reporting false means a
+     * caller that ignores the return value still cannot act on a dead session.
+     */
+    public function sessionIsLive(): bool
+    {
+        if (empty($_SESSION['authenticated'])) {
+            return false;
         }
 
         // Server-side idle timeout. The session cookie's lifetime is only a hint
@@ -139,13 +174,20 @@ class Auth
         $lastSeen = (int) ($_SESSION['last_seen'] ?? 0);
 
         if ($lifetime > 0 && $lastSeen > 0 && (time() - $lastSeen) > $lifetime) {
-            $this->logout();  // destroys the session and redirects to /admin/
+            $this->destroySession();
+            return false;
         }
 
         $_SESSION['last_seen'] = time();
+
+        return true;
     }
 
-    /** Returns true if the current session is authenticated. */
+    /**
+     * Whether the session carries an authenticated flag, ignoring the idle
+     * timeout. Prefer sessionIsLive() — this answers a narrower question and is
+     * only correct where expiry is irrelevant.
+     */
     public function isAuthenticated(): bool
     {
         return !empty($_SESSION['authenticated']);
@@ -202,12 +244,14 @@ class Auth
      * Each rate-limits independently — a Micropub client burning through bad
      * bearer tokens must not lock the human out of the admin UI.
      */
-    public const SCOPE_ADMIN    = 'admin';
-    public const SCOPE_TOTP     = 'totp';
-    public const SCOPE_PASSKEY  = 'passkey';
-    public const SCOPE_MICROPUB = 'micropub';
-    public const SCOPE_API      = 'api';
-    public const SCOPE_XMLRPC   = 'xmlrpc';
+    public const SCOPE_ADMIN     = 'admin';
+    public const SCOPE_TOTP      = 'totp';
+    public const SCOPE_PASSKEY   = 'passkey';
+    public const SCOPE_MICROPUB  = 'micropub';
+    public const SCOPE_API       = 'api';
+    public const SCOPE_XMLRPC    = 'xmlrpc';
+    /** token.php and indieauth.php: unauthenticated code redemption. */
+    public const SCOPE_INDIEAUTH = 'indieauth';
 
     /** Returns true if the IP is currently locked out for the given scope. */
     public function isLockedOut(string $ip, string $scope = self::SCOPE_ADMIN): bool
@@ -426,13 +470,19 @@ class Auth
             $existing
         );
 
+        // userVerification is 'required', not 'preferred': a passkey signs the
+        // owner in on its own, past the password and past TOTP, so possession of
+        // the authenticator alone must not be enough. Requiring UV means the
+        // device also demands a biometric or PIN, which is what makes the
+        // passkey path two-factor rather than one. Enforced again on assertion
+        // — asking for it here only sets the authenticator's behaviour.
         $createArgs = $wa->getCreateArgs(
             $userId,
             $username,
             $username,
             60,           // timeout (seconds)
             'required',   // residentKey — required for passkey behaviour
-            'preferred',  // userVerification
+            'required',   // userVerification
             null,         // any authenticator (platform or cross-platform)
             $excludeIds
         );
@@ -461,7 +511,7 @@ class Auth
             $clientDataJSON,
             $attestationObject,
             new \lbuchs\WebAuthn\Binary\ByteBuffer($challenge),
-            false, // requireUserVerification
+            true,  // requireUserVerification — see passkeyRegisterOptions()
             true,  // requireUserPresent
             false  // failIfRootMismatch (no CA pinning needed for a single-user CMS)
         );
@@ -487,7 +537,19 @@ class Auth
             $passkeys
         );
 
-        $getArgs = $wa->getGetArgs($credentialIds, 60);
+        // userVerification 'required' here matches passkeyRegisterOptions() and
+        // the check in passkeyAuthVerify(): the sign-in must be possession *and*
+        // a biometric/PIN, because it bypasses the password and TOTP entirely.
+        $getArgs = $wa->getGetArgs(
+            $credentialIds,
+            60,
+            true,        // allowUsb
+            true,        // allowNfc
+            true,        // allowBle
+            true,        // allowHybrid
+            true,        // allowInternal
+            'required'   // requireUserVerification
+        );
 
         $_SESSION['webauthn_challenge'] = $wa->getChallenge()->getBinaryString();
 
@@ -529,7 +591,7 @@ class Auth
                 $passkey['public_key'],
                 new \lbuchs\WebAuthn\Binary\ByteBuffer($challenge),
                 (int) $passkey['sign_count'],
-                false, // requireUserVerification
+                true,  // requireUserVerification — see passkeyRegisterOptions()
                 true   // requireUserPresent
             );
         } catch (\lbuchs\WebAuthn\WebAuthnException $e) {

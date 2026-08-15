@@ -1192,17 +1192,20 @@ class XmlRpcServer
      */
     private function xmlrpc_save_media(string $originalName, string $mimeType, string $bits): array
     {
-        // MIME whitelist (mirrors Media.php)
-        $allowed = [
-            'image/jpeg'    => 'jpg',
-            'image/png'     => 'png',
-            'image/gif'     => 'gif',
-            'image/webp'    => 'webp',
-            'video/mp4'     => 'mp4',
-            'video/webm'    => 'webm',
-            'audio/mpeg'    => 'mp3',
-            'audio/ogg'     => 'ogg',
-        ];
+        // The one allowlist, shared with Media::upload(). This used to be a
+        // hand-copied duplicate labelled "mirrors Media.php", which is a
+        // promise no compiler keeps.
+        $allowed = Media::ALLOWED_MIME;
+
+        // Every other upload path checks a size — Media::upload() against the
+        // posted length, Media::ingestFromUrl() against what it downloaded.
+        // This one checked nothing, so the only ceiling was nginx's
+        // client_max_body_size and a base64 body could fill the disk.
+        $maxBytes = (int) ($this->config['media']['max_bytes'] ?? Media::DEFAULT_MAX_BYTES);
+        if (strlen($bits) > $maxBytes) {
+            $this->fault(400, 'File exceeds the maximum upload size of '
+                . round($maxBytes / 1_048_576) . ' MB.');
+        }
 
         if (!isset($allowed[$mimeType])) {
             $ext      = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));

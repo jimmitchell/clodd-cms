@@ -173,7 +173,17 @@ if (isset($_GET['uploaded'])) {
         <div class="media-card" data-id="<?= (int) $item['id'] ?>">
             <div class="media-card__thumb">
                 <?php if ($isImage): ?>
-                    <img src="<?= Helpers::e($url) ?>" alt="<?= Helpers::e($item['original_name']) ?>" loading="lazy">
+                    <?php /* Through ImageTag so the grid pulls the 800px WebP
+                             companion rather than a full-size original per card
+                             — this page shows every item in the library at
+                             once, so the originals added up to more than the
+                             rest of the admin put together. */ ?>
+                    <?= CMS\ImageTag::render(
+                        $config['paths']['content'] . '/media',
+                        $url,
+                        $item['original_name'],
+                        ['sizes' => '200px']
+                    ) ?>
                 <?php elseif ($isVideo): ?>
                     <span class="media-card__icon">▶</span>
                 <?php else: ?>

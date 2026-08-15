@@ -45,8 +45,10 @@ if (file_exists($_themeCss) && (!file_exists($_themeMinCss) || filemtime($_theme
 }
 unset($_themeCss, $_themeMinCss);
 
-// Promote any scheduled posts whose publish time has passed: build them and
-// send them to the networks. Shared with api.php and micropub.php, either of
-// which may be the request that arrives first.
-$scheduler = new \CMS\Scheduler($db, $builder, $syndication);
-$scheduler->run();
+// Safety net only: bin/publish-scheduled.php is what publishes, from cron every
+// minute. tick() returns immediately while that heartbeat is fresh, so the
+// usual cost here is one settings read. When the beat has aged out it flushes
+// the response before building, so nobody waits on it — and the dashboard says
+// so, because a fallback nobody notices is a fallback nobody fixes.
+$scheduler = new \CMS\Scheduler($db, $builder, $syndication, $activityLog);
+$scheduler->tick();

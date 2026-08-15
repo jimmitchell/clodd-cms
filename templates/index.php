@@ -25,7 +25,10 @@ ob_start();
     <p class="post-list__empty">Nothing published yet. Check back soon.</p>
     <?php else: ?>
 
-    <?php foreach ($posts as $post): ?>
+    <?php foreach ($posts as $cardIndex => $post): ?>
+    <?php /* Only the first card of page 1 is reliably above the fold; page 2
+             onwards is reached by scrolling, so nothing there is the LCP. */ ?>
+    <?php $isLeadCard = ($cardIndex === 0 && $currentPage === 1); ?>
     <?php include __DIR__ . '/partials/post-card.php'; ?>
     <?php endforeach; ?>
 

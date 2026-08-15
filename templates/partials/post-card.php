@@ -9,6 +9,10 @@
  *   $settings  array
  *   $siteUrl   string
  *
+ * Optional:
+ *   $isLeadCard bool  true for the one card above the fold on the first page,
+ *                     whose photo is the Largest Contentful Paint element
+ *
  * The three kinds differ structurally, not decoratively:
  *   aside  — tinted, compact, body in full, no footer
  *   photo  — image bleeds to the card edge, caption block beneath
@@ -34,12 +38,25 @@ $cardClass = 'post-card h-entry post-card--'
     <?php if ($isPhoto && !empty($post->photos)): ?>
     <?php /* The photo is the post: it leads, full-bleed to the card's edge. */ ?>
     <div class="post-card__gallery" data-count="<?= count($post->photos) ?>">
-        <?php foreach ($post->photos as $photo): ?>
-        <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
-            'class' => 'u-photo',
-            // Cards run full-bleed to the card edge, which is the feed column.
-            'sizes' => '(max-width: 44rem) 100vw, 44rem',
-        ]) ?>
+        <?php foreach ($post->photos as $i => $photo): ?>
+        <?php
+            /* ImageTag lazy-loads everything by default, which is right for a
+               feed you scroll — except for the one image that is already on
+               screen. Telling the browser to defer the Largest Contentful
+               Paint element is the opposite of what it needs, so the lead
+               card's first photo opts out and asks to be fetched early. */
+            $imgAttrs = [
+                'class' => 'u-photo',
+                // Cards run full-bleed to the card edge, which is the feed column.
+                'sizes' => '(max-width: 44rem) 100vw, 44rem',
+            ];
+            if (!empty($isLeadCard) && $i === 0) {
+                $imgAttrs['loading']       = 'eager';
+                $imgAttrs['fetchpriority'] = 'high';
+                $imgAttrs['decoding']      = 'sync';
+            }
+        ?>
+        <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], $imgAttrs) ?>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
@@ -70,8 +87,10 @@ $cardClass = 'post-card h-entry post-card--'
         <div class="post-card__photos">
             <?php foreach ($post->photos as $photo): ?>
             <figure class="post-card__photo">
-                <img class="u-photo" src="<?= Helpers::e($photo['url']) ?>"
-                     alt="<?= Helpers::e($photo['alt']) ?>" loading="lazy" decoding="async">
+                <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
+                    'class' => 'u-photo',
+                    'sizes' => '(max-width: 44rem) 100vw, 44rem',
+                ]) ?>
             </figure>
             <?php endforeach; ?>
         </div>
@@ -80,8 +99,11 @@ $cardClass = 'post-card h-entry post-card--'
         <?php if (!$isNote && !empty($post->photos)): $cardPhoto = $post->photos[0]; ?>
         <?php /* A titled post's image illustrates rather than leads: thumbnail. */ ?>
         <figure class="post-card__photo post-card__photo--thumb">
-            <img class="u-photo" src="<?= Helpers::e($cardPhoto['url']) ?>"
-                 alt="<?= Helpers::e($cardPhoto['alt']) ?>" loading="lazy" decoding="async">
+            <?= CMS\ImageTag::render($mediaDir, $cardPhoto['url'], $cardPhoto['alt'], [
+                'class' => 'u-photo',
+                // A thumbnail, so the narrow variant is plenty at any viewport.
+                'sizes' => '160px',
+            ]) ?>
         </figure>
         <?php endif; ?>
 

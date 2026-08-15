@@ -1151,25 +1151,49 @@ class Post
      */
     public static function promoteScheduled(Database $db): array
     {
-        $due = $db->select(
-            "SELECT id FROM posts
-              WHERE status = 'scheduled'
-                AND deleted_at IS NULL
-                AND published_at <= datetime('now')"
-        );
+        // Select and update in one immediate transaction. Apart it was a race:
+        // the cron runner and a web request arriving together both read the
+        // same due rows, both returned those ids, and the caller syndicates
+        // whatever it is handed — so the post went out to Mastodon, Bluesky and
+        // Pixelfed twice. The window is small and the consequence is public,
+        // which is the worst combination to leave to luck.
+        //
+        // The UPDATE repeats the status predicate so it can only ever move rows
+        // that are still scheduled, and the returned ids are filtered to what
+        // was actually changed. Belt and braces: with BEGIN IMMEDIATE the
+        // second caller cannot see the row as scheduled at all, but that keeps
+        // this correct even if someone later loosens the transaction.
+        return $db->transaction(static function () use ($db): array {
+            $due = $db->select(
+                "SELECT id FROM posts
+                  WHERE status = 'scheduled'
+                    AND deleted_at IS NULL
+                    AND published_at <= datetime('now')"
+            );
 
-        if (empty($due)) {
-            return [];
-        }
+            if (empty($due)) {
+                return [];
+            }
 
-        $ids          = array_column($due, 'id');
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $db->exec(
-            "UPDATE posts SET status = 'published', updated_at = ? WHERE id IN ($placeholders)",
-            array_merge([date('Y-m-d H:i:s')], $ids)
-        );
+            $ids          = array_map('intval', array_column($due, 'id'));
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
 
-        return $ids;
+            $db->exec(
+                "UPDATE posts
+                    SET status = 'published', updated_at = ?
+                  WHERE id IN ($placeholders)
+                    AND status = 'scheduled'",
+                array_merge([date('Y-m-d H:i:s')], $ids)
+            );
+
+            // Every id, not just the rows the UPDATE reported changing. Holding
+            // the write lock across both statements means the two always agree,
+            // but if they ever did not, the safe direction is to hand the caller
+            // too many ids rather than too few: a redundant id rebuilds a post
+            // that was already correct, while a missing one leaves a published
+            // post unbuilt and invisible to the next promotion query.
+            return $ids;
+        });
     }
 
     // ── Private ───────────────────────────────────────────────────────────────

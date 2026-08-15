@@ -33,6 +33,11 @@
         return /^https?:\/\//i.test(u) ? u : '';
     }
 
+    // Note the sizes read backwards and are not: .wm-avatar is 32px and
+    // .wm-avatar--sm is 40px in theme.css. The modifier names the *reply*
+    // avatar, which is larger than the reaction avatars it sits among. The
+    // width/height below match the stylesheet — keep them in step, they are
+    // what stops the list reflowing as the images arrive.
     function buildAvatar(a, size) {
         var cls = 'wm-avatar' + (size === 'sm' ? ' wm-avatar--sm' : '');
         var name = a.name || '?';

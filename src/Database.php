@@ -28,10 +28,23 @@ class Database
      */
     private array $settingsCache = [];
 
+    /** Whether transaction() currently holds an open BEGIN on this connection. */
+    private bool $inTransaction = false;
+
     // Increment this whenever the schema changes.
+    // No v29: a composite page_views(timestamp, is_404, url) index was written
+    // for the analytics aggregates and then dropped again. The plan looks
+    // alarming — "SCAN page_views USING INDEX idx_pv_url" ignores the time
+    // filter entirely — but that scan is ordered by url, which is what the
+    // GROUP BY needs, and SQLite kept choosing it over the composite even with
+    // 200k rows and a fresh ANALYZE. Benchmarked at that size: 142ms against
+    // 151ms per query, which is noise, in exchange for another index to
+    // maintain on every analytics beacon write. No index removes the need to
+    // aggregate a third of the table; only pre-aggregation would, and that is
+    // not worth building for a dashboard nobody loads in a loop.
     private const SCHEMA_VERSION = 28;
 
-    public function __construct(string $dbPath)
+    public function __construct(private string $dbPath)
     {
         try {
             $this->pdo = new PDO(
@@ -49,11 +62,79 @@ class Database
             // while the analytics beacon writes, say) raises SQLITE_BUSY
             // immediately instead of waiting for it to clear.
             $this->pdo->exec('PRAGMA busy_timeout=5000');
+
+            // Under WAL, NORMAL stops fsyncing on every commit and leaves
+            // durability to the checkpoint. The failure it admits is losing the
+            // last few transactions to a power cut or kernel panic — not
+            // corruption, which WAL still rules out. track.php reasoned its way
+            // to the same setting for the beacon.
+            //
+            // Measured, not assumed: a full build commits once per post for
+            // markBuilt(), and setting this made no difference to build time
+            // here (1.41–1.54s against 1.35–1.45s over five runs each) — an
+            // SSD's fsync is too cheap for 692 of them to show. Kept because it
+            // is the right default for WAL and because prod's storage is not
+            // this laptop's, not because it sped anything up. The same
+            // measurement is why the post loop is *not* wrapped in one big
+            // transaction: there was nothing to win, and holding a write lock
+            // for the length of a build would stall the analytics beacon.
+            $this->pdo->exec('PRAGMA synchronous=NORMAL');
+
+            // Free at this size, and worth having as the corpus grows.
+            $this->pdo->exec('PRAGMA cache_size=-16000');   // 16 MB, not pages
+            $this->pdo->exec('PRAGMA mmap_size=268435456'); // 256 MB ceiling
+            $this->pdo->exec('PRAGMA temp_store=MEMORY');   // ORDER BY temp B-trees
         } catch (PDOException $e) {
             throw new RuntimeException('Cannot open database: ' . $e->getMessage());
         }
 
+        $this->restrictFilePermissions($dbPath);
         $this->migrate();
+    }
+
+    /**
+     * Take group and other off the database file and its WAL sidecars.
+     *
+     * The file is created with 0644 under the usual umask, and it holds the TOTP
+     * secret in plaintext along with the Mastodon, Bluesky and Pixelfed tokens.
+     * config.php has been 0600 since bin/setup.php wrote it and data/analytics_salt
+     * since track.php created it — the database was simply missed, and the only
+     * thing standing in for it was an nginx deny rule, which is a web-layer
+     * control over a filesystem-layer secret.
+     *
+     * The WAL and shared-memory files carry the same committed rows, so they are
+     * chmod'd too; they may not exist yet, hence the file_exists() guard.
+     *
+     * Best-effort by design. A deploy where PHP does not own the file — the
+     * database written by www-data and a CLI run as somebody else — makes chmod
+     * fail, and that must not stop the CMS from opening a database it can
+     * otherwise read. @ suppresses the warning that would otherwise reach output
+     * on a public endpoint.
+     */
+    private function restrictFilePermissions(string $dbPath): void
+    {
+        foreach ([$dbPath, $dbPath . '-wal', $dbPath . '-shm'] as $path) {
+            if (!file_exists($path)) {
+                continue;
+            }
+            // Skip when already tight, so the common case costs one stat and no
+            // syscall, and a deliberately stricter mode (0400) is left alone.
+            $mode = @fileperms($path);
+            if ($mode !== false && ($mode & 0o077) === 0) {
+                continue;
+            }
+            @chmod($path, 0o600);
+        }
+    }
+
+    /**
+     * The directory holding the database, which is also where its siblings live
+     * — the analytics salt, the scheduler lock. Saves passing $config around
+     * just to rederive a path this object already knows.
+     */
+    public function dataDir(): string
+    {
+        return dirname($this->dbPath);
     }
 
     // ── Query helpers ─────────────────────────────────────────────────────────
@@ -140,6 +221,55 @@ class Database
     public function exec(string $sql, array $params = []): PDOStatement
     {
         return $this->run($sql, $params);
+    }
+
+    /**
+     * Run $fn inside an immediate transaction, returning whatever it returns.
+     *
+     * `BEGIN IMMEDIATE` rather than PDO::beginTransaction(), which issues a
+     * deferred `BEGIN`: under a deferred transaction SQLite takes no write lock
+     * until the first write, so two connections can both read, both decide to
+     * act on what they read, and only then collide — one of them getting
+     * SQLITE_BUSY at commit having already made its decision. Taking the write
+     * lock up front makes read-then-write sequences serialise properly, which
+     * is exactly what Post::promoteScheduled() needs.
+     *
+     * The busy_timeout set in the constructor applies here, so a caller that
+     * meets a held lock waits rather than failing instantly.
+     *
+     * Nested calls join the transaction already running instead of raising —
+     * a second BEGIN is an error in SQLite — so the outermost caller owns the
+     * commit.
+     *
+     * @template T
+     * @param callable():T $fn
+     * @return T
+     */
+    public function transaction(callable $fn): mixed
+    {
+        // Tracked here rather than through PDO::inTransaction(), which only
+        // knows about transactions PDO itself began — it reports false after a
+        // raw BEGIN, so relying on it made this guard a no-op and nesting threw
+        // "cannot start a transaction within a transaction".
+        if ($this->inTransaction) {
+            return $fn();
+        }
+
+        $this->pdo->exec('BEGIN IMMEDIATE');
+        $this->inTransaction = true;
+
+        try {
+            $result = $fn();
+        } catch (\Throwable $e) {
+            $this->pdo->exec('ROLLBACK');
+            $this->inTransaction = false;
+            throw $e;
+        }
+
+        $this->pdo->exec('COMMIT');
+        $this->inTransaction = false;
+
+        return $result;
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────

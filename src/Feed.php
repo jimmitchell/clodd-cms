@@ -8,6 +8,12 @@ use League\CommonMark\GithubFlavoredMarkdownConverter;
 
 class Feed
 {
+    /**
+     * <updated> for a feed with no entries: the Unix epoch, in Atom's format.
+     * Constant so an empty feed is byte-identical between builds.
+     */
+    private const EMPTY_FEED_UPDATED = '1970-01-01T00:00:00Z';
+
     private Database                            $db;
     private array                               $settings;
     private GithubFlavoredMarkdownConverter     $converter;
@@ -44,9 +50,15 @@ class Feed
         $photosById   = Post::photosForPostIds($this->db, $postIds);
         $contextsById = Post::contextsForPostIds($this->db, $postIds);
 
+        // An empty feed used to stamp date() here, so its <updated> changed on
+        // every build. That defeats writeFile()'s content comparison: five
+        // empty term feeds rewrote themselves every time, which is churn in the
+        // output tree and in whatever syncs it. A feed with no entries has
+        // nothing that can have been updated, so the epoch is the honest
+        // answer and, being constant, the file settles.
         $feedUpdated = !empty($posts)
             ? $this->atom($posts[0]['updated_at'] ?? $posts[0]['published_at'])
-            : $this->atom(date('Y-m-d H:i:s'));
+            : self::EMPTY_FEED_UPDATED;
 
         $feedId = $siteUrl ?: 'urn:uuid:' . sha1($title);
 
@@ -119,9 +131,12 @@ class Feed
 
         $posts = array_slice($posts, 0, $count);
 
+        // See the site feed above: a constant, so an empty term feed stops
+        // rewriting itself on every build. This is the case that actually
+        // occurs — a tag whose only post was unpublished keeps its feed file.
         $feedUpdated = !empty($posts)
             ? $this->atom($posts[0]->updated_at ?? $posts[0]->published_at)
-            : $this->atom(date('Y-m-d H:i:s'));
+            : self::EMPTY_FEED_UPDATED;
 
         $feedId = $siteUrl ?: 'urn:uuid:' . sha1($siteTitle);
 

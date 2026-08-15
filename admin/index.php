@@ -12,8 +12,10 @@ if (!str_starts_with($returnTo, '/indieauth.php')) {
 }
 $loginDest = $returnTo !== '' ? $returnTo : '/admin/analytics.php';
 
-// Already authenticated → go to dashboard (or back to the consent screen).
-if ($auth->isAuthenticated()) {
+// Already signed in → go to dashboard (or back to the consent screen). An idle
+// session is expired here rather than sent on to a page whose check() would
+// only bounce it straight back.
+if ($auth->sessionIsLive()) {
     header('Location: ' . $loginDest);
     exit;
 }

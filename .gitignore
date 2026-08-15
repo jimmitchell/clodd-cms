@@ -25,6 +25,7 @@ composer.phar
 /sitemap.xml
 /theme.min.css
 /theme.critical.css
+/theme.deferred.css
 /search.json
 /posts/
 /page/

@@ -194,6 +194,114 @@ final class AuthTest extends TestCase
         $this->assertTrue($auth->isCsrfValid('a-real-token'));
     }
 
+    // ── Idle timeout ──────────────────────────────────────────────────────────
+
+    /**
+     * The gap this covers: the timeout used to live only inside check(), so the
+     * endpoints that answer differently when signed out called isAuthenticated()
+     * and skipped it. indieauth.php did that on both the consent render and the
+     * approval POST — the two requests that mint `create`-scope tokens.
+     */
+    public function testSessionIsLiveRejectsAnIdleSession(): void
+    {
+        $auth = new Auth($this->config, $this->db);   // session_lifetime = 3600
+        $_SESSION = ['authenticated' => true, 'last_seen' => time() - 3601];
+
+        $this->assertFalse($auth->sessionIsLive());
+        // Expiring must clear the session, not merely report it stale, so a
+        // caller that ignores the return value cannot act on a dead one.
+        $this->assertSame([], $_SESSION);
+    }
+
+    public function testSessionIsLiveAcceptsAnActiveSessionAndRefreshesLastSeen(): void
+    {
+        $auth = new Auth($this->config, $this->db);
+        $_SESSION = ['authenticated' => true, 'last_seen' => time() - 60];
+
+        $this->assertTrue($auth->sessionIsLive());
+        $this->assertSame(time(), $_SESSION['last_seen']);
+    }
+
+    public function testSessionIsLiveRejectsAnUnauthenticatedSession(): void
+    {
+        $auth = new Auth($this->config, $this->db);
+        $_SESSION = [];
+
+        $this->assertFalse($auth->sessionIsLive());
+    }
+
+    /** A zero lifetime disables the timeout rather than expiring everything. */
+    public function testSessionIsLiveTreatsAZeroLifetimeAsNoTimeout(): void
+    {
+        $config = $this->config;
+        $config['admin']['session_lifetime'] = 0;
+        $auth = new Auth($config, $this->db);
+        $_SESSION = ['authenticated' => true, 'last_seen' => time() - 999999];
+
+        $this->assertTrue($auth->sessionIsLive());
+    }
+
+    // ── Passkeys ──────────────────────────────────────────────────────────────
+
+    /**
+     * A passkey signs the owner in on its own — past the password and past TOTP,
+     * because passkeyAuthVerify() never consults isTotpEnabled(). With
+     * userVerification merely 'preferred', an authenticator that declines to ask
+     * for a PIN or biometric reduced admin login to possession of the key alone.
+     * 'required' is what keeps that path two-factor.
+     */
+    public function testRegistrationOptionsRequireUserVerification(): void
+    {
+        $auth    = new Auth($this->config, $this->db);
+        $options = json_decode($auth->passkeyRegisterOptions(), true);
+
+        $this->assertSame(
+            'required',
+            $options['publicKey']['authenticatorSelection']['userVerification'] ?? null
+        );
+    }
+
+    public function testAuthenticationOptionsRequireUserVerification(): void
+    {
+        $auth    = new Auth($this->config, $this->db);
+        $options = json_decode($auth->passkeyAuthOptions(), true);
+
+        $this->assertSame('required', $options['publicKey']['userVerification'] ?? null);
+    }
+
+    // ── Database file permissions ─────────────────────────────────────────────
+
+    /**
+     * The database stores the TOTP secret in plaintext plus the Mastodon,
+     * Bluesky and Pixelfed tokens. config.php and data/analytics_salt were
+     * already 0600; the database was created at the umask default of 0644 with
+     * only an nginx deny rule standing in for file permissions.
+     */
+    public function testOpeningTheDatabaseTakesGroupAndOtherOffTheFile(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'clodd_perm_') . '.db';
+        touch($path);
+        chmod($path, 0644);
+
+        new Database($path);
+        clearstatcache();
+
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            if (!file_exists($file)) {
+                continue;
+            }
+            $this->assertSame(
+                0,
+                fileperms($file) & 0o077,
+                basename($file) . ' must not be readable by group or other'
+            );
+        }
+
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            @unlink($file);
+        }
+    }
+
     // ── Schema ────────────────────────────────────────────────────────────────
 
     public function testEveryRecordedAttemptCarriesAScope(): void
@@ -202,6 +310,35 @@ final class AuthTest extends TestCase
 
         $row = $this->db->selectOne("SELECT scope FROM login_attempts LIMIT 1");
         $this->assertSame(Auth::SCOPE_API, $row['scope']);
+    }
+
+    /**
+     * Settings → Logs names each surface, and an unlabelled scope falls back to
+     * printing the raw constant. Adding a SCOPE_* without a label is easy to
+     * miss, so pin the two together.
+     */
+    public function testEveryScopeConstantHasALogsLabel(): void
+    {
+        $scopes = array_filter(
+            (new \ReflectionClass(Auth::class))->getConstants(),
+            fn($v, $k) => str_starts_with($k, 'SCOPE_'),
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        // Re-run the handler's label table in isolation: it is a plain array
+        // literal, so eval-free extraction keeps this honest without including
+        // a file that expects $db and a session.
+        $source = file_get_contents(__DIR__ . '/../admin/partials/settings/logs.handler.php');
+        preg_match('/\$scopeLabels = \[(.*?)\n\];/s', $source, $m);
+        $this->assertNotEmpty($m, 'logs.handler.php must define $scopeLabels');
+
+        foreach ($scopes as $name => $value) {
+            $this->assertStringContainsString(
+                'Auth::' . $name . ' ',
+                $m[1],
+                "Auth::{$name} has no label in the Logs tab"
+            );
+        }
     }
 
     public function testScopeDefaultsToAdminForRowsWrittenWithoutOne(): void

@@ -30,6 +30,19 @@ class SafeHttp
     public const DEFAULT_MAX_HOPS = 4;
 
     /**
+     * Default ceiling on a response body, in bytes.
+     *
+     * Every body here comes from a host we did not choose, and request() buffers
+     * it in memory. A caller that passes its own CURLOPT_MAXFILESIZE still wins
+     * — the options array is merged over these defaults — so this only decides
+     * what happens when someone forgets, which sendPing() did.
+     *
+     * curl applies this to the running transfer, not only to a declared
+     * Content-Length, so a chunked reply is bounded too (verified on 8.21).
+     */
+    public const DEFAULT_MAX_BYTES = 5_242_880;
+
+    /**
      * Perform a validated request, following redirects manually.
      *
      * $curlOpts is merged over the safe defaults; the options that enforce the
@@ -61,6 +74,7 @@ class SafeHttp
                 CURLOPT_TIMEOUT        => $timeout,
                 CURLOPT_CONNECTTIMEOUT => $timeout,
                 CURLOPT_HEADER         => true,
+                CURLOPT_MAXFILESIZE    => self::DEFAULT_MAX_BYTES,
                 CURLOPT_USERAGENT      => self::userAgent(),
             ]);
 
@@ -152,6 +166,7 @@ class SafeHttp
             curl_setopt_array($ch, $curlOpts + [
                 CURLOPT_TIMEOUT        => $timeout,
                 CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_MAXFILESIZE    => self::DEFAULT_MAX_BYTES,
                 CURLOPT_USERAGENT      => self::userAgent(),
             ]);
 

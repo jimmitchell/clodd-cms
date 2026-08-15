@@ -109,6 +109,27 @@ class Helpers
     }
 
     /**
+     * Hold a URL to the two shapes a URL in this CMS can legitimately take:
+     * absolute http(s), or a path rooted on this site. Returns '' for anything
+     * else, so callers can fall back rather than emit it.
+     *
+     * e() stops attribute breakout but says nothing about the scheme, and a
+     * `javascript:` value in an href is a working XSS the moment someone clicks
+     * it. Escaping and scheme-checking are separate jobs; this is the second
+     * one, and the result still needs e() before it reaches markup.
+     *
+     * The leading-`/` form deliberately requires a second character that is not
+     * a slash: `//evil.example` is protocol-relative, which a browser resolves
+     * to a foreign origin, not to a path on this site.
+     */
+    public static function safeUrl(?string $url): string
+    {
+        $url = trim((string) $url);
+
+        return preg_match('#^(https?://|/[^/])#i', $url) === 1 ? $url : '';
+    }
+
+    /**
      * Wrap a value in a CDATA section, safely.
      *
      * CDATA has exactly one escape concern: the section ends at the first `]]>`,
