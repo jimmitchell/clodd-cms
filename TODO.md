@@ -1,5 +1,25 @@
 # Clodd CMS — Improvement TODO List
 
+## Bugs
+
+- [ ] **A scheduled post sent over XML-RPC publishes immediately.** Confirmed on prod 2026-08-15, right after the 1.19.0 deploy. The admin path schedules correctly, so this is specific to XML-RPC — and it is almost certainly pre-existing rather than caused by 1.19.0, since none of that release touched date parsing.
+
+  The status ternary is **not** the bug. Both write paths already read the same way and both look right:
+  - `XmlRpcServer::applyStruct()` (metaWeblog) — `$post->status = strtotime($effectivePubAt) > time() ? 'scheduled' : 'published';`
+  - `XmlRpcServer::applyWpPostStruct()` (wp.newPost) — identical line.
+
+  The suspect is one line above each, where `$pubAt` is derived:
+  - metaWeblog reads **only** `$struct['dateCreated']`
+  - wp.newPost reads **only** `$struct['post_date']`
+
+  When the field is absent, `$pubAt` is null and `$effectivePubAt` falls back to `date('Y-m-d H:i:s')` — *now* — so the post publishes immediately. That is exactly the observed symptom. Most WordPress clients send **`date_created_gmt`** (and `post_date_gmt`) alongside or *instead of* the local-time field, and neither path looks at the GMT variant at all.
+
+  Second, less likely suspect: `XmlRpc::parseDate()` treats a naked timestamp as site-local. A client sending UTC without a `Z` would be misread, though for most timezones that pushes the date further into the future rather than into the past, so it would not produce an immediate publish on its own.
+
+  To fix: log `$rawDate` and the resolved `$effectivePubAt` for one scheduled call to see which field the client actually sends, then accept the `_gmt` variants (parsing those as UTC regardless of site timezone). Worth a test that a struct carrying only `date_created_gmt` still yields `scheduled`.
+
+  Which client was used matters — MarsEdit vs something else — since it decides which of the two paths ran.
+
 ## Security
 
 - [x] **Atomic config.php writes** — `admin/account.php` writes password changes with a temp file + rename pattern; wrap with `flock()` to prevent race conditions during concurrent reads
