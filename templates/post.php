@@ -95,7 +95,21 @@ ob_start();
              came for the pictures should be able to open them — the same
              affordance an image written into the body has. */ ?>
     <div class="post__photos" data-count="<?= count($post->photos) ?>">
-        <?php foreach ($post->photos as $photo): ?>
+        <?php foreach ($post->photos as $photoIndex => $photo): ?>
+        <?php
+            /* On a photo post's own page the first picture is the Largest
+               Contentful Paint element, so it must not be lazy-loaded. The
+               rest of the set stays deferred. */
+            $imgAttrs = [
+                'class' => 'u-photo',
+                'sizes' => '(max-width: 44rem) 100vw, 44rem',
+            ];
+            if ($photoIndex === 0) {
+                $imgAttrs['loading']       = 'eager';
+                $imgAttrs['fetchpriority'] = 'high';
+                $imgAttrs['decoding']      = 'sync';
+            }
+        ?>
         <?php /* Micropub refuses a photo URL that is not http(s) or site-rooted,
                  so this is a backstop for rows stored before that check existed.
                  Without a usable href there is nothing to link to, so the figure
@@ -104,16 +118,10 @@ ob_start();
         <figure class="post__photo">
             <?php if ($photoHref !== ''): ?>
             <a href="<?= Helpers::e($photoHref) ?>" class="post__photo-link" data-gallery-item>
-                <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
-                    'class' => 'u-photo',
-                    'sizes' => '(max-width: 44rem) 100vw, 44rem',
-                ]) ?>
+                <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], $imgAttrs) ?>
             </a>
             <?php else: ?>
-            <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
-                'class' => 'u-photo',
-                'sizes' => '(max-width: 44rem) 100vw, 44rem',
-            ]) ?>
+            <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], $imgAttrs) ?>
             <?php endif; ?>
         </figure>
         <?php endforeach; ?>

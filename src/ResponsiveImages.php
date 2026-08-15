@@ -66,6 +66,47 @@ final class ResponsiveImages
     }
 
     /**
+     * Take the lazy loading off the first `<img>` in $html.
+     *
+     * ImageTag defers everything, which is right for a feed you scroll and
+     * exactly wrong for the one image already on screen: telling the browser to
+     * delay the Largest Contentful Paint element is the opposite of what it
+     * needs. A photo post's picture is not always an attached u-photo row —
+     * plenty are written inline in the body — so the lead card's image often
+     * arrives here as rendered HTML rather than through a template that could
+     * pass attributes.
+     *
+     * Only the first image, and only when the caller says this block is above
+     * the fold.
+     */
+    public static function promoteFirstImage(string $html): string
+    {
+        $done = false;
+
+        $out = preg_replace_callback(
+            '#<img\b([^>]*)>#i',
+            static function (array $m) use (&$done): string {
+                if ($done) {
+                    return $m[0];
+                }
+                $done = true;
+
+                $tag = preg_replace(
+                    ['#\bloading\s*=\s*(["\']).*?\1#i', '#\bdecoding\s*=\s*(["\']).*?\1#i'],
+                    '',
+                    $m[0]
+                ) ?? $m[0];
+
+                return rtrim(substr($tag, 0, -1))
+                    . ' loading="eager" decoding="sync" fetchpriority="high">';
+            },
+            $html
+        );
+
+        return $out ?? $html;
+    }
+
+    /**
      * Re-render one tag, or hand back the original when there is nothing to
      * gain. Returning $original unchanged is always safe, so every branch that
      * cannot improve the tag takes it.

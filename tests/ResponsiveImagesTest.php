@@ -187,6 +187,51 @@ final class ResponsiveImagesTest extends TestCase
         );
     }
 
+    // ── promoteFirstImage: the LCP opt-out ────────────────────────────────────
+
+    public function testPromotingReplacesLazyWithEagerOnTheFirstImageOnly(): void
+    {
+        $html = '<p><img src="/media/a.jpg" alt="" loading="lazy" decoding="async"></p>'
+              . '<p><img src="/media/b.jpg" alt="" loading="lazy" decoding="async"></p>';
+
+        $out = ResponsiveImages::promoteFirstImage($html);
+
+        $this->assertSame(1, substr_count($out, 'loading="eager"'));
+        $this->assertSame(1, substr_count($out, 'fetchpriority="high"'));
+        // The second image keeps its lazy loading — it is below the fold.
+        $this->assertSame(1, substr_count($out, 'loading="lazy"'));
+    }
+
+    /** Leaving the old attribute behind would emit two loading= on one tag. */
+    public function testPromotingDoesNotLeaveADuplicateLoadingAttribute(): void
+    {
+        $out = ResponsiveImages::promoteFirstImage(
+            '<img src="/media/a.jpg" alt="" loading="lazy" decoding="async">'
+        );
+
+        $this->assertSame(1, substr_count($out, 'loading='));
+        $this->assertSame(1, substr_count($out, 'decoding='));
+        $this->assertStringContainsString('decoding="sync"', $out);
+    }
+
+    public function testPromotingKeepsTheRestOfTheTagIntact(): void
+    {
+        $out = ResponsiveImages::promoteFirstImage(
+            '<img class="u-photo" src="/media/a.jpg" alt="Hi" width="800" height="600" loading="lazy">'
+        );
+
+        $this->assertStringContainsString('class="u-photo"', $out);
+        $this->assertStringContainsString('src="/media/a.jpg"', $out);
+        $this->assertStringContainsString('alt="Hi"', $out);
+        $this->assertStringContainsString('width="800"', $out);
+        $this->assertStringContainsString('height="600"', $out);
+    }
+
+    public function testPromotingHtmlWithNoImagesChangesNothing(): void
+    {
+        $this->assertSame('<p>words</p>', ResponsiveImages::promoteFirstImage('<p>words</p>'));
+    }
+
     /** A gallery emits several images in one block; all of them count. */
     public function testEveryImageInABlockIsUpgraded(): void
     {

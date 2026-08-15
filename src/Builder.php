@@ -95,7 +95,15 @@ class Builder
         // Generate OG image first so the URL is available to the HTML template.
         $ogImageUrl = $this->buildOgImage($post);
 
-        $html     = $this->renderBody($post->content);
+        $html = $this->renderBody($post->content);
+
+        // On a photo post the picture is the Largest Contentful Paint element,
+        // and it is as often written inline in the body as attached as a
+        // u-photo row — templates/post.php can only reach the attached kind.
+        if ($post->isPhoto() && $post->photos === []) {
+            $html = ResponsiveImages::promoteFirstImage($html);
+        }
+
         $prevPost = Post::findPrev($this->db, $post);
         $nextPost = Post::findNext($this->db, $post);
         $rendered = $this->render('post.php', [
@@ -228,7 +236,7 @@ class Builder
             $slice    = array_slice($allPosts, ($p - 1) * $perPage, $perPage);
             $rendered = $this->render('index.php', [
                 'posts'       => $slice,
-                'postHtml'    => $this->renderNoteHtmlMap($slice),
+                'postHtml'    => $this->renderNoteHtmlMap($slice, $p === 1),
                 'currentPage' => $p,
                 'totalPages'  => $pages,
                 'totalPosts'  => $total,
@@ -381,14 +389,31 @@ class Builder
      * @param Post[] $posts
      * @return array<int,string>
      */
-    private function renderNoteHtmlMap(array $posts): array
+    private function renderNoteHtmlMap(array $posts, bool $firstIsAboveTheFold = false): array
     {
-        $map = [];
+        $map   = [];
+        $first = true;
+
         foreach ($posts as $post) {
-            if ($post->isNote() && $post->id !== null) {
-                $map[$post->id] = $this->renderBody($post->content);
+            if (!$post->isNote() || $post->id === null) {
+                $first = false;   // a standard post still occupies the lead slot
+                continue;
             }
+
+            $html = $this->renderBody($post->content);
+
+            // The lead card's picture is the Largest Contentful Paint element,
+            // and a photo post's image is as often written inline in the body
+            // as attached as a u-photo row — this is the only place that path
+            // passes through.
+            if ($first && $firstIsAboveTheFold) {
+                $html = ResponsiveImages::promoteFirstImage($html);
+            }
+
+            $map[$post->id] = $html;
+            $first = false;
         }
+
         return $map;
     }
 
@@ -696,7 +721,7 @@ class Builder
                 'type'        => $type,
                 'term'        => $term,
                 'posts'       => $slice,
-                'postHtml'    => $this->renderNoteHtmlMap($slice),
+                'postHtml'    => $this->renderNoteHtmlMap($slice, $p === 1),
                 'currentPage' => $p,
                 'totalPages'  => $totalPages,
                 'totalPosts'  => $total,

@@ -15,6 +15,9 @@ use League\CommonMark\GithubFlavoredMarkdownConverter;
  */
 class RssFeed
 {
+    /** lastBuildDate for a feed with no items: the epoch, in RFC 822. */
+    private const EMPTY_FEED_BUILD_DATE = 'Thu, 01 Jan 1970 00:00:00 GMT';
+
     private Database                            $db;
     private array                               $settings;
     private GithubFlavoredMarkdownConverter     $converter;
@@ -49,9 +52,12 @@ class RssFeed
         $photosById   = Post::photosForPostIds($this->db, $postIds);
         $contextsById = Post::contextsForPostIds($this->db, $postIds);
 
+        // Constant for an empty feed — see Feed::EMPTY_FEED_UPDATED. Stamping
+        // the current time made the file differ on every build, so it was
+        // rewritten every time however little had changed.
         $lastBuild = !empty($posts)
             ? $this->rfc822($posts[0]['updated_at'] ?? $posts[0]['published_at'])
-            : $this->rfc822(date('Y-m-d H:i:s'));
+            : self::EMPTY_FEED_BUILD_DATE;
 
         $xml  = $this->channelOpen($title, $homeUrl, $desc, $feedUrl, $lastBuild);
 
@@ -93,9 +99,10 @@ class RssFeed
 
         $posts = array_slice($posts, 0, $count);
 
+        // Constant for an empty term feed — see the site feed above.
         $lastBuild = !empty($posts)
             ? $this->rfc822($posts[0]->updated_at ?? $posts[0]->published_at)
-            : $this->rfc822(date('Y-m-d H:i:s'));
+            : self::EMPTY_FEED_BUILD_DATE;
 
         $xml = $this->channelOpen($title, $termUrl, $desc, $feedUrl, $lastBuild);
 

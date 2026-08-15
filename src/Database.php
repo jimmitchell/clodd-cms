@@ -32,6 +32,16 @@ class Database
     private bool $inTransaction = false;
 
     // Increment this whenever the schema changes.
+    // No v29: a composite page_views(timestamp, is_404, url) index was written
+    // for the analytics aggregates and then dropped again. The plan looks
+    // alarming — "SCAN page_views USING INDEX idx_pv_url" ignores the time
+    // filter entirely — but that scan is ordered by url, which is what the
+    // GROUP BY needs, and SQLite kept choosing it over the composite even with
+    // 200k rows and a fresh ANALYZE. Benchmarked at that size: 142ms against
+    // 151ms per query, which is noise, in exchange for another index to
+    // maintain on every analytics beacon write. No index removes the need to
+    // aggregate a third of the table; only pre-aggregation would, and that is
+    // not worth building for a dashboard nobody loads in a loop.
     private const SCHEMA_VERSION = 28;
 
     public function __construct(private string $dbPath)
@@ -52,6 +62,28 @@ class Database
             // while the analytics beacon writes, say) raises SQLITE_BUSY
             // immediately instead of waiting for it to clear.
             $this->pdo->exec('PRAGMA busy_timeout=5000');
+
+            // Under WAL, NORMAL stops fsyncing on every commit and leaves
+            // durability to the checkpoint. The failure it admits is losing the
+            // last few transactions to a power cut or kernel panic — not
+            // corruption, which WAL still rules out. track.php reasoned its way
+            // to the same setting for the beacon.
+            //
+            // Measured, not assumed: a full build commits once per post for
+            // markBuilt(), and setting this made no difference to build time
+            // here (1.41–1.54s against 1.35–1.45s over five runs each) — an
+            // SSD's fsync is too cheap for 692 of them to show. Kept because it
+            // is the right default for WAL and because prod's storage is not
+            // this laptop's, not because it sped anything up. The same
+            // measurement is why the post loop is *not* wrapped in one big
+            // transaction: there was nothing to win, and holding a write lock
+            // for the length of a build would stall the analytics beacon.
+            $this->pdo->exec('PRAGMA synchronous=NORMAL');
+
+            // Free at this size, and worth having as the corpus grows.
+            $this->pdo->exec('PRAGMA cache_size=-16000');   // 16 MB, not pages
+            $this->pdo->exec('PRAGMA mmap_size=268435456'); // 256 MB ceiling
+            $this->pdo->exec('PRAGMA temp_store=MEMORY');   // ORDER BY temp B-trees
         } catch (PDOException $e) {
             throw new RuntimeException('Cannot open database: ' . $e->getMessage());
         }
