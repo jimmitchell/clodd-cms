@@ -543,7 +543,7 @@ audio { width: 100%; }
     font-style: italic;
     position: relative;
     padding: 1px 1em 1em 1em;
-    background: linear-gradient(135deg, var(--color-border) 0%, var(--color-bg) 100%);
+    background: linear-gradient(135deg,var(--color-rule) 0%,var(--color-bg) 100%);
     border-left: 3px solid var(--color-link);
     margin: 1.5em 0;
     border-radius: 0;
