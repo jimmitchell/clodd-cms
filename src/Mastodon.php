@@ -459,9 +459,17 @@ class Mastodon
         $host   = $parsed['host'] ?? '';
         $port   = $parsed['port'] ?? 443;
 
-        $resolvedIp = gethostbyname($host);
-        if (filter_var($resolvedIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-            self::log("refusing to call {$host}: it resolves to {$resolvedIp}");
+        // SafeHttp's resolver rather than gethostbyname() + the two filter
+        // flags. That pair missed everything in SafeHttp::BLOCKED_CIDRS —
+        // notably 100.64.0.0/10, which is carrier-grade NAT and also Tailscale
+        // and several VPS providers' internal network — and gethostbyname()
+        // sees only the first A record, so a host with one public and one
+        // private address passed. It is also IPv4-only, uncached and has no
+        // timeout, which made it a synchronous DNS lookup on every single
+        // request; resolvePublicIp() caches per process.
+        $resolvedIp = SafeHttp::resolvePublicIp($host);
+        if ($resolvedIp === null) {
+            self::log("refusing to call {$host}: it does not resolve to a public address");
             return null;
         }
 

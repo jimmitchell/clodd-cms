@@ -77,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $snapSlug        = $post?->slug;
     $snapPublishedAt = $post?->published_at;
     $snapExcerpt     = $post?->excerpt;
+    $snapContent     = $post?->content;
     $snapPostKind    = $post?->post_kind ?? 'standard';
     $wasPublished    = $post?->status === 'published';
 
@@ -287,6 +288,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        // Everything the author needs to know is settled: the row is saved.
+        // What follows — syndication and the static rebuild — is work the
+        // browser has no reason to wait for, and waiting was expensive.
+        //
+        // A photo post's first publish is 7 to 17 HTTP round-trips with 10 to
+        // 30 second timeouts each, plus a guaranteed five seconds of sleep()
+        // while Mastodon processes the media. nginx gives this endpoint the
+        // default 60s fastcgi_read_timeout, so a slow instance produced a 504
+        // for the author with the post half-syndicated and the rebuild never
+        // run. Sending the redirect first turns that into a background problem
+        // instead of a lost save.
+        $logAction = match (true) {
+            $action === 'unpublish'                                => 'unpublish',
+            $action === 'publish' && $post->status === 'scheduled' => 'schedule',
+            $action === 'publish'                                   => 'publish',
+            $wasNew                                                => 'create',
+            default                                                => 'update',
+        };
+        $activityLog->log($logAction, 'post', $post->id, $post->title);
+
+        $label = match (true) {
+            $action === 'unpublish'                                        => 'Post unpublished.',
+            $action === 'publish' && $post->status === 'scheduled'         => 'Post scheduled.',
+            $action === 'publish'                                           => 'Post published.',
+            $action === 'draft'   && $post->status === 'published'         => 'Post updated.',
+            default                                                        => 'Draft saved.',
+        };
+        $auth->flash($label);
+
+        header('Location: /admin/post-edit.php?id=' . $post->id);
+
+        ignore_user_abort(true);
+        set_time_limit(0);
+        session_write_close();   // the flash must be stored before the flush
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+
         // Syndicate on first publish (unless opted out). One call covers every
         // network — each branch inside is guarded by its own timestamp.
         if ($isFirstPublish || $isFirstBluesky || $isFirstPixelfed) {
@@ -304,9 +343,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // networks too: nothing should be left pointing readers at a page that
         // has stopped existing. Otherwise a save of a post that is still live
         // brings its copies into line with the words as they now read.
+        // Nothing the networks display has changed, so there is nothing to
+        // rewrite. Worth checking here rather than leaving it to the clients:
+        // they each no-op only *after* fetching the remote copy to compare it,
+        // which on an ordinary typo-fix save is four HTTP round-trips whose
+        // answers are all thrown away.
+        //
+        // The payload is built from these five fields plus photos and contexts,
+        // and this handler cannot change those two — the photo and context
+        // editors are Micropub-side. Anything here that alters what a status
+        // says alters one of these.
+        $syndicatedTextChanged = $post->title        !== $snapTitle
+            || $post->slug         !== $snapSlug
+            || $post->published_at !== $snapPublishedAt
+            || $post->excerpt      !== $snapExcerpt
+            || $post->content      !== $snapContent;
+
         if ($leftPublicSite) {
             $syndication->remove($post);
-        } elseif ($post->status === 'published') {
+        } elseif ($post->status === 'published' && $syndicatedTextChanged) {
             $syndication->update($post);
         }
 
@@ -363,25 +418,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         // A post that has never been public needs no build either way.
 
-        $logAction = match (true) {
-            $action === 'unpublish'                                => 'unpublish',
-            $action === 'publish' && $post->status === 'scheduled' => 'schedule',
-            $action === 'publish'                                   => 'publish',
-            $wasNew                                                => 'create',
-            default                                                => 'update',
-        };
-        $activityLog->log($logAction, 'post', $post->id, $post->title);
-
-        $label = match (true) {
-            $action === 'unpublish'                                        => 'Post unpublished.',
-            $action === 'publish' && $post->status === 'scheduled'         => 'Post scheduled.',
-            $action === 'publish'                                           => 'Post published.',
-            $action === 'draft'   && $post->status === 'published'         => 'Post updated.',
-            default                                                        => 'Draft saved.',
-        };
-        $auth->flash($label);
-
-        header('Location: /admin/post-edit.php?id=' . $post->id);
         exit;
     }
 }
