@@ -269,6 +269,39 @@ final class AuthTest extends TestCase
         $this->assertSame('required', $options['publicKey']['userVerification'] ?? null);
     }
 
+    // ── Database file permissions ─────────────────────────────────────────────
+
+    /**
+     * The database stores the TOTP secret in plaintext plus the Mastodon,
+     * Bluesky and Pixelfed tokens. config.php and data/analytics_salt were
+     * already 0600; the database was created at the umask default of 0644 with
+     * only an nginx deny rule standing in for file permissions.
+     */
+    public function testOpeningTheDatabaseTakesGroupAndOtherOffTheFile(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'clodd_perm_') . '.db';
+        touch($path);
+        chmod($path, 0644);
+
+        new Database($path);
+        clearstatcache();
+
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            if (!file_exists($file)) {
+                continue;
+            }
+            $this->assertSame(
+                0,
+                fileperms($file) & 0o077,
+                basename($file) . ' must not be readable by group or other'
+            );
+        }
+
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            @unlink($file);
+        }
+    }
+
     // ── Schema ────────────────────────────────────────────────────────────────
 
     public function testEveryRecordedAttemptCarriesAScope(): void

@@ -75,10 +75,21 @@ chown -R deploy:www-data /var/www/cms
 chmod 775 /var/www/cms/data
 chmod 775 /var/www/cms/content/media
 
-# Restrict the SQLite database so only the www-data group can read/write it.
-# Other users on the server must not be able to read the database directly.
-# Run this after setup.php has created data/cms.db:
-chmod 660 /var/www/cms/data/cms.db
+# Restrict the SQLite database to its owner. It stores the TOTP secret in
+# plaintext alongside the Mastodon, Bluesky and Pixelfed tokens, so no other
+# user on the server should be able to read it — and the nginx deny rule is a
+# web-layer control, which is no help to a local reader.
+#
+# The CMS now applies this itself every time it opens the database (see
+# Database::restrictFilePermissions()), including the -wal and -shm sidecars,
+# which hold the same committed rows. Setting it here just means it is right
+# before the first request rather than after.
+#
+# The database must therefore be owned by the PHP-FPM user. That is already
+# required: run every CLI script as `sudo -u www-data php bin/…`, because a
+# sidecar left owned by another user takes the whole site down with a 500.
+# Root-owned cron jobs (the backup below) read it regardless of mode.
+chmod 600 /var/www/cms/data/cms.db
 
 # config.php holds the admin bcrypt hash — the web server needs to read it,
 # nobody else does. Created by hand it would inherit the default umask (644).

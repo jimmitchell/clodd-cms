@@ -53,7 +53,43 @@ class Database
             throw new RuntimeException('Cannot open database: ' . $e->getMessage());
         }
 
+        $this->restrictFilePermissions($dbPath);
         $this->migrate();
+    }
+
+    /**
+     * Take group and other off the database file and its WAL sidecars.
+     *
+     * The file is created with 0644 under the usual umask, and it holds the TOTP
+     * secret in plaintext along with the Mastodon, Bluesky and Pixelfed tokens.
+     * config.php has been 0600 since bin/setup.php wrote it and data/analytics_salt
+     * since track.php created it — the database was simply missed, and the only
+     * thing standing in for it was an nginx deny rule, which is a web-layer
+     * control over a filesystem-layer secret.
+     *
+     * The WAL and shared-memory files carry the same committed rows, so they are
+     * chmod'd too; they may not exist yet, hence the file_exists() guard.
+     *
+     * Best-effort by design. A deploy where PHP does not own the file — the
+     * database written by www-data and a CLI run as somebody else — makes chmod
+     * fail, and that must not stop the CMS from opening a database it can
+     * otherwise read. @ suppresses the warning that would otherwise reach output
+     * on a public endpoint.
+     */
+    private function restrictFilePermissions(string $dbPath): void
+    {
+        foreach ([$dbPath, $dbPath . '-wal', $dbPath . '-shm'] as $path) {
+            if (!file_exists($path)) {
+                continue;
+            }
+            // Skip when already tight, so the common case costs one stat and no
+            // syscall, and a deliberately stricter mode (0400) is left alone.
+            $mode = @fileperms($path);
+            if ($mode !== false && ($mode & 0o077) === 0) {
+                continue;
+            }
+            @chmod($path, 0o600);
+        }
     }
 
     // ── Query helpers ─────────────────────────────────────────────────────────
