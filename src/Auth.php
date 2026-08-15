@@ -244,12 +244,14 @@ class Auth
      * Each rate-limits independently — a Micropub client burning through bad
      * bearer tokens must not lock the human out of the admin UI.
      */
-    public const SCOPE_ADMIN    = 'admin';
-    public const SCOPE_TOTP     = 'totp';
-    public const SCOPE_PASSKEY  = 'passkey';
-    public const SCOPE_MICROPUB = 'micropub';
-    public const SCOPE_API      = 'api';
-    public const SCOPE_XMLRPC   = 'xmlrpc';
+    public const SCOPE_ADMIN     = 'admin';
+    public const SCOPE_TOTP      = 'totp';
+    public const SCOPE_PASSKEY   = 'passkey';
+    public const SCOPE_MICROPUB  = 'micropub';
+    public const SCOPE_API       = 'api';
+    public const SCOPE_XMLRPC    = 'xmlrpc';
+    /** token.php and indieauth.php: unauthenticated code redemption. */
+    public const SCOPE_INDIEAUTH = 'indieauth';
 
     /** Returns true if the IP is currently locked out for the given scope. */
     public function isLockedOut(string $ip, string $scope = self::SCOPE_ADMIN): bool

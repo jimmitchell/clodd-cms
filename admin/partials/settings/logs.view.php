@@ -59,6 +59,7 @@
             <tr>
                 <th>Date / Time</th>
                 <th>IP Address</th>
+                <th>Surface</th>
                 <th style="text-align:right">Result</th>
             </tr>
         </thead>
@@ -67,6 +68,7 @@
             <tr>
                 <td><?= htmlspecialchars($fmtDate($row['attempted_at'])) ?></td>
                 <td><?= htmlspecialchars($row['ip']) ?></td>
+                <td><?= htmlspecialchars($scopeLabels[$row['scope']] ?? (string) $row['scope']) ?></td>
                 <td style="text-align:right">
                     <?php if ($row['success']): ?>
                         <span class="badge badge--success">Success</span>

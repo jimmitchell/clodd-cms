@@ -8,8 +8,16 @@ use RuntimeException;
 
 class Media
 {
-    /** MIME types the CMS will accept. */
-    private const ALLOWED_MIME = [
+    /**
+     * MIME types the CMS will accept, mapped to the extension it stores them
+     * under. Public because XmlRpcServer::xmlrpc_save_media() accepts uploads
+     * too and used to keep a hand-copied duplicate of this table — the kind of
+     * pair that silently drifts apart. One list, both doors.
+     *
+     * Note what is absent: SVG, which is a document that can carry script, and
+     * would be stored-XSS the moment it were served from our own origin.
+     */
+    public const ALLOWED_MIME = [
         'image/jpeg'      => 'jpg',
         'image/png'       => 'png',
         'image/gif'       => 'gif',
@@ -21,7 +29,7 @@ class Media
     ];
 
     /** Default max upload size in bytes (50 MB). */
-    private const DEFAULT_MAX_BYTES = 52_428_800;
+    public const DEFAULT_MAX_BYTES = 52_428_800;
 
     private Database $db;
     private string   $storageDir;

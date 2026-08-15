@@ -131,6 +131,15 @@ HTML;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['code']) && !isset($_POST['csrf_token'])) {
     header('Cache-Control: no-store');
+
+    // Metered under the same scope as token.php: this is the other door onto
+    // redeemCode(), and leaving one of the two uncounted would make the meter
+    // on the first pointless.
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    if (\CMS\Auth::isLockedOutIn($db, $config, $ip, \CMS\Auth::SCOPE_INDIEAUTH)) {
+        MicropubAuth::error('invalid_request', 'too many failed attempts; try again later', 429);
+    }
+
     $row = $indie->redeemCode(
         (string) $_POST['code'],
         (string) ($_POST['client_id'] ?? ''),
@@ -138,6 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['code']) && !isset($_P
         (string) ($_POST['code_verifier'] ?? '')
     );
     if (!$row) {
+        \CMS\Auth::recordFailureIn($db, $ip, \CMS\Auth::SCOPE_INDIEAUTH);
         MicropubAuth::error('invalid_grant', 'authorization code is invalid, expired, or already used');
     }
     MicropubAuth::json(['me' => (string) $row['me']]);

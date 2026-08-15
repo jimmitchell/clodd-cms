@@ -185,7 +185,58 @@ function api_authenticate(array $config, \CMS\Database $db): void
     }
 }
 
+/**
+ * Refuse a state-changing request that a foreign origin caused a browser to
+ * make, while leaving every non-browser client alone.
+ *
+ * The JSON routes are already safe from cross-site forms: the body is parsed
+ * only for `application/json`, which a <form> cannot produce. The media upload
+ * is the exception — it reads $_FILES, and `multipart/form-data` *is* a form
+ * encoding, so a page anywhere could POST to it and the browser would attach
+ * the Basic credentials it has cached for this realm.
+ *
+ * Checking Origin rather than demanding a token or a custom header is what
+ * keeps existing clients working: curl, the Obsidian plugin and anything else
+ * outside a browser send no Origin at all, and a same-origin fetch sends one
+ * that matches. Only a genuine cross-site request carries a foreign one, and a
+ * browser will not let a page forge it.
+ */
+function api_reject_cross_origin(string $siteUrl): void
+{
+    if (in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD', 'OPTIONS'], true)) {
+        return;
+    }
+
+    // An absent Origin means no page initiated this — curl, a CLI, a native
+    // client. A present one has to match. "null" is *not* absent: a sandboxed
+    // iframe sends it literally, and allowing it would hand the attacker the
+    // bypass, since sandbox="allow-forms" is theirs to set.
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($origin === '') {
+        return;
+    }
+
+    $allowed = array_filter([
+        rtrim($siteUrl, '/'),
+        // Fall back to the requested host so an install whose site_url is unset
+        // or stale does not lock its own admin UI out of the API.
+        isset($_SERVER['HTTP_HOST'])
+            ? (($_SERVER['HTTPS'] ?? '') !== '' || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
+                ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
+            : '',
+    ]);
+
+    foreach ($allowed as $candidate) {
+        if (strcasecmp($origin, $candidate) === 0) {
+            return;
+        }
+    }
+
+    api_error('Cross-origin requests are not allowed.', 403);
+}
+
 api_authenticate($config, $db);
+api_reject_cross_origin($db->getSetting('site_url', ''));
 
 // ── Deferred setup ──────────────────────────────────────────────────────────
 // Everything below runs only for an authenticated caller. The Scheduler drives
@@ -520,7 +571,7 @@ if ($resource === 'media' && $method === 'POST' && $id === null) {
     $media = new \CMS\Media(
         $db,
         $config['paths']['content'] . '/media',
-        (int) ($config['media']['max_bytes'] ?? 52_428_800)
+        (int) ($config['media']['max_bytes'] ?? \CMS\Media::DEFAULT_MAX_BYTES)
     );
     try {
         $result = $media->upload($upload);

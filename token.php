@@ -96,6 +96,17 @@ if ($grantType !== 'authorization_code') {
     MicropubAuth::error('unsupported_grant_type', 'grant_type must be authorization_code');
 }
 
+// Code redemption is unauthenticated and hands back a scoped bearer token, so
+// it is metered like every other auth surface. Codes are 256-bit, so this is
+// not what stops a guess — it is what stops an unbounded stream of attempts
+// from being free, and what puts the failures in front of the operator in
+// Settings → Logs. Its own scope, so a broken client here cannot lock the owner
+// out of /admin/.
+$ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+if (\CMS\Auth::isLockedOutIn($db, $config, $ip, \CMS\Auth::SCOPE_INDIEAUTH)) {
+    MicropubAuth::error('invalid_request', 'too many failed attempts; try again later', 429);
+}
+
 $row = $indie->redeemCode(
     (string) ($_POST['code'] ?? ''),
     (string) ($_POST['client_id'] ?? ''),
@@ -103,6 +114,7 @@ $row = $indie->redeemCode(
     (string) ($_POST['code_verifier'] ?? '')
 );
 if (!$row) {
+    \CMS\Auth::recordFailureIn($db, $ip, \CMS\Auth::SCOPE_INDIEAUTH);
     MicropubAuth::error('invalid_grant', 'authorization code is invalid, expired, or already used');
 }
 

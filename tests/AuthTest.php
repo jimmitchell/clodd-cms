@@ -312,6 +312,35 @@ final class AuthTest extends TestCase
         $this->assertSame(Auth::SCOPE_API, $row['scope']);
     }
 
+    /**
+     * Settings → Logs names each surface, and an unlabelled scope falls back to
+     * printing the raw constant. Adding a SCOPE_* without a label is easy to
+     * miss, so pin the two together.
+     */
+    public function testEveryScopeConstantHasALogsLabel(): void
+    {
+        $scopes = array_filter(
+            (new \ReflectionClass(Auth::class))->getConstants(),
+            fn($v, $k) => str_starts_with($k, 'SCOPE_'),
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        // Re-run the handler's label table in isolation: it is a plain array
+        // literal, so eval-free extraction keeps this honest without including
+        // a file that expects $db and a session.
+        $source = file_get_contents(__DIR__ . '/../admin/partials/settings/logs.handler.php');
+        preg_match('/\$scopeLabels = \[(.*?)\n\];/s', $source, $m);
+        $this->assertNotEmpty($m, 'logs.handler.php must define $scopeLabels');
+
+        foreach ($scopes as $name => $value) {
+            $this->assertStringContainsString(
+                'Auth::' . $name . ' ',
+                $m[1],
+                "Auth::{$name} has no label in the Logs tab"
+            );
+        }
+    }
+
     public function testScopeDefaultsToAdminForRowsWrittenWithoutOne(): void
     {
         // Pre-v24 rows migrate to 'admin', the conservative reading.
