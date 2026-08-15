@@ -147,10 +147,15 @@ if (!function_exists('_e')) {
          data-theme-pref carries the three-way preference so CSS can pick the
          toggle's icon on first paint, without waiting for deferred theme.js. -->
     <script>(function(){var d=document.documentElement;var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='light'){t='system';}d.setAttribute('data-theme-pref',t);var dark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);d.setAttribute('data-theme',dark?'dark':'light');})();</script>
+    <?php /* Critical CSS inline, the rest deferred. theme.deferred.css holds
+             only what comes after the marker: linking theme.min.css here would
+             re-send the block already inlined above, which was 4.6 KB of a
+             10.8 KB gzipped page. Falls back to the whole stylesheet when
+             there is no critical split to work with. */ ?>
     <?php if (!empty($criticalCss)): ?>
     <style><?= $criticalCss ?></style>
-    <link rel="preload" href="/theme.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="/theme.min.css"></noscript>
+    <link rel="preload" href="/theme.deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/theme.deferred.css"></noscript>
     <?php else: ?>
     <link rel="stylesheet" href="/theme.min.css">
     <?php endif; ?>

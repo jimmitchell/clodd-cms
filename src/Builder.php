@@ -459,8 +459,19 @@ class Builder
             // prefix is never processed twice.
             $critMinified = $this->minifyCss(substr($css, 0, $pos));
             $restMinified = $this->minifyCss(substr($css, $pos + strlen(self::CRITICAL_MARKER)));
+
             $this->writeFile($critDest, $critMinified);
             $this->writeFile($dest, $critMinified . $restMinified);
+
+            // The deferred half on its own. base.php inlines the critical CSS
+            // into every page and then linked theme.min.css, which *starts*
+            // with that same critical CSS — so a first visit downloaded it
+            // twice, 4.6 KB of the 10.8 KB gzipped homepage. This is what the
+            // page actually links; theme.min.css stays whole for anything that
+            // wants the stylesheet on its own, and for the no-marker fallback
+            // below.
+            $this->writeFile($this->outputDir . '/theme.deferred.css', $restMinified);
+
             $this->criticalCss = $critMinified;
         } else {
             $this->writeFile($dest, $this->minifyCss($css));
