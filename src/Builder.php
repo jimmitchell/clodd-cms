@@ -95,8 +95,7 @@ class Builder
         // Generate OG image first so the URL is available to the HTML template.
         $ogImageUrl = $this->buildOgImage($post);
 
-        $html     = $this->md->convert($post->content)->getContent();
-        $html     = $this->shortcodes->render($html);
+        $html     = $this->renderBody($post->content);
         $prevPost = Post::findPrev($this->db, $post);
         $nextPost = Post::findNext($this->db, $post);
         $rendered = $this->render('post.php', [
@@ -202,8 +201,7 @@ class Builder
             return;
         }
 
-        $html     = $this->md->convert($page->content)->getContent();
-        $html     = $this->shortcodes->render($html);
+        $html     = $this->renderBody($page->content);
         $rendered = $this->render('page.php', ['page' => $page, 'html' => $html]);
         $hash     = hash('sha256', $rendered);
 
@@ -388,7 +386,7 @@ class Builder
         $map = [];
         foreach ($posts as $post) {
             if ($post->isNote() && $post->id !== null) {
-                $map[$post->id] = $this->md->convert($post->content)->getContent();
+                $map[$post->id] = $this->renderBody($post->content);
             }
         }
         return $map;
@@ -808,8 +806,7 @@ class Builder
             $post->published_at = date('Y-m-d H:i:s');
         }
 
-        $html = $this->md->convert($post->content)->getContent();
-        $html = $this->shortcodes->render($html);
+        $html = $this->renderBody($post->content);
 
         $rendered = $this->render('post.php', [
             'post'       => $post,
@@ -831,6 +828,25 @@ class Builder
     public function markdownToHtml(string $markdown): string
     {
         return $this->md->convert($markdown)->getContent();
+    }
+
+    /**
+     * A post or page body, from Markdown to the HTML that reaches a template:
+     * convert, expand shortcodes, then upgrade images.
+     *
+     * One method because the three call sites had drifted — renderNoteHtmlMap()
+     * converted without expanding shortcodes, so a [youtube] in an aside became
+     * an embed on its permalink and literal text on the home page.
+     *
+     * Image upgrading goes last, after shortcodes have produced their own
+     * markup, so a gallery gets the same treatment as a body image.
+     */
+    private function renderBody(string $markdown): string
+    {
+        $html = $this->md->convert($markdown)->getContent();
+        $html = $this->shortcodes->render($html);
+
+        return ResponsiveImages::upgrade($html, $this->mediaDir);
     }
 
     /**
