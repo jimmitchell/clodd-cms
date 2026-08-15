@@ -246,8 +246,9 @@ api_reject_cross_origin($db->getSetting('site_url', ''));
 $builder     = new \CMS\Builder($config, $db);
 $syndication = new \CMS\Syndication($db, $config);
 
-// Promote any due scheduled posts (same as bootstrap.php does for the UI).
-(new \CMS\Scheduler($db, $builder, $syndication))->run();
+// Safety net for a stopped cron, same as bootstrap.php — a no-op while
+// bin/publish-scheduled.php keeps the heartbeat fresh.
+(new \CMS\Scheduler($db, $builder, $syndication, new \CMS\ActivityLog($db)))->tick();
 
 // ── Parse request ────────────────────────────────────────────────────────────
 

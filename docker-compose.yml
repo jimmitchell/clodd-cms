@@ -10,6 +10,26 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     restart: unless-stopped
 
+  # Scheduled posts, the same job the prod crontab runs every minute. Shares
+  # the php service's uid/gid deliberately: this writes HTML into the web root,
+  # and files owned by anyone else make the next web-triggered rebuild fail.
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www/cms
+    user: "${UID:-1000}:${GID:-1000}"
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      'while true; do
+         php /var/www/cms/bin/publish-scheduled.php --quiet || true;
+         sleep 60;
+       done'
+    depends_on:
+      - php
+    restart: unless-stopped
+
   nginx:
     image: nginx:1.27-alpine
     ports:

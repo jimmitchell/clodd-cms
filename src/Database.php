@@ -28,10 +28,13 @@ class Database
      */
     private array $settingsCache = [];
 
+    /** Whether transaction() currently holds an open BEGIN on this connection. */
+    private bool $inTransaction = false;
+
     // Increment this whenever the schema changes.
     private const SCHEMA_VERSION = 28;
 
-    public function __construct(string $dbPath)
+    public function __construct(private string $dbPath)
     {
         try {
             $this->pdo = new PDO(
@@ -90,6 +93,16 @@ class Database
             }
             @chmod($path, 0o600);
         }
+    }
+
+    /**
+     * The directory holding the database, which is also where its siblings live
+     * — the analytics salt, the scheduler lock. Saves passing $config around
+     * just to rederive a path this object already knows.
+     */
+    public function dataDir(): string
+    {
+        return dirname($this->dbPath);
     }
 
     // ── Query helpers ─────────────────────────────────────────────────────────
@@ -176,6 +189,55 @@ class Database
     public function exec(string $sql, array $params = []): PDOStatement
     {
         return $this->run($sql, $params);
+    }
+
+    /**
+     * Run $fn inside an immediate transaction, returning whatever it returns.
+     *
+     * `BEGIN IMMEDIATE` rather than PDO::beginTransaction(), which issues a
+     * deferred `BEGIN`: under a deferred transaction SQLite takes no write lock
+     * until the first write, so two connections can both read, both decide to
+     * act on what they read, and only then collide — one of them getting
+     * SQLITE_BUSY at commit having already made its decision. Taking the write
+     * lock up front makes read-then-write sequences serialise properly, which
+     * is exactly what Post::promoteScheduled() needs.
+     *
+     * The busy_timeout set in the constructor applies here, so a caller that
+     * meets a held lock waits rather than failing instantly.
+     *
+     * Nested calls join the transaction already running instead of raising —
+     * a second BEGIN is an error in SQLite — so the outermost caller owns the
+     * commit.
+     *
+     * @template T
+     * @param callable():T $fn
+     * @return T
+     */
+    public function transaction(callable $fn): mixed
+    {
+        // Tracked here rather than through PDO::inTransaction(), which only
+        // knows about transactions PDO itself began — it reports false after a
+        // raw BEGIN, so relying on it made this guard a no-op and nesting threw
+        // "cannot start a transaction within a transaction".
+        if ($this->inTransaction) {
+            return $fn();
+        }
+
+        $this->pdo->exec('BEGIN IMMEDIATE');
+        $this->inTransaction = true;
+
+        try {
+            $result = $fn();
+        } catch (\Throwable $e) {
+            $this->pdo->exec('ROLLBACK');
+            $this->inTransaction = false;
+            throw $e;
+        }
+
+        $this->pdo->exec('COMMIT');
+        $this->inTransaction = false;
+
+        return $result;
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────

@@ -248,6 +248,44 @@ The script exits with code `0` on success and `1` if any pings failed (useful fo
 
 ---
 
+## Scheduled posts (cron)
+
+**Required if you schedule posts.** Promotion used to happen only when somebody
+knocked — `admin/bootstrap.php`, `admin/api.php` and `micropub.php` each ran the
+scheduler inline — so a post set for 09:00 went live whenever the next request
+happened to arrive, and that visitor paid for the whole build and syndication.
+
+```bash
+php /var/www/cms/bin/publish-scheduled.php             # publish anything due
+php /var/www/cms/bin/publish-scheduled.php --dry-run   # list what is due, change nothing
+php /var/www/cms/bin/publish-scheduled.php --quiet     # silent unless it published or failed
+```
+
+Add to the crontab of **the same user PHP-FPM runs as** (`sudo crontab -u
+www-data -e`). This matters more here than for the other jobs: this script
+writes HTML into the web root, and files left owned by another user make the
+next web-triggered rebuild fail on permissions.
+
+```
+* * * * * /usr/bin/php /var/www/cms/bin/publish-scheduled.php --quiet >> /var/www/cms/storage/scheduler.log 2>&1
+```
+
+Every minute is deliberate — it is the resolution at which "publishes at 09:00"
+is true. A run with nothing due is two queries and a settings write.
+
+Runs are serialised by `data/scheduler.lock`, so a slow syndication call cannot
+have a second run stacked behind it, and each completed run records a heartbeat
+in the `scheduler_ran_at` setting.
+
+The web entry points keep a fallback (`Scheduler::tick()`): while the heartbeat
+is fresh they do nothing, and if it ages out they publish — after flushing the
+response, so no visitor waits on the build. **The dashboard shows a warning when
+the heartbeat has gone stale and posts are waiting**, which is how you find out
+the cron has stopped. Don't rely on the fallback as the normal path: it only
+fires when somebody happens to visit.
+
+---
+
 ## Retention pruning (cron)
 
 **Required.** `login_attempts`, `activity_log` and `page_views` grow with every

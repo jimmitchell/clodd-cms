@@ -76,6 +76,20 @@ $scheduled = $db->select(
       ORDER BY published_at ASC"
 );
 
+// Is the cron runner alive? Only asked when something is actually scheduled —
+// see Scheduler::heartbeatIsStale().
+$schedulerIsStale = $scheduler->heartbeatIsStale();
+$schedulerLastRan = 'never';
+if ($schedulerIsStale) {
+    $lastRan = $db->getSetting(\CMS\Scheduler::HEARTBEAT_KEY, '');
+    if ($lastRan !== '') {
+        $mins = intdiv($scheduler->heartbeatAgeSeconds(), 60);
+        $schedulerLastRan = $mins >= 120
+            ? intdiv($mins, 60) . ' hours ago'
+            : $mins . ' minutes ago';
+    }
+}
+
 $siteTitle = $db->getSetting('site_title', 'My CMS');
 $csrf      = $auth->csrfToken();
 
@@ -160,6 +174,16 @@ $csrf      = $auth->csrfToken();
     <?php if ($scheduled): ?>
     <section class="panel">
         <h2>Scheduled</h2>
+        <?php if ($schedulerIsStale): ?>
+        <?php /* Without this a dead cron is invisible: posts simply stop going
+                 live at their time, and the only symptom is a date that has
+                 quietly passed in the list below. */ ?>
+        <p class="alert alert--error">
+            The scheduled-post runner last ran <?= Helpers::e($schedulerLastRan) ?>.
+            These posts will not publish on time until it is running again —
+            check the <code>bin/publish-scheduled.php</code> cron job.
+        </p>
+        <?php endif; ?>
         <ul class="item-list">
             <?php foreach ($scheduled as $post): ?>
             <li>
