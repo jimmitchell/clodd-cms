@@ -277,7 +277,7 @@ final class AuthTest extends TestCase
      * already 0600; the database was created at the umask default of 0644 with
      * only an nginx deny rule standing in for file permissions.
      */
-    public function testOpeningTheDatabaseTakesGroupAndOtherOffTheFile(): void
+    public function testOpeningTheDatabaseTakesOtherAccessOffTheFile(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'clodd_perm_') . '.db';
         touch($path);
@@ -292,10 +292,54 @@ final class AuthTest extends TestCase
             }
             $this->assertSame(
                 0,
-                fileperms($file) & 0o077,
-                basename($file) . ' must not be readable by group or other'
+                fileperms($file) & 0o007,
+                basename($file) . ' must not be readable by other'
             );
         }
+
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            @unlink($file);
+        }
+    }
+
+    /**
+     * The regression that took prod down in 1.19.0. The database is owned
+     * deploy:www-data there and PHP-FPM reaches it through the group bit, so a
+     * flat chmod(0600) locked www-data out and every PHP endpoint 500'd.
+     * Whether the web user arrives as owner or as group is the deployment's
+     * choice; only world access is ours to remove.
+     */
+    public function testOpeningTheDatabaseLeavesGroupAccessAlone(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'clodd_perm_') . '.db';
+        touch($path);
+        chmod($path, 0660);
+
+        new Database($path);
+        clearstatcache();
+
+        $this->assertSame(
+            0o660,
+            fileperms($path) & 0o777,
+            'a group-readable deployment must survive opening the database'
+        );
+
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            @unlink($file);
+        }
+    }
+
+    /** 0644 loses only the world bits, so group-based installs still work. */
+    public function testWorldReadableBecomesGroupReadableNotOwnerOnly(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'clodd_perm_') . '.db';
+        touch($path);
+        chmod($path, 0664);
+
+        new Database($path);
+        clearstatcache();
+
+        $this->assertSame(0o660, fileperms($path) & 0o777);
 
         foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
             @unlink($file);

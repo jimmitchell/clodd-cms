@@ -93,23 +93,32 @@ class Database
     }
 
     /**
-     * Take group and other off the database file and its WAL sidecars.
+     * Take *other* access off the database file and its WAL sidecars.
      *
-     * The file is created with 0644 under the usual umask, and it holds the TOTP
+     * The file is created 0644 under the usual umask, and it holds the TOTP
      * secret in plaintext along with the Mastodon, Bluesky and Pixelfed tokens.
-     * config.php has been 0600 since bin/setup.php wrote it and data/analytics_salt
-     * since track.php created it — the database was simply missed, and the only
-     * thing standing in for it was an nginx deny rule, which is a web-layer
-     * control over a filesystem-layer secret.
+     * config.php has been 0600 since bin/setup.php wrote it and
+     * data/analytics_salt since track.php created it — the database was simply
+     * missed, and the only thing standing in for it was an nginx deny rule,
+     * which is a web-layer control over a filesystem-layer secret.
      *
-     * The WAL and shared-memory files carry the same committed rows, so they are
-     * chmod'd too; they may not exist yet, hence the file_exists() guard.
+     * Group access is deliberately left alone. 1.19.0 first shipped this as a
+     * flat chmod(0600) and took the site down: prod owns its files
+     * deploy:www-data and PHP-FPM was reaching the database through the *group*
+     * bit, so removing it locked www-data out entirely and every PHP endpoint
+     * 500'd. Group is a deployment's business — whether the web user reaches
+     * the file as owner or as group is a choice the install makes, and either
+     * is legitimate. "Not readable by every account on the box" is the property
+     * that was actually missing, and clearing o-rwx is the whole of it.
      *
-     * Best-effort by design. A deploy where PHP does not own the file — the
-     * database written by www-data and a CLI run as somebody else — makes chmod
-     * fail, and that must not stop the CMS from opening a database it can
-     * otherwise read. @ suppresses the warning that would otherwise reach output
-     * on a public endpoint.
+     * The WAL and shared-memory files carry the same committed rows, so they
+     * get the same treatment; SQLite creates them with the main file's mode and
+     * removes them on a clean close, hence the file_exists() guard.
+     *
+     * Best-effort by design. Where PHP does not own the file the chmod fails,
+     * and that must not stop the CMS opening a database it can otherwise read.
+     * @ suppresses the warning that would otherwise reach output on a public
+     * endpoint.
      */
     private function restrictFilePermissions(string $dbPath): void
     {
@@ -117,13 +126,22 @@ class Database
             if (!file_exists($path)) {
                 continue;
             }
-            // Skip when already tight, so the common case costs one stat and no
-            // syscall, and a deliberately stricter mode (0400) is left alone.
+
             $mode = @fileperms($path);
-            if ($mode !== false && ($mode & 0o077) === 0) {
+            if ($mode === false) {
                 continue;
             }
-            @chmod($path, 0o600);
+
+            // Already closed to other: nothing to do. The common case costs one
+            // stat and no syscall, and a mode the operator chose deliberately —
+            // 0600, 0640, 0660 — is preserved rather than normalised.
+            if (($mode & 0o007) === 0) {
+                continue;
+            }
+
+            // Clear only the other bits. Owner and group keep whatever the
+            // deployment gave them.
+            @chmod($path, $mode & 0o770);
         }
     }
 

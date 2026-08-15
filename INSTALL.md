@@ -75,21 +75,25 @@ chown -R deploy:www-data /var/www/cms
 chmod 775 /var/www/cms/data
 chmod 775 /var/www/cms/content/media
 
-# Restrict the SQLite database to its owner. It stores the TOTP secret in
-# plaintext alongside the Mastodon, Bluesky and Pixelfed tokens, so no other
-# user on the server should be able to read it — and the nginx deny rule is a
-# web-layer control, which is no help to a local reader.
+# Keep the SQLite database off-limits to other accounts on the box. It stores
+# the TOTP secret in plaintext alongside the Mastodon, Bluesky and Pixelfed
+# tokens, and the nginx deny rule is a web-layer control that is no help
+# against a local reader.
 #
-# The CMS now applies this itself every time it opens the database (see
-# Database::restrictFilePermissions()), including the -wal and -shm sidecars,
-# which hold the same committed rows. Setting it here just means it is right
-# before the first request rather than after.
+# 660 with group www-data, NOT 600: with the ownership above the web server
+# reaches the database through the group bit, so removing group access locks
+# PHP-FPM out and every PHP endpoint returns 500. (1.19.0 shipped a chmod(600)
+# that did exactly that.) If your database is owned *by* www-data rather than
+# by deploy, 600 is fine — the point is that the web user must be able to
+# reach it one way or the other.
 #
-# The database must therefore be owned by the PHP-FPM user. That is already
-# required: run every CLI script as `sudo -u www-data php bin/…`, because a
-# sidecar left owned by another user takes the whole site down with a 500.
+# The CMS clears the world bits itself every time it opens the database (see
+# Database::restrictFilePermissions()), including the -wal and -shm sidecars.
+# It never touches owner or group, so whichever of the two arrangements you
+# use survives. Setting it here just means it is right before the first request.
+#
 # Root-owned cron jobs (the backup below) read it regardless of mode.
-chmod 600 /var/www/cms/data/cms.db
+chmod 660 /var/www/cms/data/cms.db
 
 # config.php holds the admin bcrypt hash — the web server needs to read it,
 # nobody else does. Created by hand it would inherit the default umask (644).

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.19.1] — 2026-08-15
+
+### Fixed
+
+- **Opening the database no longer strips group access, which took the site down on deploy.** 1.19.0 shipped `Database::restrictFilePermissions()` as a flat `chmod(0600)` on the database and its WAL sidecars. That assumed the file is owned by the PHP-FPM user; prod owns it `deploy:www-data` at `0660` and PHP-FPM reaches it through the **group** bit, so removing group access locked www-data out of the database entirely and every PHP endpoint returned 500 — `/admin/` included. The public site stayed up, being static HTML, which is the only reason it was not worse.
+
+  The vulnerability being fixed was that the database was **world-readable** (`0644`), and clearing the world bits is the whole of it. Owner and group are now left exactly as the deployment set them, so `0644` becomes `0640`, `0664` becomes `0660`, and a mode the operator chose deliberately is preserved rather than normalised. Whether the web user arrives as owner or as group is the install's business; only world access was ever ours to remove. Two tests cover it, one asserting a `0660` deployment survives an open — the case that broke.
+
+  `INSTALL.md` goes back to recommending `chmod 660` with group `www-data`, noting that `600` is correct only where www-data owns the file itself.
+
+---
+
 ## [1.19.0] — 2026-08-15
 
 A third security and performance pass over the whole project, following 1.13.0 in July and 1.14.0 in August. The 1.15–1.18 releases added about 2,500 lines — Pixelfed syndication, the Micropub post-list query, photo posts, the lightbox — and none of it had been reviewed.
