@@ -147,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['code']) && !isset($_P
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $auth->startSession();
-    if (!$auth->isAuthenticated()) {
+    if (!$auth->sessionIsLive()) {
         http_response_code(403);
         exit('Not authenticated.');
     }
@@ -227,7 +227,7 @@ $cid    = $syntax['cid'];
 // anyway, which is why nothing below here needs to redirect errors back.
 
 $auth->startSession();
-if (!$auth->isAuthenticated()) {
+if (!$auth->sessionIsLive()) {
     header('Location: /admin/?return_to=' . urlencode($_SERVER['REQUEST_URI'] ?? '/indieauth.php'));
     exit;
 }

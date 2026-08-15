@@ -194,6 +194,81 @@ final class AuthTest extends TestCase
         $this->assertTrue($auth->isCsrfValid('a-real-token'));
     }
 
+    // ── Idle timeout ──────────────────────────────────────────────────────────
+
+    /**
+     * The gap this covers: the timeout used to live only inside check(), so the
+     * endpoints that answer differently when signed out called isAuthenticated()
+     * and skipped it. indieauth.php did that on both the consent render and the
+     * approval POST — the two requests that mint `create`-scope tokens.
+     */
+    public function testSessionIsLiveRejectsAnIdleSession(): void
+    {
+        $auth = new Auth($this->config, $this->db);   // session_lifetime = 3600
+        $_SESSION = ['authenticated' => true, 'last_seen' => time() - 3601];
+
+        $this->assertFalse($auth->sessionIsLive());
+        // Expiring must clear the session, not merely report it stale, so a
+        // caller that ignores the return value cannot act on a dead one.
+        $this->assertSame([], $_SESSION);
+    }
+
+    public function testSessionIsLiveAcceptsAnActiveSessionAndRefreshesLastSeen(): void
+    {
+        $auth = new Auth($this->config, $this->db);
+        $_SESSION = ['authenticated' => true, 'last_seen' => time() - 60];
+
+        $this->assertTrue($auth->sessionIsLive());
+        $this->assertSame(time(), $_SESSION['last_seen']);
+    }
+
+    public function testSessionIsLiveRejectsAnUnauthenticatedSession(): void
+    {
+        $auth = new Auth($this->config, $this->db);
+        $_SESSION = [];
+
+        $this->assertFalse($auth->sessionIsLive());
+    }
+
+    /** A zero lifetime disables the timeout rather than expiring everything. */
+    public function testSessionIsLiveTreatsAZeroLifetimeAsNoTimeout(): void
+    {
+        $config = $this->config;
+        $config['admin']['session_lifetime'] = 0;
+        $auth = new Auth($config, $this->db);
+        $_SESSION = ['authenticated' => true, 'last_seen' => time() - 999999];
+
+        $this->assertTrue($auth->sessionIsLive());
+    }
+
+    // ── Passkeys ──────────────────────────────────────────────────────────────
+
+    /**
+     * A passkey signs the owner in on its own — past the password and past TOTP,
+     * because passkeyAuthVerify() never consults isTotpEnabled(). With
+     * userVerification merely 'preferred', an authenticator that declines to ask
+     * for a PIN or biometric reduced admin login to possession of the key alone.
+     * 'required' is what keeps that path two-factor.
+     */
+    public function testRegistrationOptionsRequireUserVerification(): void
+    {
+        $auth    = new Auth($this->config, $this->db);
+        $options = json_decode($auth->passkeyRegisterOptions(), true);
+
+        $this->assertSame(
+            'required',
+            $options['publicKey']['authenticatorSelection']['userVerification'] ?? null
+        );
+    }
+
+    public function testAuthenticationOptionsRequireUserVerification(): void
+    {
+        $auth    = new Auth($this->config, $this->db);
+        $options = json_decode($auth->passkeyAuthOptions(), true);
+
+        $this->assertSame('required', $options['publicKey']['userVerification'] ?? null);
+    }
+
     // ── Schema ────────────────────────────────────────────────────────────────
 
     public function testEveryRecordedAttemptCarriesAScope(): void

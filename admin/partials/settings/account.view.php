@@ -202,12 +202,17 @@ use CMS\Helpers;
                         <td><?= Helpers::e($pk['last_used_at'] ?? '—') ?></td>
                         <td>
                             <form method="post" action="/admin/settings.php?tab=account"
-                                  onsubmit="return confirm('Remove this passkey?')">
+                                  onsubmit="return confirm('Remove this passkey?')"
+                                  style="display:flex;gap:.4rem;align-items:center;justify-content:flex-end">
                                 <input type="hidden" name="csrf_token"
                                        value="<?= Helpers::e($csrf) ?>">
                                 <input type="hidden" name="action" value="passkey_remove">
                                 <input type="hidden" name="passkey_id"
                                        value="<?= (int) $pk['id'] ?>">
+                                <input type="password" name="confirm_pw"
+                                       aria-label="Confirm with your password"
+                                       placeholder="Password" autocomplete="current-password"
+                                       style="max-width:9rem;margin:0">
                                 <button type="submit" class="btn btn--danger btn--sm">Remove</button>
                             </form>
                         </td>
@@ -219,9 +224,23 @@ use CMS\Helpers;
         <p style="margin-bottom:1rem">No passkeys registered yet.</p>
     <?php endif; ?>
 
-    <button type="button" class="btn btn--secondary" id="passkey-register-btn">
-        Register a new passkey
-    </button>
+    <details>
+        <summary style="cursor:pointer;font-weight:600;margin-bottom:.5rem">
+            Register a new passkey
+        </summary>
+        <p class="form-hint" style="margin-bottom:.75rem">
+            A passkey signs you in on its own, without your password or a 2FA code,
+            so confirm your password to add one.
+        </p>
+        <label for="passkey_confirm_pw">Confirm with your password</label>
+        <input type="password" id="passkey_confirm_pw"
+               autocomplete="current-password" style="max-width:20rem">
+        <div style="margin-top:.75rem">
+            <button type="button" class="btn btn--secondary" id="passkey-register-btn">
+                Register a new passkey
+            </button>
+        </div>
+    </details>
 </div>
 
 <script src="/admin/assets/admin.js"></script>
@@ -251,13 +270,33 @@ use CMS\Helpers;
         btn.disabled = false;
     }
 
+    var csrf  = <?= json_encode($csrf) ?>;
+    var pwEl  = document.getElementById('passkey_confirm_pw');
+
     btn.addEventListener('click', async function () {
+        var pw = pwEl ? pwEl.value : '';
+        if (!pw) {
+            showError('Enter your password to register a passkey.');
+            btn.disabled = false;
+            return;
+        }
+
         btn.disabled = true;
         errEl.style.display = 'none';
 
         try {
-            var optResp = await fetch('/admin/passkey-api.php?action=passkey_register_options');
-            if (!optResp.ok) throw new Error('Could not start passkey registration.');
+            // POST, not GET: the password must not land in a query string, and
+            // the server ties this re-auth to the completion call below.
+            var optResp = await fetch('/admin/passkey-api.php?action=passkey_register_options', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ csrf_token: csrf, confirm_pw: pw })
+            });
+            if (pwEl) pwEl.value = '';
+            if (!optResp.ok) {
+                var optErr = await optResp.json().catch(function () { return {}; });
+                throw new Error(optErr.error || 'Could not start passkey registration.');
+            }
             var options = await optResp.json();
 
             options.publicKey.challenge = b64urlToArrayBuffer(options.publicKey.challenge);
@@ -277,6 +316,7 @@ use CMS\Helpers;
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    csrf_token: csrf,
                     id:   credential.id,
                     type: credential.type,
                     name: name.trim() || 'Passkey',

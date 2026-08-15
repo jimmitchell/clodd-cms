@@ -24,11 +24,21 @@ register_shutdown_function(function (): void {
 /**
  * Passkey (WebAuthn) JSON API — session-based, not Basic Auth.
  *
- * GET  ?action=passkey_register_options   Generate registration challenge (auth required)
- * POST ?action=passkey_register           Complete registration (auth required)
+ * POST ?action=passkey_register_options   Generate registration challenge (password required)
+ * POST ?action=passkey_register           Complete registration (auth + fresh re-auth)
  * GET  ?action=passkey_auth_options       Generate authentication challenge (public)
- * POST ?action=passkey_auth              Verify assertion and log in (public)
+ * POST ?action=passkey_auth               Verify assertion and log in (public)
+ *
+ * A passkey outranks what it is registered from: once added it signs the owner
+ * in on its own, past both the password and TOTP. So registration is gated the
+ * way `totp_disable` is — CSRF plus the password — and the two halves of the
+ * ceremony are tied together by a short-lived session flag, so completing it
+ * needs the same re-authentication that started it. The options call is POST
+ * for that reason: a password does not belong in a query string.
  */
+
+/** How long a verified re-auth authorises a registration for. */
+const PASSKEY_REAUTH_TTL = 300;
 
 require __DIR__ . '/bootstrap.php';
 
@@ -61,10 +71,40 @@ function passkey_error(string $message, int $status = 400): never
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
 
-// ── Register options (auth required) ─────────────────────────────────────────
+/** The JSON request body, decoded once. */
+function passkey_body(): array
+{
+    static $body = null;
+    if ($body === null) {
+        $body = json_decode((string) file_get_contents('php://input'), true) ?: [];
+    }
+    return is_array($body) ? $body : [];
+}
 
-if ($action === 'passkey_register_options' && $method === 'GET') {
+// ── Register options (password required) ─────────────────────────────────────
+
+if ($action === 'passkey_register_options' && $method === 'POST') {
     $auth->check();
+
+    $body = passkey_body();
+
+    if (!$auth->isCsrfValid((string) ($body['csrf_token'] ?? ''))) {
+        passkey_error('Invalid request token. Reload the page and try again.', 403);
+    }
+
+    // Metered: this is a password check reachable from a live session, so it is
+    // a guessing oracle if left uncounted.
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    if (\CMS\Auth::isLockedOutIn($db, $config, $ip, \CMS\Auth::SCOPE_PASSKEY)) {
+        passkey_error('Too many failed attempts. Try again later.', 429);
+    }
+
+    if (!password_verify((string) ($body['confirm_pw'] ?? ''), $config['admin']['password_hash'] ?? '')) {
+        \CMS\Auth::recordFailureIn($db, $ip, \CMS\Auth::SCOPE_PASSKEY);
+        passkey_error('Password is incorrect.', 403);
+    }
+
+    $_SESSION['passkey_reauth_at'] = time();
 
     try {
         passkey_json(json_decode($auth->passkeyRegisterOptions()));
@@ -73,12 +113,25 @@ if ($action === 'passkey_register_options' && $method === 'GET') {
     }
 }
 
-// ── Register complete (auth required) ────────────────────────────────────────
+// ── Register complete (auth + fresh re-auth) ─────────────────────────────────
 
 if ($action === 'passkey_register' && $method === 'POST') {
     $auth->check();
 
-    $body = json_decode((string) file_get_contents('php://input'), true) ?? [];
+    $body = passkey_body();
+
+    if (!$auth->isCsrfValid((string) ($body['csrf_token'] ?? ''))) {
+        passkey_error('Invalid request token. Reload the page and try again.', 403);
+    }
+
+    // Consume the re-auth regardless of what happens below, so one password
+    // check can never authorise more than the one registration it started.
+    $reauthAt = (int) ($_SESSION['passkey_reauth_at'] ?? 0);
+    unset($_SESSION['passkey_reauth_at']);
+
+    if ($reauthAt === 0 || (time() - $reauthAt) > PASSKEY_REAUTH_TTL) {
+        passkey_error('Confirm your password again to register a passkey.', 403);
+    }
 
     $name              = substr(trim($body['name'] ?? 'Passkey'), 0, 100) ?: 'Passkey';
     $clientDataJSON    = b64url_decode($body['response']['clientDataJSON']    ?? '');

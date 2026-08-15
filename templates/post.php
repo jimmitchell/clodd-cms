@@ -96,13 +96,25 @@ ob_start();
              affordance an image written into the body has. */ ?>
     <div class="post__photos" data-count="<?= count($post->photos) ?>">
         <?php foreach ($post->photos as $photo): ?>
+        <?php /* Micropub refuses a photo URL that is not http(s) or site-rooted,
+                 so this is a backstop for rows stored before that check existed.
+                 Without a usable href there is nothing to link to, so the figure
+                 renders the picture alone rather than an anchor to nowhere. */ ?>
+        <?php $photoHref = Helpers::safeUrl($photo['url']); ?>
         <figure class="post__photo">
-            <a href="<?= Helpers::e($photo['url']) ?>" class="post__photo-link" data-gallery-item>
+            <?php if ($photoHref !== ''): ?>
+            <a href="<?= Helpers::e($photoHref) ?>" class="post__photo-link" data-gallery-item>
                 <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
                     'class' => 'u-photo',
                     'sizes' => '(max-width: 44rem) 100vw, 44rem',
                 ]) ?>
             </a>
+            <?php else: ?>
+            <?= CMS\ImageTag::render($mediaDir, $photo['url'], $photo['alt'], [
+                'class' => 'u-photo',
+                'sizes' => '(max-width: 44rem) 100vw, 44rem',
+            ]) ?>
+            <?php endif; ?>
         </figure>
         <?php endforeach; ?>
     </div>

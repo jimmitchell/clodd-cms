@@ -174,6 +174,13 @@ function mp_post_types(): array
  * {value, alt} objects — into photo rows for Post::savePhotos(). URLs under
  * the site's own origin are stored site-relative, matching uploads.
  *
+ * A photo URL reaches both an <img src> and, since 1.15.2, the href of the
+ * link that opens it in the lightbox. An href is a live sink: `javascript:`
+ * there is a working XSS on a public page, where in a src it is inert. The
+ * token that posted it holds `create`, which CLAUDE.md already treats as
+ * trusted — but this is one allowlist call, so refuse it at the boundary
+ * rather than rely on every future consumer to remember.
+ *
  * @return array<array{url: string, alt: string, media_id: null}>
  */
 function mp_parse_photo_values(array $vals, string $siteUrl): array
@@ -192,6 +199,11 @@ function mp_parse_photo_values(array $vals, string $siteUrl): array
         }
         if ($siteUrl !== '' && str_starts_with($url, $siteUrl . '/')) {
             $url = substr($url, strlen($siteUrl));
+        }
+        // Checked after the origin rewrite above, so a same-site absolute URL
+        // is judged in the site-relative form that is actually stored.
+        if (\CMS\Helpers::safeUrl($url) === '') {
+            continue;
         }
         $rows[] = ['url' => $url, 'alt' => $alt, 'media_id' => null];
     }

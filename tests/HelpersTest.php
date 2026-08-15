@@ -154,4 +154,48 @@ final class HelpersTest extends TestCase
         // Record keys are lowercase base32; an uppercase segment is a path, not a key.
         $this->assertNull(Helpers::blueskyRkey('https://bsky.app/profile/jim.example/post/ABC'));
     }
+
+    // ── safeUrl ───────────────────────────────────────────────────────────────
+
+    public function testSafeUrlKeepsAbsoluteHttpAndSiteRootedPaths(): void
+    {
+        $this->assertSame('https://example.com/x.jpg', Helpers::safeUrl('https://example.com/x.jpg'));
+        $this->assertSame('http://example.com/x.jpg', Helpers::safeUrl('http://example.com/x.jpg'));
+        // Scheme matching is case-insensitive; the value is returned as written.
+        $this->assertSame('HTTPS://example.com/x', Helpers::safeUrl('HTTPS://example.com/x'));
+        $this->assertSame('/media/x.jpg', Helpers::safeUrl('/media/x.jpg'));
+        $this->assertSame('/media/x.jpg', Helpers::safeUrl('  /media/x.jpg  '));
+    }
+
+    /**
+     * The reason this helper exists: a photo URL reaches an href on the public
+     * post page, where a javascript: value is a working XSS.
+     */
+    public function testSafeUrlRejectsScriptBearingSchemes(): void
+    {
+        $this->assertSame('', Helpers::safeUrl('javascript:alert(1)'));
+        $this->assertSame('', Helpers::safeUrl('JaVaScRiPt:alert(1)'));
+        $this->assertSame('', Helpers::safeUrl('data:text/html;base64,PHNjcmlwdD4='));
+        $this->assertSame('', Helpers::safeUrl('vbscript:msgbox(1)'));
+        $this->assertSame('', Helpers::safeUrl('file:///etc/passwd'));
+    }
+
+    /**
+     * "//evil.example" is protocol-relative: a browser resolves it to a foreign
+     * origin, so it must not pass as a path rooted on this site.
+     */
+    public function testSafeUrlRejectsProtocolRelativeUrls(): void
+    {
+        $this->assertSame('', Helpers::safeUrl('//evil.example/x.jpg'));
+        $this->assertSame('', Helpers::safeUrl('///evil.example/x.jpg'));
+    }
+
+    public function testSafeUrlRejectsEmptyAndRelativeValues(): void
+    {
+        $this->assertSame('', Helpers::safeUrl(''));
+        $this->assertSame('', Helpers::safeUrl(null));
+        $this->assertSame('', Helpers::safeUrl('   '));
+        // A bare relative path has no leading slash, so it is not site-rooted.
+        $this->assertSame('', Helpers::safeUrl('media/x.jpg'));
+    }
 }

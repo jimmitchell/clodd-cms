@@ -167,19 +167,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-    // ── Remove a passkey ─────────────────────────────────────────────────────
+    // ── Remove a passkey (requires password) ─────────────────────────────────
+    // Gated like totp_disable: a passkey is a sign-in credential, so adding or
+    // dropping one is an account-security change, not a preference. Removing
+    // the last one can lock the owner out of a device they were relying on.
     } elseif ($action === 'passkey_remove') {
-        $id = (int) ($_POST['passkey_id'] ?? 0);
-        if ($id > 0) {
-            $passkey = $db->selectOne("SELECT name FROM passkeys WHERE id = :id", ['id' => $id]);
-            if ($passkey !== null) {
-                $db->delete('passkeys', 'id = :id', ['id' => $id]);
-                $activityLog->log('passkey_remove', 'security', null, 'Passkey: ' . $passkey['name']);
-                $auth->flash('Passkey removed.', 'success');
+        $pw = $_POST['confirm_pw'] ?? '';
+        if (!password_verify($pw, $config['admin']['password_hash'] ?? '')) {
+            $errors[] = 'Password is incorrect.';
+        } else {
+            $id = (int) ($_POST['passkey_id'] ?? 0);
+            if ($id > 0) {
+                $passkey = $db->selectOne("SELECT name FROM passkeys WHERE id = :id", ['id' => $id]);
+                if ($passkey !== null) {
+                    $db->delete('passkeys', 'id = :id', ['id' => $id]);
+                    $activityLog->log('passkey_remove', 'security', null, 'Passkey: ' . $passkey['name']);
+                    $auth->flash('Passkey removed.', 'success');
+                }
             }
+            header('Location: /admin/settings.php?tab=account');
+            exit;
         }
-        header('Location: /admin/settings.php?tab=account');
-        exit;
     }
 }
 

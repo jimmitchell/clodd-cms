@@ -24,15 +24,12 @@ $ogImageUrl  = $ogImageUrl  ?? '';
 // The author avatar sits beside the site title. Builder inlines a 64px copy as
 // a data URI so the header costs no second request — see Builder::headerAvatar().
 // Anything it could not encode (a remote avatar, or no GD) falls back to the URL
-// as written, held to the two shapes an avatar can legitimately take: absolute
-// http(s), or a path rooted on this site. Settings are owner-written, but this
-// markup is on every public page.
+// as written, held by Helpers::safeUrl() to the two shapes an avatar can
+// legitimately take. Settings are owner-written, but this markup is on every
+// public page.
 $headerAvatar = trim((string) ($headerAvatar ?? ''));
 if ($headerAvatar === '') {
-    $headerAvatar = trim((string) ($settings['author_avatar_url'] ?? ''));
-    if ($headerAvatar !== '' && !preg_match('#^(https?://|/[^/])#i', $headerAvatar)) {
-        $headerAvatar = '';
-    }
+    $headerAvatar = CMS\Helpers::safeUrl($settings['author_avatar_url'] ?? '');
 }
 
 // Mastodon: the handle only reaches the head as a meta value here. The profile
