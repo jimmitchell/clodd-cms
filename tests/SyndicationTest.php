@@ -232,6 +232,145 @@ final class SyndicationTest extends TestCase
         $this->assertNull($reloaded->bluesky_url);
     }
 
+    // ── Is the edit actually visible? ─────────────────────────────────────────
+
+    /**
+     * Bluesky's AppView does not re-index an edited record, so putRecord
+     * answering 200 does not mean anybody can see the new words. The verdict is
+     * fetched a few minutes later, from cron, and these pin the bookkeeping that
+     * gets a post into and out of that queue — the network call itself has no
+     * seam to test against.
+     */
+    public function testAnEditIsQueuedForVerificationFiveMinutesOut(): void
+    {
+        $post = $this->savedPost();
+        $post->markBluesky('https://bsky.app/profile/jim.example/post/3kv7qabcd2s', '3kv7qabcd2s');
+
+        $before = time();
+        $post->markBlueskyUnverified();
+
+        $reloaded = Post::findById($this->db, (int) $post->id);
+        $this->assertNotNull($reloaded->bluesky_verify_at);
+
+        // UTC, because the query that reads it back compares against SQLite's
+        // datetime('now'). A local timestamp would be due early or never.
+        $due = (int) strtotime($reloaded->bluesky_verify_at . ' UTC');
+        $this->assertGreaterThanOrEqual($before + 300, $due);
+        $this->assertLessThanOrEqual(time() + 301, $due);
+    }
+
+    public function testVerificationOnlyPicksUpChecksThatHaveComeDue(): void
+    {
+        $post = $this->savedPost();
+        $post->markBluesky('https://bsky.app/profile/jim.example/post/3kv7qabcd2s', '3kv7qabcd2s');
+        $post->markBlueskyUnverified();
+
+        $this->assertSame([], $this->dueForVerification(), 'a fresh edit is not due yet');
+
+        $this->db->update(
+            'posts',
+            ['bluesky_verify_at' => gmdate('Y-m-d H:i:s', time() - 60)],
+            'id = :id',
+            ['id' => $post->id]
+        );
+
+        $this->assertSame([(int) $post->id], $this->dueForVerification());
+    }
+
+    public function testAPostWithNoRecordKeyIsNeverDueForVerification(): void
+    {
+        $post = $this->savedPost();
+        $post->markBlueskyUnverified();
+        $this->db->update(
+            'posts',
+            ['bluesky_verify_at' => gmdate('Y-m-d H:i:s', time() - 60)],
+            'id = :id',
+            ['id' => $post->id]
+        );
+
+        // Nothing addressable to ask about: markBluesky() was never called, so
+        // there is no rkey to hand the AppView.
+        $this->assertSame([], $this->dueForVerification());
+    }
+
+    public function testTheVerdictClearsTheQueueAndRecordsWhatWasSeen(): void
+    {
+        $post = $this->savedPost();
+        $post->markBluesky('https://bsky.app/profile/jim.example/post/3kv7qabcd2s', '3kv7qabcd2s');
+        $post->markBlueskyUnverified();
+
+        $post->markBlueskyVerified(false);
+        $reloaded = Post::findById($this->db, (int) $post->id);
+        $this->assertNull($reloaded->bluesky_verify_at);
+        $this->assertSame(1, $reloaded->bluesky_stale);
+
+        $post->markBlueskyUnverified();
+        $post->markBlueskyVerified(true);
+        $reloaded = Post::findById($this->db, (int) $post->id);
+        $this->assertNull($reloaded->bluesky_verify_at);
+        $this->assertSame(0, $reloaded->bluesky_stale, 'a copy seen to be current is no longer flagged');
+    }
+
+    /**
+     * An unreachable AppView is evidence of nothing. It must not clear a warning
+     * that is still true, nor raise one that was never established.
+     */
+    public function testAnUnanswerableCheckLeavesTheVerdictAlone(): void
+    {
+        $post = $this->savedPost();
+        $post->markBluesky('https://bsky.app/profile/jim.example/post/3kv7qabcd2s', '3kv7qabcd2s');
+        $post->markBlueskyUnverified();
+        $post->markBlueskyVerified(false);
+
+        $post->markBlueskyUnverified();
+        $post->markBlueskyVerified(null);
+
+        $reloaded = Post::findById($this->db, (int) $post->id);
+        $this->assertNull($reloaded->bluesky_verify_at, 'the check is spent either way');
+        $this->assertSame(1, $reloaded->bluesky_stale);
+    }
+
+    /**
+     * The badge points at a copy on Bluesky. Once that copy is gone the badge is
+     * describing nothing, so it goes with it.
+     */
+    public function testForgettingTheCopyAlsoDropsItsWarning(): void
+    {
+        $post = $this->savedPost();
+        $post->markBluesky('https://bsky.app/profile/jim.example/post/3kv7qabcd2s', '3kv7qabcd2s');
+        $post->markBlueskyUnverified();
+        $post->markBlueskyVerified(false);
+
+        $post->clearSyndication();
+
+        $reloaded = Post::findById($this->db, (int) $post->id);
+        foreach ([$post, $reloaded] as $subject) {
+            $this->assertNull($subject->bluesky_verify_at);
+            $this->assertSame(0, $subject->bluesky_stale);
+        }
+    }
+
+    /**
+     * The same predicate Syndication::verifyBluesky() runs, so the tests above
+     * pin what the cron will actually pick up.
+     *
+     * @return list<int>
+     */
+    private function dueForVerification(): array
+    {
+        $rows = $this->db->select(
+            "SELECT id
+               FROM posts
+              WHERE bluesky_verify_at IS NOT NULL
+                AND bluesky_verify_at <= datetime('now')
+                AND bluesky_rkey IS NOT NULL
+                AND deleted_at IS NULL
+              ORDER BY bluesky_verify_at"
+        );
+
+        return array_map(static fn(array $r): int => (int) $r['id'], $rows);
+    }
+
     // ── What gets sent ────────────────────────────────────────────────────────
 
     public function testAStandardPostSyndicatesItsTitleExcerptAndUrl(): void

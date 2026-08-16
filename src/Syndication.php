@@ -124,8 +124,12 @@ final class Syndication
             );
         }
 
+        // Bluesky's answer is worth keeping: a rewrite that landed in the repo
+        // still has to be indexed before anybody sees it, and it often is not.
+        // Only a write that actually happened is worth checking — an unchanged
+        // record has nothing new to surface.
         if ($post->bluesky_rkey !== null && !isset($this->justCreated['bluesky'])) {
-            $this->bluesky()?->editPost(
+            $edit = $this->bluesky()?->editPost(
                 $post->bluesky_rkey,
                 $payload['context'],
                 $payload['title'],
@@ -133,6 +137,10 @@ final class Syndication
                 $payload['url'],
                 $payload['images']
             );
+
+            if ($edit === Bluesky::EDIT_WRITTEN) {
+                $post->markBlueskyUnverified();
+            }
         }
 
         // An existing Pixelfed copy is kept current whatever the post has since
@@ -191,6 +199,59 @@ final class Syndication
         }
 
         $post->clearSyndication($mastodonGone, $blueskyGone, $pixelfedGone);
+    }
+
+    /**
+     * Ask bsky.app whether the edits written to it have actually surfaced, for
+     * every copy whose check has come due.
+     *
+     * Runs from cron (bin/publish-scheduled.php) rather than from the save that
+     * made the edit: the AppView needs a moment to index an ordinary write, so
+     * an answer taken straight after the write would be no answer at all.
+     *
+     * Returns the posts found stale, so a caller with somewhere to print can
+     * say so. A no-op when nothing is due or Bluesky is not configured.
+     *
+     * @return list<int> ids of posts bsky.app is showing an older version of
+     */
+    public function verifyBluesky(): array
+    {
+        $due = $this->db->select(
+            "SELECT id, bluesky_rkey
+               FROM posts
+              WHERE bluesky_verify_at IS NOT NULL
+                AND bluesky_verify_at <= datetime('now')
+                AND bluesky_rkey IS NOT NULL
+                AND deleted_at IS NULL
+              ORDER BY bluesky_verify_at"
+        );
+
+        if ($due === []) {
+            return [];
+        }
+
+        // One client for the batch, so the whole run signs in once.
+        $bluesky = $this->bluesky();
+        if ($bluesky === null) {
+            return [];
+        }
+
+        $stale = [];
+        foreach ($due as $row) {
+            $post = Post::findById($this->db, (int) $row['id']);
+            if ($post === null) {
+                continue;
+            }
+
+            $visible = $bluesky->isVisible((string) $row['bluesky_rkey']);
+            $post->markBlueskyVerified($visible);
+
+            if ($visible === false) {
+                $stale[] = (int) $row['id'];
+            }
+        }
+
+        return $stale;
     }
 
     // ── Private ───────────────────────────────────────────────────────────────

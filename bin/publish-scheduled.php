@@ -2,7 +2,15 @@
 <?php
 
 /**
- * Publish scheduled posts whose time has come.
+ * Publish scheduled posts whose time has come, and check that the last edit
+ * sent to Bluesky actually surfaced there.
+ *
+ * The second job rides along here rather than in a cron of its own because it
+ * wants exactly what this one already has: a minute-by-minute tick, and a
+ * Syndication instance. Bluesky's AppView does not re-index an edited record,
+ * so an edit that putRecord accepted may never reach a reader; the check runs a
+ * few minutes after the write and flags the post when it did not. See
+ * Syndication::verifyBluesky().
  *
  * Promotion used to happen only when somebody knocked: admin/bootstrap.php,
  * admin/api.php and micropub.php each ran the scheduler inline, so a post set
@@ -17,8 +25,10 @@
  *   php bin/publish-scheduled.php [--dry-run] [--quiet]
  *
  * Options:
- *   --dry-run   Report what is due without promoting, building or syndicating.
- *   --quiet     Print nothing unless something was published or went wrong.
+ *   --dry-run   Report what is due without promoting, building, syndicating or
+ *               verifying.
+ *   --quiet     Print nothing unless something was published, a Bluesky copy
+ *               came back stale, or something went wrong.
  *
  * Add to cron (every minute):
  *   * * * * * /usr/bin/php /var/www/cms/bin/publish-scheduled.php --quiet >> /var/www/cms/storage/scheduler.log 2>&1
@@ -69,10 +79,12 @@ try {
     exit(1);
 }
 
+$syndication = new Syndication($db, $config);
+
 $scheduler = new Scheduler(
     $db,
     new Builder($config, $db),
-    new Syndication($db, $config),
+    $syndication,
     new ActivityLog($db)
 );
 
@@ -107,15 +119,32 @@ try {
     exit(1);
 }
 
-if ($promoted === []) {
-    $say('[scheduler] nothing due.');
-    exit(0);
-}
-
 // Published something, so speak up even under --quiet.
 foreach ($promoted as $id) {
     $post = Post::findById($db, $id);
     echo '[scheduler] published #', $id, '  ', $post?->slug ?? '(gone)', "\n";
+}
+
+if ($promoted === []) {
+    $say('[scheduler] nothing due.');
+}
+
+// Bluesky's half of the job, and the reason this script does two things: an
+// edit written to the repo a few minutes ago either reached the AppView or did
+// not, and there is no way to know but to look. Wrapped separately so a network
+// that is down cannot make a cron run that published correctly exit non-zero.
+try {
+    $stale = $syndication->verifyBluesky();
+} catch (\Throwable $e) {
+    fwrite(STDERR, '[bluesky] verification failed: ' . $e::class . ': ' . $e->getMessage() . "\n");
+    exit(0);
+}
+
+// Worth saying even under --quiet: it is the only thing that will say it here.
+foreach ($stale as $id) {
+    $post = Post::findById($db, $id);
+    echo '[bluesky] #', $id, '  ', $post?->slug ?? '(gone)',
+         " — bsky.app is still showing the version before the last edit\n";
 }
 
 exit(0);

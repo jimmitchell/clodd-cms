@@ -205,6 +205,12 @@ $flashType = $flash['type']    ?? 'success';
                         <?= $post->status ?>
                     </span>
                     <?php endif; ?>
+                    <?php if ($post->bluesky_stale === 1): ?>
+                    <span class="badge badge--stale"
+                          title="The last edit reached your Bluesky repo but not bsky.app. Open the post for details.">
+                        Bluesky behind
+                    </span>
+                    <?php endif; ?>
                 </td>
                 <td class="meta">
                     <?= $post->published_at ? Helpers::formatDate($post->published_at, 'M j, Y g:i a', '', $timezone) : '—' ?>

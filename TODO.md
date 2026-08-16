@@ -2,7 +2,19 @@
 
 ## Bugs
 
-- [ ] **A scheduled post sent over XML-RPC publishes immediately.** Confirmed on prod 2026-08-15, right after the 1.19.0 deploy. The admin path schedules correctly, so this is specific to XML-RPC — and it is almost certainly pre-existing rather than caused by 1.19.0, since none of that release touched date parsing.
+- [ ] **A Bluesky edit is written but never seen.** Not a bug in this codebase and not fixable here: `putRecord` rewrites the record in the repo and answers 200, but Bluesky's AppView does not re-index a post record it has already indexed, so bsky.app keeps serving the original text. Confirmed 2026-08-16 across four records, the oldest edited four days earlier — the PDS held the new words in every one, the AppView the old ones.
+
+  1.20.0 stops the CMS claiming success it cannot see: the write is checked against the AppView five minutes later from cron, and a copy that came back behind gets a **Bluesky behind** badge on the post list and an explanation in the editor. Left open because the underlying behaviour is still Bluesky's, and the only thing that would actually surface an edit is delete-and-repost — a new URL, and the likes and replies on the old record abandoned. Not worth it; decide case by case when the badge appears.
+
+  Diagnosis takes two unauthenticated requests — compare what the repo holds against what readers see:
+
+  ```
+  DID=did:plc:fwhnzbkc5lnmvbtyqwut5nwy
+  curl -s "https://bsky.social/xrpc/com.atproto.repo.getRecord?repo=$DID&collection=app.bsky.feed.post&rkey=RKEY"
+  curl -s -A "facebookexternalhit/1.1" "https://bsky.app/profile/jimmitchell.org/post/RKEY" | grep og:description
+  ```
+
+- [x] **A scheduled post sent over XML-RPC publishes immediately.** Confirmed on prod 2026-08-15, right after the 1.19.0 deploy. **Fixed in 1.19.3** — the cause was the second suspect below: the `_gmt` date variants most WordPress clients send were never read, so `$pubAt` came back null and fell through to *now*. Verified in prod with MarsEdit 2026-08-16. The admin path schedules correctly, so this is specific to XML-RPC — and it is almost certainly pre-existing rather than caused by 1.19.0, since none of that release touched date parsing.
 
   The status ternary is **not** the bug. Both write paths already read the same way and both look right:
   - `XmlRpcServer::applyStruct()` (metaWeblog) — `$post->status = strtotime($effectivePubAt) > time() ? 'scheduled' : 'published';`

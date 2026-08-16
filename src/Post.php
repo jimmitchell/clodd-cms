@@ -25,6 +25,10 @@ class Post
     public ?string $bluesky_url  = null;
     public ?string $bluesky_rkey = null;
     public int     $bluesky_skip  = 0;
+    /** When to ask bsky.app whether the last edit surfaced; null once asked. */
+    public ?string $bluesky_verify_at = null;
+    /** 1 once that answer came back no — see Bluesky::isVisible(). */
+    public int     $bluesky_stale = 0;
     public ?string $pixelfed_at   = null;
     public ?string $pixelfed_url  = null;
     public ?string $pixelfed_status_id = null;
@@ -811,6 +815,52 @@ class Post
     }
 
     /**
+     * Record that the Bluesky record was rewritten and nobody has yet checked
+     * whether bsky.app is showing the new words.
+     *
+     * The delay is what makes the answer mean something: the AppView takes a
+     * few seconds to index an ordinary write, so asking immediately would call
+     * every edit stale. Verification runs from cron — see
+     * Syndication::verifyBluesky().
+     *
+     * Written with gmdate(), not date(): the due-row query compares this against
+     * SQLite's datetime('now'), which is UTC whatever the site timezone says.
+     */
+    public function markBlueskyUnverified(): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+
+        $due                     = gmdate('Y-m-d H:i:s', time() + 300);
+        $this->bluesky_verify_at = $due;
+        $this->db->update('posts', ['bluesky_verify_at' => $due], 'id = :id', ['id' => $this->id]);
+    }
+
+    /**
+     * Record what the check found: true when bsky.app is showing what the repo
+     * holds, false when it is still serving the older record, null when the
+     * question could not be answered — which leaves the previous verdict alone
+     * rather than clearing a warning on no evidence.
+     */
+    public function markBlueskyVerified(?bool $visible): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+
+        $this->bluesky_verify_at = null;
+        $cols = ['bluesky_verify_at' => null];
+
+        if ($visible !== null) {
+            $this->bluesky_stale  = $visible ? 0 : 1;
+            $cols['bluesky_stale'] = $this->bluesky_stale;
+        }
+
+        $this->db->update('posts', $cols, 'id = :id', ['id' => $this->id]);
+    }
+
+    /**
      * Record that outgoing webmentions were sent for this post.
      */
     public function markWebmentionsSent(): void
@@ -889,7 +939,17 @@ class Post
         }
         if ($bluesky) {
             $this->bluesky_at = $this->bluesky_url = $this->bluesky_rkey = null;
-            $cols += ['bluesky_at' => null, 'bluesky_url' => null, 'bluesky_rkey' => null];
+            // A copy that is gone cannot be showing the wrong words, so the
+            // pending check and the warning go with it.
+            $this->bluesky_verify_at = null;
+            $this->bluesky_stale     = 0;
+            $cols += [
+                'bluesky_at'        => null,
+                'bluesky_url'       => null,
+                'bluesky_rkey'      => null,
+                'bluesky_verify_at' => null,
+                'bluesky_stale'     => 0,
+            ];
         }
         if ($pixelfed) {
             $this->pixelfed_at = $this->pixelfed_url = $this->pixelfed_status_id = null;
@@ -1220,6 +1280,8 @@ class Post
         $post->bluesky_url   = $row['bluesky_url']  ?? null;
         $post->bluesky_rkey  = $row['bluesky_rkey'] ?? null;
         $post->bluesky_skip  = (int) ($row['bluesky_skip']  ?? 0);
+        $post->bluesky_verify_at = $row['bluesky_verify_at'] ?? null;
+        $post->bluesky_stale = (int) ($row['bluesky_stale'] ?? 0);
         $post->pixelfed_at        = $row['pixelfed_at']        ?? null;
         $post->pixelfed_url       = $row['pixelfed_url']       ?? null;
         $post->pixelfed_status_id = $row['pixelfed_status_id'] ?? null;

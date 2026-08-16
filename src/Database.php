@@ -42,7 +42,7 @@ class Database
     // maintain on every analytics beacon write. No index removes the need to
     // aggregate a third of the table; only pre-aggregation would, and that is
     // not worth building for a dashboard nobody loads in a loop.
-    private const SCHEMA_VERSION = 28;
+    private const SCHEMA_VERSION = 29;
 
     public function __construct(private string $dbPath)
     {
@@ -795,6 +795,21 @@ class Database
         $this->pdo->exec("ALTER TABLE posts ADD COLUMN pixelfed_url       TEXT");
         $this->pdo->exec("ALTER TABLE posts ADD COLUMN pixelfed_status_id TEXT");
         $this->pdo->exec("ALTER TABLE posts ADD COLUMN pixelfed_skip      INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private function applySchemaV29(): void
+    {
+        // On Bluesky a successful edit is not a visible edit. putRecord rewrites
+        // the record in the repo and answers 200, but the AppView that renders
+        // bsky.app does not re-index a post it has already seen — records edited
+        // days earlier were still serving their original text. Mastodon and
+        // Pixelfed have a real edit endpoint and have never had this problem.
+        //
+        // So the write is checked afterwards rather than trusted: verify_at is
+        // when to ask the AppView, stale is what it said. If Bluesky ever starts
+        // re-indexing, the answer changes on its own and the warning stops.
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN bluesky_verify_at DATETIME");
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN bluesky_stale     INTEGER NOT NULL DEFAULT 0");
     }
 
     /** Insert or update a single settings row. */

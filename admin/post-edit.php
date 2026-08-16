@@ -349,15 +349,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // which on an ordinary typo-fix save is four HTTP round-trips whose
         // answers are all thrown away.
         //
-        // The payload is built from these five fields plus photos and contexts,
+        // The payload is built from these six fields plus photos and contexts,
         // and this handler cannot change those two — the photo and context
         // editors are Micropub-side. Anything here that alters what a status
         // says alters one of these.
+        //
+        // post_kind belongs in the list even though no status prints it: it is
+        // what decides whether the copy links home at all, because a note
+        // syndicates as its own words with no trailer (Syndication::payload()).
+        // Flipping a post to or from an aside or a photo therefore rewrites
+        // every network's copy while touching none of the other five.
         $syndicatedTextChanged = $post->title        !== $snapTitle
             || $post->slug         !== $snapSlug
             || $post->published_at !== $snapPublishedAt
             || $post->excerpt      !== $snapExcerpt
-            || $post->content      !== $snapContent;
+            || $post->content      !== $snapContent
+            || $post->post_kind    !== $snapPostKind;
 
         if ($leftPublicSite) {
             $syndication->remove($post);
@@ -611,6 +618,13 @@ if ($post->published_at) {
                     <div style="margin-bottom:.75rem">
                         <p class="form-hint" style="margin-bottom:.25rem">&#10003; Shared to Bluesky</p>
                         <p class="form-hint" style="margin-bottom:.5rem">Saving updates the Bluesky post. Unpublishing or deleting removes it.</p>
+                        <?php if ($post->bluesky_stale === 1): ?>
+                        <p class="form-hint form-hint--warn" style="margin-bottom:.5rem">
+                            bsky.app is still showing the version before your last edit. The record in
+                            your Bluesky repo is up to date &mdash; Bluesky does not re-index a post
+                            once it has been edited, so readers there keep seeing the original.
+                        </p>
+                        <?php endif; ?>
                         <label for="bluesky_url" style="font-size:.8rem;font-weight:400;color:var(--color-muted)">Bluesky post URL</label>
                         <input type="url" id="bluesky_url" name="bluesky_url"
                                value="<?= Helpers::e($post->bluesky_url ?? '') ?>"

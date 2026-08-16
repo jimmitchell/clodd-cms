@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.20.0] — 2026-08-16
+
+Schema v29. Adds `posts.bluesky_verify_at` and `posts.bluesky_stale`; the migration runs on the first database open after deploy.
+
+### Fixed
+
+- **An edit sent to Bluesky is written but not shown, and now says so.** Editing an already-syndicated post updates the Mastodon and Pixelfed copies and appears to update the Bluesky one: `com.atproto.repo.putRecord` answers 200, `Bluesky::editPost()` returns true, nothing is logged. But atproto keeps the repo and the service that renders it apart, and Bluesky's AppView does not re-index a post record it has already seen — so bsky.app keeps serving the original text indefinitely. Four records confirmed stale on 2026-08-16, the oldest edited four days earlier; in each the PDS held the new words and the AppView the old ones.
+
+  Nothing here can make Bluesky re-index. What changes is that the CMS stops reporting success it cannot see: a rewrite that lands schedules a check five minutes out, `Syndication::verifyBluesky()` runs from the existing every-minute cron and compares the AppView's cid against the PDS's, and a copy that came back behind is flagged. The post list grows a "Bluesky behind" badge and the editor's Bluesky panel explains what happened. If Bluesky ever starts re-indexing, the check passes and the warning stops appearing on its own — nothing needs unpicking.
+
+  `editPost()` now returns `EDIT_WRITTEN` / `EDIT_UNCHANGED` / `EDIT_FAILED` rather than a bool, because an unchanged record has nothing to verify and must not be queued. Sessions are held for the life of the client, so an edit and the check that follows it sign in once.
+
+- **A lost `swapRecord` race no longer breaks every later edit.** `putRecord` is sent with `swapRecord` set to the cid just read, so a rival write is refused rather than clobbered — but a cid that changed for a benign reason (a `langs` key or a label the PDS added of its own accord) failed the same way, permanently, with no retry. The edit now re-reads the record once and recomposes against what is actually there, which keeps the guard doing its job instead of dropping it.
+
+- **Changing a post's kind left every syndicated copy stale.** `admin/post-edit.php` decides whether to re-syndicate by comparing five fields, and `post_kind` was not among them — yet it is what decides whether the copy links home at all, since a note syndicates as its own words with no trailer. Flipping a post to or from an aside or a photo therefore rewrote what Mastodon, Bluesky and Pixelfed should say while tripping none of the five, so none of them heard about it.
+
+---
+
 ## [1.19.1] — 2026-08-15
 
 ### Fixed
