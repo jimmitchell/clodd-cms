@@ -1142,8 +1142,7 @@ class XmlRpcServer
         }
 
         // Date
-        $rawDate = trim((string) ($struct['dateCreated'] ?? ''));
-        $pubAt   = $rawDate !== '' ? XmlRpc::parseDate($rawDate, $timezone) : null;
+        $pubAt = XmlRpc::parseStructDate($struct, 'dateCreated', 'date_created_gmt', $timezone);
 
         // Status
         if (!$publish) {
@@ -1559,8 +1558,7 @@ class XmlRpcServer
         }
 
         // Date
-        $rawDate = trim((string) ($struct['post_date'] ?? ''));
-        $pubAt   = $rawDate !== '' ? XmlRpc::parseDate($rawDate, $timezone) : null;
+        $pubAt = XmlRpc::parseStructDate($struct, 'post_date', 'post_date_gmt', $timezone);
 
         // Status
         $wpStat = strtolower(trim((string) ($struct['post_status'] ?? 'publish')));

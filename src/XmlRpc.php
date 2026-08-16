@@ -233,4 +233,39 @@ class XmlRpc
             return date('Y-m-d H:i:s');
         }
     }
+
+    /**
+     * Pull the publication date out of an incoming struct, or null if it carries none.
+     *
+     * WordPress clients may send the local field, the GMT field, or both, and
+     * plenty send only the GMT one. Reading just the local key meant $pubAt came
+     * back null for those clients, the caller fell back to now, and a post the
+     * author had scheduled published immediately.
+     *
+     * The GMT variant wins when present: it is unambiguous, where the local one
+     * has to be interpreted against whatever the site timezone happens to be.
+     * Null is a meaningful return — it is what lets a caller tell "no date
+     * supplied" (keep the existing published_at) from "a date that resolves to
+     * now", so do not collapse it to a default here.
+     *
+     * @param array<string,mixed> $struct
+     */
+    public static function parseStructDate(
+        array $struct,
+        string $localKey,
+        string $gmtKey,
+        string $timezone
+    ): ?string {
+        $gmt = trim((string) ($struct[$gmtKey] ?? ''));
+        if ($gmt !== '') {
+            // Parsed against UTC rather than the site timezone. An explicit
+            // offset carried in the value still wins, which is gentler than
+            // WordPress's own handling — it forces a Z onto the string.
+            return self::parseDate($gmt, 'UTC');
+        }
+
+        $local = trim((string) ($struct[$localKey] ?? ''));
+
+        return $local !== '' ? self::parseDate($local, $timezone) : null;
+    }
 }

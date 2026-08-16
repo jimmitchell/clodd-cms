@@ -209,4 +209,93 @@ final class XmlRpcTest extends TestCase
     {
         $this->assertSame('20260729T12:00:00', XmlRpc::isoDate('2026-07-29 12:00:00'));
     }
+
+    // ── Struct dates ──────────────────────────────────────────────────────────
+    //
+    // The regression these pin: a client that sends only the _gmt field left
+    // $pubAt null, so the caller fell back to now and a scheduled post went out
+    // immediately. Null must stay reachable, and only when neither key is there.
+
+    public function testStructDateReadsTheGmtFieldAsUtc(): void
+    {
+        $this->assertSame(
+            '2026-07-29 12:00:00',
+            XmlRpc::parseStructDate(
+                ['date_created_gmt' => '20260729T12:00:00'],
+                'dateCreated',
+                'date_created_gmt',
+                'America/New_York'
+            )
+        );
+    }
+
+    public function testStructDateFallsBackToTheLocalField(): void
+    {
+        $this->assertSame(
+            '2026-07-29 16:00:00',
+            XmlRpc::parseStructDate(
+                ['dateCreated' => '20260729T12:00:00'],
+                'dateCreated',
+                'date_created_gmt',
+                'America/New_York'
+            )
+        );
+    }
+
+    public function testStructDatePrefersGmtWhenBothArePresent(): void
+    {
+        // Both carry the same wall-clock time, so the reading is what separates
+        // them: as GMT it is 12:00 UTC, as New York local it would be 16:00.
+        // (An earlier version used 08:00 local, which is 12:00 UTC — the same
+        // answer either way, so it passed no matter which field was read.)
+        $this->assertSame(
+            '2026-07-29 12:00:00',
+            XmlRpc::parseStructDate(
+                [
+                    'dateCreated'      => '20260729T12:00:00',
+                    'date_created_gmt' => '20260729T12:00:00',
+                ],
+                'dateCreated',
+                'date_created_gmt',
+                'America/New_York'
+            )
+        );
+    }
+
+    public function testStructDateIsNullWhenNeitherKeyIsPresent(): void
+    {
+        $this->assertNull(
+            XmlRpc::parseStructDate(['title' => 'No date here'], 'post_date', 'post_date_gmt', 'UTC')
+        );
+    }
+
+    public function testStructDateTreatsAnEmptyValueAsAbsent(): void
+    {
+        $this->assertNull(
+            XmlRpc::parseStructDate(
+                ['post_date' => '', 'post_date_gmt' => '   '],
+                'post_date',
+                'post_date_gmt',
+                'UTC'
+            )
+        );
+    }
+
+    public function testStructDateFromGmtStillResolvesToTheFuture(): void
+    {
+        // The end-to-end shape of the bug: a GMT-only struct scheduled an hour
+        // out has to stay in the future, since that comparison is the only
+        // thing separating 'scheduled' from 'published' in XmlRpcServer.
+        $future = gmdate('Ymd\TH:i:s', time() + 3600);
+
+        $resolved = XmlRpc::parseStructDate(
+            ['post_date_gmt' => $future],
+            'post_date',
+            'post_date_gmt',
+            'America/New_York'
+        );
+
+        $this->assertNotNull($resolved);
+        $this->assertGreaterThan(time(), strtotime($resolved . ' UTC'));
+    }
 }
