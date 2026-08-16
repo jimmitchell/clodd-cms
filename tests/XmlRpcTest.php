@@ -205,6 +205,48 @@ final class XmlRpcTest extends TestCase
         );
     }
 
+    /**
+     * The shapes clients actually send.
+     *
+     * Three of these get their answer from PHP's DateTime constructor rather
+     * than from anything here: the compact-format normalisation regex is
+     * anchored at the seconds, so it declines anything with a Z or an offset
+     * glued on, and the offset check only recognises the +hh:mm spelling, not
+     * +hhmm. They parse correctly anyway. Pinned because that is incidental —
+     * tightening either regex could break them without touching a line of
+     * these tests otherwise.
+     *
+     * A naked timestamp is site-local on purpose: 'dateCreated' and 'post_date'
+     * are defined as blog-local by metaWeblog and WordPress respectively, which
+     * is the whole reason the _gmt siblings exist. Nothing in the value says
+     * otherwise, so a client that puts UTC there cannot be detected.
+     *
+     * @dataProvider dateFormatProvider
+     */
+    public function testParseDateHandlesTheFormatsClientsSend(string $iso, string $expected): void
+    {
+        $this->assertSame($expected, XmlRpc::parseDate($iso, 'America/New_York'));
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function dateFormatProvider(): array
+    {
+        return [
+            // Naked → site-local (New York is UTC-4 in July).
+            'compact'                 => ['20260729T12:00:00',        '2026-07-29 16:00:00'],
+            'fully compact'           => ['20260729T120000',          '2026-07-29 16:00:00'],
+            'extended'                => ['2026-07-29T12:00:00',      '2026-07-29 16:00:00'],
+            'space separated'         => ['2026-07-29 12:00:00',      '2026-07-29 16:00:00'],
+            // Zone indicator present → honoured, site timezone ignored.
+            'compact Z'               => ['20260729T12:00:00Z',       '2026-07-29 12:00:00'],
+            'fully compact Z'         => ['20260729T120000Z',         '2026-07-29 12:00:00'],
+            'extended Z'              => ['2026-07-29T12:00:00Z',     '2026-07-29 12:00:00'],
+            'compact offset colon'    => ['20260729T12:00:00+00:00',  '2026-07-29 12:00:00'],
+            'compact offset no colon' => ['20260729T12:00:00+0000',   '2026-07-29 12:00:00'],
+            'extended offset no colon' => ['2026-07-29T12:00:00+0000', '2026-07-29 12:00:00'],
+        ];
+    }
+
     public function testIsoDateFormatsForMarsEdit(): void
     {
         $this->assertSame('20260729T12:00:00', XmlRpc::isoDate('2026-07-29 12:00:00'));
