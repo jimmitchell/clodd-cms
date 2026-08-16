@@ -516,7 +516,9 @@ class Builder
      */
     private function syncInlineCriticalCss(string $new): array
     {
-        $pattern = '/(<style>)(.*?)(<\/style>\s*<link rel="preload" href="\/theme\.min\.css")/s';
+        // Either filename: base.php linked theme.min.css before 1.19.0 split the
+        // stylesheet, and pages generated back then are still on disk untouched.
+        $pattern = '/(<style>)(.*?)(<\/style>\s*<link rel="preload" href="\/theme\.(?:deferred|min)\.css")/s';
 
         $updated = 0;
         $current = 0;
