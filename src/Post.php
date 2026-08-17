@@ -48,6 +48,14 @@ class Post
     public array $photos = [];
     public array $contexts = [];
 
+    /**
+     * True unless this object was loaded via fromRow() and hasn't yet gone
+     * through hydrateManyTerms() — see ensureHydrated(). A freshly constructed
+     * Post is accurate by construction (save()/saveTerms()/savePhotos()/
+     * saveContexts() each keep their own slice current), so it starts true.
+     */
+    public bool $termsHydrated = true;
+
     private Database $db;
 
     public function __construct(Database $db)
@@ -1261,6 +1269,10 @@ class Post
     private static function fromRow(Database $db, array $row): self
     {
         $post               = new self($db);
+        // findPrev()/findNext() return objects straight from fromRow() without
+        // hydrating terms — flag it so a caller that renders this object as a
+        // page in its own right (not just for its title/slug) can catch that.
+        $post->termsHydrated = false;
         $post->id           = (int) $row['id'];
         $post->title        = $row['title'];
         $post->slug         = $row['slug'];
@@ -1475,6 +1487,24 @@ class Post
                     'url'  => (string) $row['url'],
                 ];
             }
+        }
+
+        foreach ($posts as $post) {
+            $post->termsHydrated = true;
+        }
+    }
+
+    /**
+     * Load categories/tags/photos/contexts for $post if it isn't already
+     * hydrated — e.g. an object returned by findPrev()/findNext(), which skip
+     * hydration since their usual purpose (nav-link title/slug) doesn't need
+     * it. Anything that renders $post as a page in its own right must call
+     * this first, since photos/categories/tags/contexts feed the template.
+     */
+    public static function ensureHydrated(Database $db, self $post): void
+    {
+        if (!$post->termsHydrated) {
+            self::hydrateManyTerms($db, [$post]);
         }
     }
 }

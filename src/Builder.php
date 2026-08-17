@@ -92,6 +92,12 @@ class Builder
             return;
         }
 
+        // $post may have come from findPrev()/findNext(), which skip hydration
+        // since they're usually only used for nav-link title/slug — but here
+        // $post is the page being rendered, so photos/categories/tags/contexts
+        // must be real.
+        Post::ensureHydrated($this->db, $post);
+
         // Generate OG image first so the URL is available to the HTML template.
         $ogImageUrl = $this->buildOgImage($post);
 
