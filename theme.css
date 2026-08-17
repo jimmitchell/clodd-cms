@@ -1187,7 +1187,7 @@ audio { width: 100%; }
 }
 
 .search-overlay__panel {
-    width: min(560px, calc(100% - 3rem));
+    width: min(700px, calc(100% - 3rem));
     margin: 18vh auto 0;
     transform: translateY(-8px);
     transition: transform .18s ease;
