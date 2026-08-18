@@ -60,7 +60,9 @@
 - [x] **Tag autocomplete** — Replace raw comma-separated tag input with a pill-style picker with autocomplete against existing tags
 - [x] **Related posts** — 1.21.0. Opt-in via Settings → Content (`show_related_posts`, default off). Up to three titled posts scored `2 × shared categories + 1 × shared tags`, ties by recency; `Post::findRelated()` / `findRelatedNeighbours()`, rendered by `templates/partials/related-posts.php` with no mf2 classes so it cannot be parsed as child entries. `Builder::buildPost()` re-renders term-sharing neighbours so a new post does not leave existing lists stale.
 
-  Worth knowing before judging it on the live site: measured against the current database, **45 of 56 titled posts have no term overlap at all** and show nothing. `post_tags` holds 12 rows sitewide and `post_categories` is dominated by *Photos* (105 posts, 2 of them titled). The feature fills in as titled posts get categorised — it is not broken, it is under-fed.
+  Verified on prod 2026-08-18: **all 10 titled posts on the first page of `/category/posts/` carry a block**, and the picks are topical rather than merely recent — *why-i-blog-the-way-i-do* draws *Social Media Hasn't Killed the Personal Blog Yet*, *Thousands of Niche Open Web Apps* and *Micro.blog Question Challenge*. Exactly one `h-entry` per page, so the block introduces no nested child entries.
+
+  Note for anyone re-measuring: `data/cms.db` in a dev checkout is **not** representative. It is full of *Test Post* / *Lorem Ipusm* rows, holds 12 `post_tags` sitewide, and its `post_categories` is dominated by *Photos* — measuring coverage against it predicted that 45 of 56 titled posts would show nothing, which is wrong for prod, where the tags are real and in active use. Sample the live site instead.
 
 - [ ] **Scheduled post notifications** — Send an email/webhook when a scheduled post is auto-published
 - [ ] **Activity log filters** — Add date range + action type filter to the Logs tab (`admin/settings.php?tab=logs`)
