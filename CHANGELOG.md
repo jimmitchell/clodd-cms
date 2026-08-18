@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.21.1] — 2026-08-18
+
+No schema change. Both fixes are to what leaves the site on first publish; nothing on the public site changes.
+
+### Fixed
+
+- **A post published from the admin editor reached Mastodon before its page existed.** Mastodon fetches the permalink to build its preview card exactly once, seconds after the status is created, and never retries a fetch that failed. `admin/post-edit.php` syndicated at the top of the save handler and did not call `buildPost()` until fifty lines later, so a first publish from a draft — which by the handler's own comment "has nothing on disk" — handed Mastodon a URL that 404'd. The card was then lost for good, on a status that reads correctly and links correctly, which is what made this look like a theming problem rather than an ordering one.
+
+  `micropub.php` and `Scheduler` have run build-then-syndicate since 1.13.3 for exactly this reason; that commit touched neither this handler nor its tests, so the editor path kept the old order for sixteen releases. Posts published from Obsidian got their cards and posts published from the editor did not.
+
+  Syndication now runs after the build, and re-renders the post once when a copy was actually made, so the page still picks up the syndication links it lists. `remove()` and `update()` moved with it to keep the three calls in one place.
+
+### Added
+
+- **Bluesky link cards.** Unlike Mastodon, Bluesky fetches nothing: its AppView renders only what the record carries, so a link posted without an `app.bsky.embed.external` embed shows as bare text forever, no matter what the page's OpenGraph tags say. `Bluesky` only ever built `app.bsky.embed.images`, for photo posts, so every titled post this CMS has ever syndicated arrived as an unadorned URL.
+
+  A titled post now carries its own card — title, excerpt and the OG image the build wrote moments earlier, uploaded as a blob rather than advertised as a URL. The thumbnail is read off local disk rather than fetched back over HTTP from our own web server, which also keeps the outbound-HTTP invariant out of it.
+
+  A record holds exactly one embed, so a photo post's pictures still win; a note has no permalink and is untouched. A thumbnail that will not upload costs the picture and not the card.
+
+  This does not backfill. Mastodon will not re-crawl a status it has already given up on, and a Bluesky card can only be added by a `putRecord` edit, which the AppView does not re-index — see the note in `CLAUDE.md`.
+
+---
+
 ## [1.21.0] — 2026-08-18
 
 No schema change. Adds one setting, `show_related_posts`, which defaults to **off** — the public site is unchanged until it is switched on in Settings → Content.

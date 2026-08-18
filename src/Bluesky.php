@@ -25,6 +25,12 @@ class Bluesky
     /** Characters the app.bsky.feed.post lexicon accepts in one record. */
     private const TEXT_LIMIT = 300;
 
+    /**
+     * How much of the excerpt a link card carries. The lexicon sets no limit,
+     * but the client shows two or three lines and drops the rest.
+     */
+    private const CARD_DESCRIPTION_LIMIT = 300;
+
     /** What editPost() did — see its docblock. */
     public const EDIT_WRITTEN   = 'written';
     public const EDIT_UNCHANGED = 'unchanged';
@@ -63,9 +69,12 @@ class Bluesky
      *         plain text — see Post::contextsText().
      * @param  array<array{path:string,mime:string,alt:string}> $images
      *         Local image files to attach — see SyndicationMedia::forPost().
+     * @param  string|null $cardImagePath
+     *         Local path to the post's OG image, used as the link card's
+     *         thumbnail. Null when the post has none (notes, or GD missing).
      * @return array{url:string,rkey:string}|null
      */
-    public function postToBluesky(string $context, string $title, string $excerpt, string $url, array $images = []): ?array
+    public function postToBluesky(string $context, string $title, string $excerpt, string $url, array $images = [], ?string $cardImagePath = null): ?array
     {
         $session = $this->createSession();
         if ($session === false) {
@@ -75,6 +84,18 @@ class Bluesky
         $text   = $this->buildText($context, $title, $excerpt, $url);
         $facets = $this->buildFacets($text, $url, ...SyndicationText::urlsIn($context));
         $embed  = $this->buildImageEmbed($session['jwt'], $images);
+
+        // Bluesky builds no preview card of its own. Unlike Mastodon, nothing
+        // on the far side ever fetches the permalink for its OpenGraph tags —
+        // the AppView renders only what the record carries, so a link posted
+        // without an embed shows as bare text forever. A titled post arrives
+        // here with $url set (a note's is ''), and that is the one to card.
+        //
+        // A record holds exactly one embed, and a photo post's pictures outrank
+        // a card for the page they are already showing.
+        if ($embed === null && $url !== '') {
+            $embed = $this->buildExternalEmbed($session['jwt'], $url, $title, $excerpt, $cardImagePath);
+        }
 
         // Every attachment failed on a post that had nothing but pictures to
         // say — an empty record would say nothing at all.
@@ -503,6 +524,45 @@ class Bluesky
         }
 
         return $items === [] ? null : ['$type' => 'app.bsky.embed.images', 'images' => $items];
+    }
+
+    /**
+     * Assemble the link card for a post that points back at its permalink.
+     *
+     * The thumbnail is uploaded from the OG image already on disk rather than
+     * fetched back over HTTP — the build wrote it moments ago, and reading the
+     * file skips a round trip to our own web server.
+     *
+     * A card with no picture still renders, so a thumbnail that will not upload
+     * costs the image and not the card.
+     */
+    private function buildExternalEmbed(
+        string $jwt,
+        string $url,
+        string $title,
+        string $description,
+        ?string $thumbPath
+    ): array {
+        $external = [
+            'uri' => $url,
+
+            // The lexicon accepts an empty title, but a card with no words on
+            // it reads as broken. Fall back to the link itself.
+            'title'       => $title !== '' ? $title : $url,
+            'description' => Helpers::truncate($description, self::CARD_DESCRIPTION_LIMIT),
+        ];
+
+        if ($thumbPath !== null && is_file($thumbPath)) {
+            $encoded = SyndicationMedia::fit($thumbPath, 'image/png', self::BLOB_MAX_BYTES);
+            if ($encoded !== null) {
+                $blob = $this->uploadBlob($jwt, $encoded['bytes'], $encoded['mime']);
+                if ($blob !== null) {
+                    $external['thumb'] = $blob;
+                }
+            }
+        }
+
+        return ['$type' => 'app.bsky.embed.external', 'external' => $external];
     }
 
     /**

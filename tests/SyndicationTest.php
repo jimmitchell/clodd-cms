@@ -705,6 +705,99 @@ final class SyndicationTest extends TestCase
         $this->assertNull($pixelfed->tootPost('', '', 'Just words', '', []));
     }
 
+    // ── Bluesky link cards ────────────────────────────────────────────────────
+
+    /**
+     * Bluesky fetches nothing. A link with no embed on the record renders as
+     * bare text, which is what every titled post looked like before 1.21.1.
+     */
+    public function testATitledPostCarriesItsOwnLinkCard(): void
+    {
+        $embed = $this->externalEmbedFor(
+            'https://example.com/2026/08/14/a-post/',
+            'A Post',
+            'What it says.'
+        );
+
+        $this->assertSame('app.bsky.embed.external', $embed['$type']);
+        $this->assertSame('https://example.com/2026/08/14/a-post/', $embed['external']['uri']);
+        $this->assertSame('A Post', $embed['external']['title']);
+        $this->assertSame('What it says.', $embed['external']['description']);
+    }
+
+    /** A card with no words on it reads as broken; fall back to the link. */
+    public function testAnUntitledCardFallsBackToTheUrl(): void
+    {
+        $embed = $this->externalEmbedFor('https://example.com/a/', '', '');
+
+        $this->assertSame('https://example.com/a/', $embed['external']['title']);
+    }
+
+    /** The thumbnail is optional — a card still renders without a picture. */
+    public function testACardSurvivesAMissingThumbnail(): void
+    {
+        $embed = $this->externalEmbedFor('https://example.com/a/', 'A Post', 'Words.', '/no/such/og.png');
+
+        $this->assertArrayNotHasKey('thumb', $embed['external']);
+    }
+
+    /** The client shows a couple of lines; the rest is dead weight on the wire. */
+    public function testALongDescriptionIsClipped(): void
+    {
+        $embed = $this->externalEmbedFor('https://example.com/a/', 'A Post', str_repeat('word ', 200));
+
+        $this->assertLessThanOrEqual(301, mb_strlen($embed['external']['description']));
+    }
+
+    /**
+     * A note carries no permalink and no OG image, so there is nothing to card
+     * — postToBluesky() keys the whole decision off the payload URL.
+     */
+    public function testANoteOffersNothingToCard(): void
+    {
+        $post               = $this->savedPost();
+        $post->post_kind    = 'aside';
+        $post->content      = 'Just a thought.';
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+
+        $payload = $this->payloadFor($post);
+
+        $this->assertSame('', $payload['url']);
+        $this->assertNull($payload['og_image']);
+    }
+
+    /** Nothing on disk means no thumbnail, not a fatal. */
+    public function testAMissingOgImageResolvesToNull(): void
+    {
+        $post               = $this->savedPost();
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+
+        $this->assertNull($this->payloadFor($post)['og_image']);
+    }
+
+    /** The build wrote it moments ago; the card uploads that file, not a URL. */
+    public function testTheOgImageOnDiskIsHandedToTheClient(): void
+    {
+        $post               = $this->savedPost();
+        $post->slug         = 'a-proper-post';
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+
+        $root   = sys_get_temp_dir() . '/clodd_og_' . bin2hex(random_bytes(6));
+        $ogPath = $root . '/posts/2026/08/01/a-proper-post/og.png';
+        mkdir(dirname($ogPath), 0775, true);
+        file_put_contents($ogPath, 'stands in for the card image');
+
+        $syndication = new Syndication($this->db, ['paths' => ['content' => sys_get_temp_dir(), 'output' => $root]]);
+        $payload     = (new \ReflectionMethod(Syndication::class, 'payload'))->invoke($syndication, $post);
+
+        $this->assertSame($ogPath, $payload['og_image']);
+
+        unlink($ogPath);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Stands in for a resolved attachment; nothing here reads the file. */
@@ -742,6 +835,19 @@ final class SyndicationTest extends TestCase
         $buildFacets = new \ReflectionMethod(Bluesky::class, 'buildFacets');
 
         return $buildFacets->invoke(new Bluesky('jim.example', 'app-password'), $text, ...$urls);
+    }
+
+    /**
+     * Build a link card without a session. Only a real thumbnail path would
+     * reach the network, so every case here stays offline.
+     *
+     * @return array<string,mixed>
+     */
+    private function externalEmbedFor(string $url, string $title, string $description, ?string $thumb = null): array
+    {
+        $build = new \ReflectionMethod(Bluesky::class, 'buildExternalEmbed');
+
+        return $build->invoke(new Bluesky('jim.example', 'app-password'), 'jwt', $url, $title, $description, $thumb);
     }
 
     /** @return array<string,mixed>|null */

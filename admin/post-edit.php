@@ -326,12 +326,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             fastcgi_finish_request();
         }
 
-        // Syndicate on first publish (unless opted out). One call covers every
-        // network — each branch inside is guarded by its own timestamp.
-        if ($isFirstPublish || $isFirstBluesky || $isFirstPixelfed) {
-            $syndication->publish($post);
-        }
-
         // A save that takes the post off the public site: unpublishing, but also
         // re-scheduling a post that is already live. bootstrap.php promotes due
         // scheduled posts and builds them on every admin request, so a post can
@@ -365,12 +359,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             || $post->excerpt      !== $snapExcerpt
             || $post->content      !== $snapContent
             || $post->post_kind    !== $snapPostKind;
-
-        if ($leftPublicSite) {
-            $syndication->remove($post);
-        } elseif ($post->status === 'published' && $syndicatedTextChanged) {
-            $syndication->update($post);
-        }
 
         // Rebuild this post + selectively rebuild neighbors and shared resources.
         // Anything public now, or public before this save, needs the pass; a
@@ -424,6 +412,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         // A post that has never been public needs no build either way.
+
+        // ── Syndicate, after the build ───────────────────────────────────────
+
+        // Order matters, and it is not the obvious one. Mastodon fetches the
+        // permalink to build its preview card exactly once, seconds after the
+        // status is created, and never retries a fetch that failed. A first
+        // publish from a draft has nothing on disk until buildPost() runs above,
+        // so syndicating first handed Mastodon a 404 and lost the card for good.
+        //
+        // micropub.php and Scheduler have run in this order since 1.13.3 for
+        // this reason; this handler was missed, so posts published from the
+        // editor went out cardless while the same post over Micropub did not.
+        if ($isFirstPublish || $isFirstBluesky || $isFirstPixelfed) {
+            $syndicationBefore = [$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url];
+            $syndication->publish($post);
+
+            // The post page lists the copies it made, so a syndication that
+            // recorded a URL leaves the page just written a version behind.
+            // Only post.php renders these URLs — the feeds and index do not,
+            // so nothing else needs the second pass.
+            if ([$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url] !== $syndicationBefore) {
+                $builder->buildPost($post);
+            }
+        }
+
+        if ($leftPublicSite) {
+            $syndication->remove($post);
+        } elseif ($post->status === 'published' && $syndicatedTextChanged) {
+            $syndication->update($post);
+        }
 
         exit;
     }

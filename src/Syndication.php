@@ -26,6 +26,12 @@ final class Syndication
     private string $mediaDir;
 
     /**
+     * Where the build writes the site. Bluesky needs the post's OG image as a
+     * file to upload, not a URL to advertise — see payload().
+     */
+    private string $outputDir;
+
+    /**
      * Networks this request has just posted to. A copy made moments ago
      * already says what the post says; reading it back to prove that would be
      * a round trip to learn nothing.
@@ -37,8 +43,9 @@ final class Syndication
     /** @param array<string,mixed> $config */
     public function __construct(Database $db, array $config)
     {
-        $this->db       = $db;
-        $this->mediaDir = $config['paths']['content'] . '/media';
+        $this->db        = $db;
+        $this->mediaDir  = $config['paths']['content'] . '/media';
+        $this->outputDir = rtrim((string) ($config['paths']['output'] ?? ''), '/\\');
     }
 
     /**
@@ -74,7 +81,8 @@ final class Syndication
                 $payload['title'],
                 $payload['excerpt'],
                 $payload['url'],
-                $payload['images']
+                $payload['images'],
+                $payload['og_image']
             );
             if ($result !== null) {
                 $post->markBluesky($result['url'], $result['rkey']);
@@ -286,13 +294,23 @@ final class Syndication
         $post->loadContexts();
         $context = Post::contextsText($post->contexts);
 
+        $ogImage = null;
+
         if ($post->isNote()) {
             $url     = '';
             $excerpt = $post->noteText();
         } else {
-            $url = $siteUrl . '/'
-                 . Post::datePath((string) $post->published_at, $post->slug, $this->db->getSetting('timezone', ''))
-                 . '/';
+            $datePath = Post::datePath((string) $post->published_at, $post->slug, $this->db->getSetting('timezone', ''));
+            $url      = $siteUrl . '/' . $datePath . '/';
+
+            // Bluesky renders no preview card unless the record carries one,
+            // thumbnail included, so the card image has to be uploaded as
+            // bytes. Builder::buildOgImage() writes it here on every build of a
+            // titled post; a note has none, and neither does any post built
+            // without GD. Left null when it is missing — the card still shows,
+            // without a picture.
+            $ogPath  = $this->outputDir . '/posts/' . $datePath . '/og.png';
+            $ogImage = is_file($ogPath) ? $ogPath : null;
 
             $effective = $post->effectiveExcerpt();
             $excerpt   = $effective !== null ? strip_tags($effective) : Helpers::truncate($post->content, 280);
@@ -317,11 +335,12 @@ final class Syndication
         }
 
         return [
-            'context' => $context,
-            'title'   => $post->title,
-            'excerpt' => $excerpt,
-            'url'     => $url,
-            'images'  => $images,
+            'context'  => $context,
+            'title'    => $post->title,
+            'excerpt'  => $excerpt,
+            'url'      => $url,
+            'images'   => $images,
+            'og_image' => $ogImage,
         ];
     }
 
