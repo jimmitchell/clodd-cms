@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.21.2] — 2026-08-18
+
+No schema change. Finishes the job 1.21.1 started, one release too early.
+
+### Fixed
+
+- **The XML-RPC endpoint also syndicated before it built — in four places.** 1.21.1 fixed `admin/post-edit.php` on the reasoning that Mastodon fetches a permalink for its preview card exactly once and never retries. `XmlRpcServer` had the same inversion at all four of its publish paths (`metaWeblog.newPost`, `metaWeblog.editPost`, `wp.newPost`, `wp.editPost`), so a post filed from MarsEdit still went out ahead of its own page. Its `rebuildPost()` docblock says it "mirrors the logic in `admin/post-edit.php`", which it faithfully did, bug included.
+
+  The first post published after the 1.21.1 deploy proved it: the status was created at 11:42:32.347Z and both `index.html` and `og.png` were written at 11:42:33 — a second late. Mastodon got its 404 and produced no card, and the new Bluesky card came out with no thumbnail, because `Syndication::payload()` looked for an OG image that had not been written yet.
+
+  All four sites now build first. The second pass that picks up the syndication links moved into `syndicatePost()` itself rather than being repeated at each call site, since four copies of a rule is how this got missed twice.
+
+- **A structural guard against the third recurrence.** `XmlRpcServer` builds its own `Builder` and `Syndication`, so there is no seam to observe call order through, and the ordering has no locally visible effect — the copies are only wrong on someone else's server. `XmlRpcTest` now asserts from the source that every `syndicatePost()` call is immediately preceded by `rebuildPost()`. Crude, but it fails on exactly the edit that caused this, which neither of the two previous fixes did.
+
+  Audited repo-wide while here: `Syndication::publish()` has exactly four call sites — `micropub.php`, `src/Scheduler.php`, `admin/post-edit.php` and `src/XmlRpcServer.php` — and all four now build first.
+
+---
+
 ## [1.21.1] — 2026-08-18
 
 No schema change. Both fixes are to what leaves the site on first publish; nothing on the public site changes.

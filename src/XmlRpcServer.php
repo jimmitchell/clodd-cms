@@ -105,8 +105,8 @@ class XmlRpcServer
                 $this->xmlrpc_finalize_aside_slug($post);
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
-                $this->syndicatePost($post);
                 $this->rebuildPost($post);
+                $this->syndicatePost($post);
 
                 echo XmlRpc::encodeResponse((string) $post->id);
                 break;
@@ -135,9 +135,9 @@ class XmlRpcServer
                 $this->xmlrpc_finalize_aside_slug($post);
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
+                $this->rebuildPost($post, $wasPublished, $oldDir);
                 $this->syndicatePost($post);
                 $this->resyndicatePost($post, $wasPublished);
-                $this->rebuildPost($post, $wasPublished, $oldDir);
 
                 echo XmlRpc::encodeResponse(true);
                 break;
@@ -556,8 +556,8 @@ class XmlRpcServer
                     $this->xmlrpc_finalize_aside_slug($post);
                     $this->xmlrpc_apply_link_context($post, $struct);
                     $this->xmlrpc_save_terms($post, $struct);
-                    $this->syndicatePost($post);
                     $this->rebuildPost($post);
+                    $this->syndicatePost($post);
                     echo XmlRpc::encodeResponse((string) $post->id);
                 }
                 break;
@@ -601,9 +601,9 @@ class XmlRpcServer
                 $this->xmlrpc_finalize_aside_slug($post);
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
+                $this->rebuildPost($post, $wasPublished, $oldDir);
                 $this->syndicatePost($post);
                 $this->resyndicatePost($post, $wasPublished);
-                $this->rebuildPost($post, $wasPublished, $oldDir);
                 echo XmlRpc::encodeResponse(true);
                 break;
 
@@ -1161,6 +1161,14 @@ class XmlRpcServer
     /**
      * Syndicate a newly-published post to Mastodon and/or Bluesky.
      * Only fires when status = 'published' and the post has not already been shared.
+     *
+     * **Call this after rebuildPost(), never before.** Mastodon fetches the
+     * permalink to build its preview card exactly once, seconds after the
+     * status is created, and never retries a fetch that failed; Bluesky needs
+     * the OG image on disk to upload as the card thumbnail. A post MarsEdit has
+     * just created has neither until the build runs, so syndicating first cost
+     * the Mastodon card outright and left the Bluesky card pictureless. All
+     * four call sites here had it backwards until 1.21.2.
      */
     private function syndicatePost(Post $post): void
     {
@@ -1168,7 +1176,15 @@ class XmlRpcServer
             return;
         }
 
+        $before = [$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url];
         $this->syndication->publish($post);
+
+        // The post page lists the copies it made, so a syndication that
+        // recorded a URL leaves the page just built a version behind. Only
+        // post.php renders these URLs; feeds and index need no second pass.
+        if ([$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url] !== $before) {
+            $this->builder->buildPost($post);
+        }
     }
 
     /**

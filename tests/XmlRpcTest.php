@@ -340,4 +340,49 @@ final class XmlRpcTest extends TestCase
         $this->assertNotNull($resolved);
         $this->assertGreaterThan(time(), strtotime($resolved . ' UTC'));
     }
+
+    // ── Build order ───────────────────────────────────────────────────────────
+
+    /**
+     * Syndication must never run before the build, on any publish path.
+     *
+     * Mastodon fetches the permalink to build its preview card exactly once,
+     * seconds after the status is created, and never retries a fetch that
+     * failed; Bluesky needs the OG image on disk to upload as the card
+     * thumbnail. A post created over XML-RPC has neither until the build runs.
+     *
+     * This is a structural check rather than a behavioural one because the
+     * ordering has no observable effect locally — the copies only come out
+     * wrong on somebody else's server, days later. It is worth having because
+     * the bug has recurred by the same route twice: 1.13.3 fixed micropub.php
+     * and Scheduler and missed admin/post-edit.php, then 1.21.1 fixed that and
+     * missed all four call sites here. XmlRpcServer builds its own Builder and
+     * Syndication, so there is no seam to observe the order through.
+     */
+    public function testEveryXmlRpcPublishPathBuildsBeforeItSyndicates(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../src/XmlRpcServer.php');
+
+        $this->assertNotFalse($source);
+
+        // Only the call sites, not the private method that ends in the same
+        // name — a leading '$this->' with no 'function' keyword before it.
+        preg_match_all('/^\s*\$this->(rebuildPost|syndicatePost)\(/m', $source, $matches);
+        $calls = $matches[1];
+
+        $this->assertNotEmpty($calls, 'No publish-path calls found — has the file been restructured?');
+
+        foreach ($calls as $i => $call) {
+            if ($call !== 'syndicatePost') {
+                continue;
+            }
+
+            $this->assertSame(
+                'rebuildPost',
+                $calls[$i - 1] ?? null,
+                'syndicatePost() must be immediately preceded by rebuildPost(); '
+                . 'a copy made before the page is on disk links to a 404.'
+            );
+        }
+    }
 }
