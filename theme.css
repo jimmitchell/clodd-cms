@@ -1571,6 +1571,115 @@ audio { width: 100%; }
     border-color: currentColor;
 }
 
+/* ── Related posts ───────────────────────────────────────────────────────── */
+/* Sits below the critical marker: this block is at the foot of a post and is
+   never part of the first paint.
+
+   These items stay at page tone rather than becoming white cards. The theme's
+   rule is that an article lifts off the paper and a note recesses into it
+   (see --color-card-tint), so giving these the surface fill would claim they
+   are three more articles sitting right here, competing with the one just
+   read. They are pointers, so they recess. */
+.related-posts {
+    margin-top: 3rem;
+}
+
+/* The eyebrow is deliberately the exact spec as .post-nav__label below, so the
+   two blocks at the foot of a post read as one system rather than as two
+   unrelated widgets that happen to be adjacent. */
+.related-posts__title {
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--color-muted);
+    margin-bottom: 1rem;
+}
+
+.related-posts__list {
+    display: grid;
+    /* auto-fit rather than a fixed 3: findRelated() can return one or two, and
+       a short list should fill the measure instead of leaving column-shaped
+       holes where the missing posts would have been. */
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 2rem;
+    /* Items are independent: a title that wraps to three lines must not drag
+       its neighbours' dates down with it. */
+    align-items: start;
+    list-style: none;
+}
+
+/* The per-item rule is what holds the row together. A thumbnail is optional
+   here and, on this site, usually absent — most titled posts carry no photo —
+   so a row mixing one picture with two bare titles has no shared top edge and
+   reads as a mistake. The rule supplies that edge whatever the items contain,
+   and three hairlines abreast directly above .post-nav's single full-width one
+   make the foot of the page a deliberate ruled system. */
+.related-posts__item {
+    position: relative;
+    border-top: 1px solid var(--color-border);
+    padding-top: .85rem;
+    transition: border-color .15s ease;
+}
+
+.related-posts__item:hover {
+    border-top-color: var(--color-border-hover);
+}
+
+.related-posts__thumb {
+    margin-bottom: .7rem;
+}
+
+.related-posts__thumb img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+    border-radius: var(--radius);
+}
+
+.related-posts__link {
+    display: block;
+    font-size: .9rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--color-text);
+    text-decoration: none;
+    transition: color .15s ease;
+}
+
+/* Stretch the permalink over the whole item, the same affordance .post-card
+   gives its title. Nothing else in the item is interactive, so there is no
+   inline link needing to be lifted above this one. */
+.related-posts__link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+}
+
+.related-posts__item:hover .related-posts__link {
+    color: var(--color-link);
+}
+
+/* Muted like the eyebrow above, told apart by case rather than by size, so the
+   two quiet elements in the block don't read as the same kind of label. */
+.related-posts__date {
+    display: block;
+    margin-top: .35rem;
+    font-size: .75rem;
+    color: var(--color-muted);
+}
+
+@media (max-width: 600px) {
+    /* One column, and the rules become the separators of a plain list. Stated
+       explicitly rather than left to auto-fit: two 11rem columns still fit at
+       this width, which would strand the third item alone on its own row. */
+    .related-posts__list {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+}
+
 /* ── Post navigation (prev / next) ────────────────────────────────────────── */
 .post-nav {
     display: flex;

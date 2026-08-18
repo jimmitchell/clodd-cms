@@ -58,6 +58,10 @@
 - [ ] **Post clone** — "Duplicate as draft" action on post list and edit page
 - [x] **Draft preview** — Generate a temporary HTML preview of a draft without publishing or running a full site rebuild
 - [x] **Tag autocomplete** — Replace raw comma-separated tag input with a pill-style picker with autocomplete against existing tags
+- [x] **Related posts** — 1.21.0. Opt-in via Settings → Content (`show_related_posts`, default off). Up to three titled posts scored `2 × shared categories + 1 × shared tags`, ties by recency; `Post::findRelated()` / `findRelatedNeighbours()`, rendered by `templates/partials/related-posts.php` with no mf2 classes so it cannot be parsed as child entries. `Builder::buildPost()` re-renders term-sharing neighbours so a new post does not leave existing lists stale.
+
+  Worth knowing before judging it on the live site: measured against the current database, **45 of 56 titled posts have no term overlap at all** and show nothing. `post_tags` holds 12 rows sitewide and `post_categories` is dominated by *Photos* (105 posts, 2 of them titled). The feature fills in as titled posts get categorised — it is not broken, it is under-fed.
+
 - [ ] **Scheduled post notifications** — Send an email/webhook when a scheduled post is auto-published
 - [ ] **Activity log filters** — Add date range + action type filter to the Logs tab (`admin/settings.php?tab=logs`)
 - [x] **Micropub `summary` property** — `micropub.php` reads `properties.summary` on create and supports replace/add/delete on update, assigning to `$post->excerpt` so Mastodon/Bluesky syndication and feeds use a client-supplied summary instead of always auto-deriving via `effectiveExcerpt()`.

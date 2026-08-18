@@ -1,6 +1,15 @@
 <?php
 // View partial for Settings → General. Variables come from general.handler.php.
 use CMS\Helpers;
+
+// Every text field below repopulates as $_POST['x'] ?? $settings['x'], which is
+// wrong for a checkbox: an unchecked box sends nothing, so on a validation-error
+// redisplay it would fall through to the saved setting and re-render as ticked,
+// silently undoing the change the user just made. On POST the submitted state is
+// the only truth; on GET the saved setting is.
+$showRelatedPosts = $_SERVER['REQUEST_METHOD'] === 'POST'
+    ? isset($_POST['show_related_posts'])
+    : (($settings['show_related_posts'] ?? '0') === '1');
 ?>
 <?php foreach ($errors as $e): ?>
     <p class="alert alert--error"><?= Helpers::e($e) ?></p>
@@ -116,6 +125,12 @@ use CMS\Helpers;
                value="<?= (int) ($_POST['feed_post_count'] ?? $settings['feed_post_count'] ?? 20) ?>"
                min="1" max="100" style="max-width:120px">
         <p class="form-hint">Number of posts included in each feed (<code>feed.xml</code>, <code>feed.rss</code>, <code>feed.json</code>).</p>
+
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+            <input type="checkbox" name="show_related_posts" value="1" <?= $showRelatedPosts ? 'checked' : '' ?>>
+            Show related posts
+        </label>
+        <p class="form-hint">Adds a &ldquo;Related posts&rdquo; block to the foot of posts with titles, choosing up to three by shared categories and tags. A post with no shared category or tag shows nothing. Untitled notes and photo posts neither show the block nor appear in one.</p>
     </div>
 
     <div class="panel">

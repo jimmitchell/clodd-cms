@@ -32,6 +32,9 @@ class Builder
     /** Display size of the header avatar in CSS pixels; see .site-header__avatar. */
     private const AVATAR_CSS_PX = 32;
 
+    /** How many related posts a titled post shows, when the setting is on. */
+    private const RELATED_COUNT = 3;
+
     /** Encoded header avatar, memoised per build. Empty string = none, null = not yet resolved. */
     private ?string $headerAvatar = null;
 
@@ -43,6 +46,20 @@ class Builder
      * and buildAll() then rebuilt every archive again anyway.
      */
     private bool $deferTaxonomy = false;
+
+    /**
+     * Suppress buildPost()'s related-posts neighbour rebuild.
+     *
+     * A related-posts block makes a post's output depend on *other* posts,
+     * which the content_hash short-circuit knows nothing about — so buildPost()
+     * re-renders everything sharing a term with the post it just built. That is
+     * right for a single edit and pure waste during a bulk build, where every
+     * post is being re-rendered anyway.
+     *
+     * It doubles as the recursion guard: without it, each neighbour would
+     * rebuild its own neighbours and the pass would never terminate.
+     */
+    private bool $deferRelated = false;
 
     public function __construct(array $config, Database $db)
     {
@@ -89,6 +106,9 @@ class Builder
             foreach ($post->tags as $tag) {
                 $this->buildTagArchive((int) $tag['id']);
             }
+            // A post leaving the public site has to leave everyone else's
+            // related list with it, so the neighbour pass runs here too.
+            $this->rebuildRelatedNeighbours($post);
             return;
         }
 
@@ -112,12 +132,21 @@ class Builder
 
         $prevPost = Post::findPrev($this->db, $post);
         $nextPost = Post::findNext($this->db, $post);
+
+        // Notes carry no title to label a link with, and are excluded from the
+        // candidate set for the same reason — so they neither show the block
+        // nor appear in one.
+        $relatedPosts = ($this->relatedEnabled() && !$post->isNote())
+            ? Post::findRelated($this->db, $post, self::RELATED_COUNT)
+            : [];
+
         $rendered = $this->render('post.php', [
-            'post'        => $post,
-            'html'        => $html,
-            'prevPost'    => $prevPost,
-            'nextPost'    => $nextPost,
-            'ogImageUrl'  => $ogImageUrl,
+            'post'         => $post,
+            'html'         => $html,
+            'prevPost'     => $prevPost,
+            'nextPost'     => $nextPost,
+            'relatedPosts' => $relatedPosts,
+            'ogImageUrl'   => $ogImageUrl,
         ]);
         $hash     = hash('sha256', $rendered);
 
@@ -138,6 +167,55 @@ class Builder
         }
         foreach ($post->tags as $tag) {
             $this->buildTagArchive((int) $tag['id']);
+        }
+
+        $this->rebuildRelatedNeighbours($post);
+    }
+
+    /** Whether the Related posts block is switched on in Settings → Content. */
+    private function relatedEnabled(): bool
+    {
+        return ($this->settings['show_related_posts'] ?? '0') === '1';
+    }
+
+    /**
+     * Re-render every post whose related list could have changed because
+     * $post did.
+     *
+     * buildPost() hashes its own rendered HTML into content_hash and skips the
+     * write when it matches, which assumes a post's output depends only on the
+     * post. The related block breaks that assumption: publish a new post
+     * sharing a category and every existing post in it is now wrong, with no
+     * change of its own to trigger a rebuild.
+     *
+     * This lives inside buildPost() rather than at the call sites on purpose.
+     * The prev/next rebuild is duplicated by hand across admin/post-edit.php,
+     * admin/posts.php, admin/api.php, micropub.php, XmlRpcServer and
+     * bin/publish-scheduled.php, and a rule that has to be remembered in eight
+     * places is a rule that will be missed in one.
+     *
+     * Bounded by the titled corpus, and writeFile() no-ops when the bytes are
+     * unchanged, so a neighbour that did not actually move costs a render and
+     * no disk write.
+     *
+     * Known gap: saveTerms() has already replaced the junction rows by the time
+     * this runs, so a post that *lost* a term is no longer connected to the
+     * posts under it and they keep a stale entry until the next full rebuild.
+     * Saving settings forces one, as does bin/build.php.
+     */
+    private function rebuildRelatedNeighbours(Post $post): void
+    {
+        if ($this->deferRelated || !$this->relatedEnabled()) {
+            return;
+        }
+
+        $this->deferRelated = true;
+        try {
+            foreach (Post::findRelatedNeighbours($this->db, $post) as $neighbour) {
+                $this->buildPost($neighbour);
+            }
+        } finally {
+            $this->deferRelated = false;
         }
     }
 
@@ -611,8 +689,16 @@ class Builder
     {
         $this->refreshContext();
         $this->db->exec("UPDATE posts SET content_hash = NULL");
-        foreach (Post::findAll($this->db, 'published') as $post) {
-            $this->buildPost($post);
+        // Every post is being re-rendered here, so each one already picks up
+        // its own related block — the neighbour pass would only re-render the
+        // same posts again, once per term they share.
+        $this->deferRelated = true;
+        try {
+            foreach (Post::findAll($this->db, 'published') as $post) {
+                $this->buildPost($post);
+            }
+        } finally {
+            $this->deferRelated = false;
         }
     }
 
@@ -646,13 +732,17 @@ class Builder
 
         // Suppress buildPost()'s per-post archive rebuilds for the duration of
         // the loop; buildAllTaxonomyArchives() below covers every term once.
+        // The related-posts neighbour pass goes with it, for the same reason:
+        // the loop below already re-renders every post exactly once.
         $this->deferTaxonomy = true;
+        $this->deferRelated  = true;
         try {
             foreach (Post::findAll($this->db) as $post) {
                 $this->buildPost($post);
             }
         } finally {
             $this->deferTaxonomy = false;
+            $this->deferRelated  = false;
         }
 
         foreach (Page::findAll($this->db) as $page) {
@@ -853,11 +943,14 @@ class Builder
         $html = $this->renderBody($post->content);
 
         $rendered = $this->render('post.php', [
-            'post'       => $post,
-            'html'       => $html,
-            'prevPost'   => null,
-            'nextPost'   => null,
-            'ogImageUrl' => '',
+            'post'         => $post,
+            'html'         => $html,
+            'prevPost'     => null,
+            'nextPost'     => null,
+            // A preview shows the post being edited, not the site around it —
+            // the same reasoning that leaves prev/next null here.
+            'relatedPosts' => [],
+            'ogImageUrl'   => '',
         ]);
 
         $post->published_at = $originalPublishedAt;

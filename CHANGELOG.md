@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.21.0] — 2026-08-18
+
+No schema change. Adds one setting, `show_related_posts`, which defaults to **off** — the public site is unchanged until it is switched on in Settings → Content.
+
+### Added
+
+- **Related posts.** A titled post can now end with up to three others chosen by shared categories and tags, above the existing prev/next pair. Candidates are scored `2 × shared categories + 1 × shared tags`, ties broken by recency, so the closest match wins rather than the most recent one; a shared category counts double because tags are barely used here and tag overlap is the weaker signal. A post with nothing in common renders no block at all, not an empty heading.
+
+  Notes and photo posts neither show the block nor appear in one — they carry no title to label a link with, which is the whole reason the feature is scoped to titled posts. Drafts, scheduled and soft-deleted posts are never candidates.
+
+  The block deliberately carries no microformats classes. `partials/post-card.php` marks each card as an `h-entry` with `u-url` and `p-name`, which is right on a listing page and wrong on a permalink: a nested `h-entry` inside the page's own parses as a *child* entry, so a webmention consumer or Bridgy reading the post would see three phantom replies to it. Hence a separate `partials/related-posts.php` rather than a reuse.
+
+  Visually the items stay at page tone instead of becoming white cards — the theme's rule is that an article lifts off the paper and a note recesses into it, and these are pointers to articles, not three more articles sitting on the page. Each carries its own top hairline, so a row mixing one thumbnail with two bare titles still shares a top edge; three rules abreast directly above `.post-nav`'s single one make the foot of a post one ruled system. One column below 600px.
+
+### Fixed
+
+- **A post's output can now depend on another post without going stale.** `Builder::buildPost()` hashes what it renders into `content_hash` and skips the write when it matches, which assumed a post's output depends only on that post. A related block breaks the assumption: publishing a new post in a shared category changes what every existing post in it should show, with no edit of their own to trigger a rebuild — the same shape as the photo-post bug fixed in 1.20.0.
+
+  `buildPost()` now re-renders every post sharing a term with the one it just built, on the unpublish and soft-delete path as well as the publish path, guarded by a `deferRelated` flag that doubles as the recursion guard and is raised for the duration of `buildAll()` and `rebuildPosts()`. This lives inside `buildPost()` rather than at the call sites on purpose: the prev/next rebuild beside it is duplicated by hand across `admin/post-edit.php`, `admin/posts.php`, `admin/api.php`, `micropub.php`, `XmlRpcServer` and `bin/publish-scheduled.php`, and a rule that has to be remembered in eight places is a rule that will be missed in one.
+
+  One gap is left deliberately: `saveTerms()` has already replaced the junction rows by the time the rebuild runs, so a post that *lost* a term is no longer connected to the posts under it and they keep a stale entry until the next full rebuild. Saving settings forces one, as does `bin/build.php`.
+
+---
+
 ## [1.20.0] — 2026-08-16
 
 Schema v29. Adds `posts.bluesky_verify_at` and `posts.bluesky_stale`; the migration runs on the first database open after deploy.

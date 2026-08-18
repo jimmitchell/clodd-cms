@@ -293,6 +293,108 @@ class Post
         return $posts;
     }
 
+
+    // ── Related posts ─────────────────────────────────────────────────────────
+
+    /**
+     * The SQL naming the posts eligible to appear as a related post, and the
+     * expression scoring how close each one is to post `:self`.
+     *
+     * Eligibility mirrors micropubTypePredicate('article') — a title and not a
+     * photo — with `aside` excluded by name as well, so a titleless kind that
+     * somehow acquires a title cannot slip into the list. Both sides of the
+     * feature use it: findRelated() takes the top few, findRelatedNeighbours()
+     * takes all of them.
+     *
+     * A shared category counts double. Tags are barely used on this site (12
+     * post_tags rows against 117 post_categories), so tag overlap is the weaker
+     * signal and should not outrank a genuine category match.
+     *
+     * The two overlap subqueries are grouped by post rather than joined
+     * directly because a post sharing three categories must score 6, not appear
+     * three times. Both are covered by idx_post_categories_cat and
+     * idx_post_tags_tag (schema V26).
+     *
+     * `:self` appears three times, so callers bind three separately-named
+     * parameters — PDO's SQLite driver is on native prepares here and reusing
+     * one name is the kind of thing that works until it doesn't.
+     */
+    private const RELATED_SCORE = '(2 * COALESCE(sc.n, 0) + COALESCE(st.n, 0))';
+
+    private const RELATED_FROM = "
+          FROM posts p
+          LEFT JOIN (SELECT post_id, COUNT(*) AS n FROM post_categories
+                      WHERE category_id IN (SELECT category_id FROM post_categories WHERE post_id = :cid)
+                      GROUP BY post_id) sc ON sc.post_id = p.id
+          LEFT JOIN (SELECT post_id, COUNT(*) AS n FROM post_tags
+                      WHERE tag_id IN (SELECT tag_id FROM post_tags WHERE post_id = :tid)
+                      GROUP BY post_id) st ON st.post_id = p.id
+         WHERE p.id <> :self
+           AND p.status = 'published'
+           AND p.deleted_at IS NULL
+           AND p.title <> ''
+           AND p.post_kind NOT IN ('aside', 'photo')
+           AND (2 * COALESCE(sc.n, 0) + COALESCE(st.n, 0)) > 0";
+
+    /**
+     * Titled published posts sharing a category or tag with $post, best match
+     * first, ties broken by recency.
+     *
+     * Returns [] for a post with no id — an unsaved post has no junction rows,
+     * so the query could only ever match on nothing.
+     *
+     * @return self[]
+     */
+    public static function findRelated(Database $db, self $post, int $limit = 3): array
+    {
+        if ($post->id === null) {
+            return [];
+        }
+        // LIMIT is interpolated, not bound: PDO's SQLite driver binds integers
+        // as strings, which SQLite then refuses. Same reasoning as findAll().
+        $limit = max(0, $limit);
+        if ($limit === 0) {
+            return [];
+        }
+        $rows = $db->select(
+            'SELECT p.*, ' . self::RELATED_SCORE . ' AS related_score'
+            . self::RELATED_FROM
+            . ' ORDER BY related_score DESC, p.published_at DESC'
+            . ' LIMIT ' . $limit,
+            ['cid' => $post->id, 'tid' => $post->id, 'self' => $post->id]
+        );
+        $posts = array_map(fn($row) => self::fromRow($db, $row), $rows);
+        // Hydrated: templates/partials/related-posts.php reads $post->photos for
+        // the thumbnail. Four queries for the whole batch, not per post.
+        self::hydrateManyTerms($db, $posts);
+        return $posts;
+    }
+
+    /**
+     * Every titled published post whose own related list could change when
+     * $post changes — that is, everything sharing a term with it.
+     *
+     * This is findRelated() without the limit. A post entering or leaving the
+     * site alters the ranking for all of them, not just the three it would
+     * itself display, so the rebuild pass in Builder has to cover the lot.
+     *
+     * Deliberately unhydrated: the caller only re-renders these, and
+     * Builder::buildPost() hydrates whatever it renders.
+     *
+     * @return self[]
+     */
+    public static function findRelatedNeighbours(Database $db, self $post): array
+    {
+        if ($post->id === null) {
+            return [];
+        }
+        $rows = $db->select(
+            'SELECT p.*' . self::RELATED_FROM,
+            ['cid' => $post->id, 'tid' => $post->id, 'self' => $post->id]
+        );
+        return array_map(fn($row) => self::fromRow($db, $row), $rows);
+    }
+
     // ── Persistence ───────────────────────────────────────────────────────────
 
     /**

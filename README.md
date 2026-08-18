@@ -16,6 +16,7 @@ A lightweight flat-file CMS with a PHP/SQLite admin panel and a fully static HTM
 - **Draft preview** — preview any saved draft (or published post) in the full public theme by clicking **Preview** in the post editor sidebar; opens in a new tab without publishing or triggering a site rebuild
 - **Scheduling** — set a future publish date; posts promote automatically on next admin load
 - **Categories & tags** — full taxonomy system; posts can belong to multiple categories and tags; archive pages generated at `/category/{slug}/` and `/tag/{slug}/`; tag input is a pill-style picker with autocomplete against existing tags
+- **Related posts** — optional block at the foot of titled posts linking up to three others by shared categories and tags, scored so the closest match wins over the most recent; off by default, switched on in Settings → Content
 - **Media library** — drag-and-drop uploads with MIME validation; images, video, and audio supported (50 MB limit)
 - **Image galleries** — select multiple images in the post editor and insert a `[gallery]` shortcode; renders as a Mondrian-style tiled CSS Grid (curated layouts per image count 1–7; larger sets chunk into stacked sibling blocks that visually merge into one continuous tile field) with a looping lightbox
 - **Atom feed** — generated automatically at `/feed.xml`; embeds [Byline](https://bylinespec.org/1.0) elements so feed readers can show your name, bio, avatar, and verified social links
@@ -224,6 +225,14 @@ Manage them in **Admin → Categories** and **Admin → Tags** (the Tags page ha
 - `/tag/{slug}/` → `tag/{slug}/index.html`
 
 Categories and tags are displayed as styled pills in the post header on public post pages.
+
+#### Related posts
+
+Switch on **Show related posts** in **Settings → Content** to end each titled post with up to three others sharing its categories or tags, above the prev/next links. Candidates are scored `2 × shared categories + 1 × shared tags` and tied scores fall back to recency, so the closest match wins rather than the newest — a shared category counts double because a category is the stronger signal on most sites.
+
+Only posts *with titles* take part, both as the page showing the block and as the posts listed in it: an aside or photo post has no title to use as a link label. A post sharing no category or tag with anything renders no block at all, so the setting is safe to leave on regardless of how thoroughly a site is categorised — but it also means the block only appears once posts actually share terms.
+
+Turning the setting on or off rebuilds the whole site, and publishing a post afterwards re-renders the other posts whose lists it belongs in, so the block stays current without a manual rebuild.
 
 ### Media
 
@@ -687,6 +696,7 @@ clodd-cms/
 │   ├── Webmention.php      # Outgoing webmention discovery and sending
 │   └── XmlRpc.php
 ├── templates/              # Public HTML templates
+│   ├── partials/           # Shared fragments (post-card, related-posts, …)
 │   ├── 404.php             # 404 Not Found error page
 │   ├── base.php
 │   ├── index.php

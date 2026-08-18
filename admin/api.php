@@ -620,7 +620,7 @@ const API_PUBLIC_SETTINGS = [
     'mastodon_handle', 'mastodon_instance',
     'pixelfed_instance', 'pixelfed_url',
     'posts_per_page', 'reply_email', 'schema_version',
-    'site_description', 'site_title', 'site_url',
+    'show_related_posts', 'site_description', 'site_title', 'site_url',
     'timezone', 'tinylytics_code', 'tinylytics_kudos_emoji',
     'webmention_domain',
 ];

@@ -179,6 +179,12 @@ ob_start();
     <div class="webmentions__body"></div>
 </section>
 <?php endif; ?>
+<?php /* Related before prev/next: the reader has just finished the article, so
+         the lateral move by subject is the more useful offer, and the
+         chronological pair reads as the last thing on the page. */ ?>
+<?php if (!empty($relatedPosts)): ?>
+<?php include __DIR__ . '/partials/related-posts.php'; ?>
+<?php endif; ?>
 <?php
 $navLabel = function (CMS\Post $p) use ($settings): string {
     if (!$p->isNote() && $p->title !== '') {

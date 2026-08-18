@@ -20,6 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'locale'             => trim($_POST['locale']             ?? ''),
         'posts_per_page'     => (string) max(1, (int) ($_POST['posts_per_page'] ?? 10)),
         'feed_post_count'    => (string) max(1, (int) ($_POST['feed_post_count'] ?? 20)),
+        // A checkbox sends nothing when unchecked, so this cannot use the
+        // trim($_POST[...] ?? '') idiom the text fields do — an absent key is
+        // the "off" signal, not a missing value.
+        'show_related_posts' => isset($_POST['show_related_posts']) ? '1' : '0',
         'mastodon_handle'    => trim($_POST['mastodon_handle']    ?? ''),
         'mastodon_instance'  => rtrim(trim($_POST['mastodon_instance'] ?? ''), '/'),
         'mastodon_token'     => trim($_POST['mastodon_token']     ?? ''),
