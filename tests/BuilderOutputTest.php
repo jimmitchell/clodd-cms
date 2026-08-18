@@ -317,6 +317,58 @@ final class BuilderOutputTest extends TestCase
         $this->assertFileExists($path, 'a missing file must be rebuilt');
     }
 
+    // ── Neighbor rebuilds must not drop relational data ────────────────────────
+
+    /**
+     * findPrev()/findNext() intentionally skip hydrating photos/categories/
+     * tags/contexts — they're normally only used for a nav link's title and
+     * slug. But every publish path also rebuilds whichever neighbor they
+     * return, to keep that neighbor's own nav links current. If buildPost()
+     * trusted the under-hydrated object, that rebuild would silently strip
+     * the neighbor's photo from its own page. See Post::ensureHydrated().
+     */
+    public function testAPhotoPostKeepsItsImageWhenABuildIsTriggeredByALaterPost(): void
+    {
+        $this->writeTemplate('post.php', <<<'PHP'
+<h1><?= $post->title ?></h1>
+<?php foreach ($post->photos as $photo): ?><img src="<?= $photo['url'] ?>">
+<?php endforeach; ?>
+PHP);
+
+        $photoPost = $this->makePublishedPost('photo-post');
+        $photoPost->savePhotos([['url' => '/media/a.jpg', 'alt' => 'A']]);
+        $this->builder->buildPost($photoPost);
+
+        $dir = $this->builder->postOutputDir($photoPost->published_at, $photoPost->slug);
+        $this->assertStringContainsString(
+            '/media/a.jpg',
+            file_get_contents($dir . '/index.html'),
+            'precondition: the photo post is built with its image'
+        );
+
+        // Publish a later, unrelated post — this is what every real publish
+        // path does: build the new post, then rebuild its findPrev() neighbor
+        // (the photo post) to refresh its nav links.
+        $notePost = new Post($this->db);
+        $notePost->title        = 'A note';
+        $notePost->slug         = 'note-post';
+        $notePost->content      = 'x';
+        $notePost->status       = 'published';
+        $notePost->published_at = '2026-07-30 12:00:00';
+        $notePost->save();
+        $this->builder->buildPost($notePost);
+
+        $prev = Post::findPrev($this->db, $notePost);
+        $this->assertNotNull($prev, 'precondition: the photo post is findPrev()\'s neighbor');
+        $this->builder->buildPost($prev);
+
+        $this->assertStringContainsString(
+            '/media/a.jpg',
+            file_get_contents($dir . '/index.html'),
+            'the photo post must keep its image after a rebuild triggered by a different post'
+        );
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Put a minimal template in place so render() has something to include. */
