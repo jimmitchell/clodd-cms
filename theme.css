@@ -1724,11 +1724,20 @@ audio { width: 100%; }
         gap: 1rem;
     }
 
-    /* And no rules in one column. The hairline exists to give a row of mixed
-       items — one with a thumbnail, two without — a shared top edge, and a
-       single-column list has no row to align. Stacked, the three lines read
-       as empty headings sitting above the titles they belong to, so the gap
-       does the separating instead. */
+    /* No thumbnails on a phone. At full width they are the largest thing in
+       the block by some distance, and a pointer to something you have not
+       read yet does not earn that much of a small screen. Titles alone make
+       the list scannable in a single glance. */
+    .related-posts__thumb {
+        display: none;
+    }
+
+    /* And no rules, with the pictures gone. The hairline exists to give a row
+       of mixed items — one with a thumbnail, two without — a shared top edge;
+       a single-column list of bare titles has neither a row to align nor any
+       unevenness to correct. Stacked, the three lines read as empty headings
+       sitting above the titles they belong to, so the gap does the separating
+       instead. */
     .related-posts__item {
         border-top: 0;
         padding-top: 0;

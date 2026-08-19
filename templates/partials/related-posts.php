@@ -48,8 +48,12 @@ use CMS\Post;
             <?php if ($relatedThumb !== null): ?>
             <div class="related-posts__thumb">
                 <?= CMS\ImageTag::render($mediaDir, $relatedThumb['url'], $relatedThumb['alt'], [
-                    // Three columns inside a 740px measure, one column on a phone.
-                    'sizes' => '(max-width: 600px) 100vw, 240px',
+                    // Three columns inside a 740px measure. Flat rather than
+                    // viewport-relative because theme.css hides .related-posts__thumb
+                    // below 600px: a display:none picture is still fetched, so a
+                    // 100vw hint would have phones pull the widest candidate for
+                    // something they never paint.
+                    'sizes' => '240px',
                 ]) ?>
             </div>
             <?php endif; ?>
