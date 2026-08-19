@@ -31,7 +31,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 4;
+    public const DESIGN_VERSION = 5;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -58,6 +58,17 @@ class OgImage
 
     /** Clear air between the site name and the tallest the title may reach. */
     private const TITLE_CLEARANCE = 48;
+
+    /**
+     * The avatar's diameter, and the gap to the site name beside it.
+     *
+     * Deliberately *not* the header's proportions. `.site-header__avatar` is
+     * 32px against a 1rem name, and scaling that ratio onto the card puts the
+     * face at a size that is a smudge rather than a likeness — a card is read
+     * at about a third of its width in a timeline, not at reading distance.
+     */
+    private const AVATAR_EDGE = 76;
+    private const AVATAR_GAP  = 26;
 
     /**
      * Looser than the 1.1 `.post__title` uses on the page. That value is set for
@@ -94,9 +105,17 @@ class OgImage
      * @param string $siteTitle  The site name shown in smaller text at the top.
      * @param string $postTitle  The post title, set large and hung off the foot.
      * @param string $outputPath Absolute path to write the PNG file.
+     * @param string $avatarPath Absolute path to a local avatar image, or ''.
+     *                           Anything unreadable is skipped rather than
+     *                           raised: a missing face is worth a plainer card,
+     *                           never no card at all.
      */
-    public function generate(string $siteTitle, string $postTitle, string $outputPath): void
-    {
+    public function generate(
+        string $siteTitle,
+        string $postTitle,
+        string $outputPath,
+        string $avatarPath = ''
+    ): void {
         $img = imagecreatetruecolor(self::WIDTH, self::HEIGHT);
         if ($img === false) {
             throw new RuntimeException('imagecreatetruecolor() failed.');
@@ -117,10 +136,30 @@ class OgImage
         // above it reads as the same 80px the title keeps below.
         $metaFoot = $pad;
         if ($siteTitle !== '') {
-            $metaBox  = imagettfbbox(self::META_SIZE, 0, $this->fontRegular, $siteTitle);
-            $metaY    = $pad + abs($metaBox[7]);
-            $metaFoot = $metaY + max(0, $metaBox[1]);
-            imagettftext($img, self::META_SIZE, 0, $pad, $metaY, $metaColor, $this->fontRegular, $siteTitle);
+            $metaBox   = imagettfbbox(self::META_SIZE, 0, $this->fontRegular, $siteTitle);
+            $ascent    = abs($metaBox[7]);
+            $descent   = max(0, $metaBox[1]);
+            $metaY     = $pad + $ascent;
+            $metaFoot  = $metaY + $descent;
+            $metaX     = $pad;
+
+            // Prepared before anything is drawn, so an unreadable file leaves
+            // the plain name exactly where it would have been.
+            $avatar = $avatarPath === '' ? null : $this->prepareAvatar($avatarPath);
+
+            if ($avatar !== null) {
+                $edge = self::AVATAR_EDGE;
+                $this->drawCircle($img, $avatar, $pad, $pad, $edge);
+                imagedestroy($avatar);
+
+                // The name sits on the avatar's centre line rather than sharing
+                // its top edge — the lockup reads as one object that way.
+                $metaX    = $pad + $edge + self::AVATAR_GAP;
+                $metaY    = $pad + (int) round(($edge + $ascent - $descent) / 2);
+                $metaFoot = $pad + $edge;
+            }
+
+            imagettftext($img, self::META_SIZE, 0, $metaX, $metaY, $metaColor, $this->fontRegular, $siteTitle);
         }
 
         // ── Post title (hung off the foot, bold, word-wrapped) ────────────────
@@ -175,6 +214,110 @@ class OgImage
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+
+    /**
+     * The avatar, centre-cropped square and resampled to AVATAR_EDGE, with any
+     * transparency already composited onto the card ground.
+     *
+     * The crop is the same rule `Media::squareWebpDataUri()` applies to the
+     * header copy — take the largest centred square — so the face on the card
+     * and the face on the page are framed alike. Returns null for anything GD
+     * will not open, which is the caller's signal to draw the name alone.
+     */
+    private function prepareAvatar(string $path): ?\GdImage
+    {
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $source = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'jpg', 'jpeg' => @imagecreatefromjpeg($path),
+            'png'         => @imagecreatefrompng($path),
+            'webp'        => @imagecreatefromwebp($path),
+            'gif'         => @imagecreatefromgif($path),
+            default       => false,
+        };
+
+        if ($source === false) {
+            return null;
+        }
+
+        try {
+            $srcW = imagesx($source);
+            $srcH = imagesy($source);
+            if ($srcW < 1 || $srcH < 1) {
+                return null;
+            }
+
+            $side   = min($srcW, $srcH);
+            $edge   = self::AVATAR_EDGE;
+            $square = imagecreatetruecolor($edge, $edge);
+            if ($square === false) {
+                return null;
+            }
+
+            // Fill with the card ground first and leave blending on, so a PNG
+            // with a transparent surround composites onto the card instead of
+            // arriving as a black box.
+            imagefilledrectangle($square, 0, 0, $edge - 1, $edge - 1, imagecolorallocate($square, ...self::BG_COLOR));
+            imagealphablending($square, true);
+            imagecopyresampled(
+                $square,
+                $source,
+                0,
+                0,
+                (int) (($srcW - $side) / 2),
+                (int) (($srcH - $side) / 2),
+                $edge,
+                $edge,
+                $side,
+                $side
+            );
+
+            return $square;
+        } finally {
+            imagedestroy($source);
+        }
+    }
+
+    /**
+     * Copy $avatar onto $dst as a circle with its top-left at ($x, $y).
+     *
+     * GD has no circular crop, so this is a per-pixel copy that skips anything
+     * outside the radius. The outermost pixel is blended toward the card ground
+     * by how far it falls inside the edge — without it the circle renders with a
+     * hard stair-stepped rim, which is very visible against a flat background.
+     */
+    private function drawCircle(\GdImage $dst, \GdImage $avatar, int $x, int $y, int $edge): void
+    {
+        $radius = $edge / 2;
+        [$bgR, $bgG, $bgB] = self::BG_COLOR;
+
+        for ($py = 0; $py < $edge; $py++) {
+            for ($px = 0; $px < $edge; $px++) {
+                $distance = sqrt((($px + 0.5) - $radius) ** 2 + (($py + 0.5) - $radius) ** 2);
+                if ($distance > $radius) {
+                    continue;
+                }
+
+                $rgb = imagecolorat($avatar, $px, $py);
+                $r   = ($rgb >> 16) & 0xFF;
+                $g   = ($rgb >> 8) & 0xFF;
+                $b   = $rgb & 0xFF;
+
+                $coverage = min(1.0, $radius - $distance);
+                if ($coverage < 1.0) {
+                    $r = (int) round($r * $coverage + $bgR * (1 - $coverage));
+                    $g = (int) round($g * $coverage + $bgG * (1 - $coverage));
+                    $b = (int) round($b * $coverage + $bgB * (1 - $coverage));
+                }
+
+                // Truecolor, so the packed integer is the colour — no allocation.
+                imagesetpixel($dst, $x + $px, $y + $py, ($r << 16) | ($g << 8) | $b);
+            }
+        }
+    }
 
     /**
      * Find the largest font size at which $text wraps to no more than

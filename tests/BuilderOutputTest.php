@@ -610,6 +610,10 @@ PHP);
      * changes, and that hash is over the text and the font file — neither of
      * which moves when only the palette or the type scale does. So the design
      * version is in the hash, and bumping it is what republishes the set.
+     *
+     * The avatar is in it for the same reason from the other direction: the
+     * setting can keep pointing at the same URL while the picture behind it is
+     * replaced, so the stamp has to carry the file's mtime, not just its path.
      */
     public function testTheOgHashCoversTheCardDesign(): void
     {
@@ -630,6 +634,20 @@ PHP);
             $m[1],
             'The OG hash omits OgImage::DESIGN_VERSION, so a card retheme would '
             . 'leave every post already built showing the old design.'
+        );
+
+        $this->assertStringContainsString(
+            '$avatarStamp',
+            $m[1],
+            'The OG hash omits the avatar stamp, so replacing the avatar would '
+            . 'leave every card showing the old face.'
+        );
+
+        $this->assertSame(
+            1,
+            preg_match('/\$avatarStamp\s*=.*?filemtime/s', $src),
+            'The avatar stamp does not include the file mtime, so swapping the '
+            . 'picture behind an unchanged setting would not redraw the cards.'
         );
     }
 

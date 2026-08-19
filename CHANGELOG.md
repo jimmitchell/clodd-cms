@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.24.0] — 2026-08-19
+
+No schema change.
+
+### Added
+
+- **The author avatar now sits on the generated OG card**, in a lockup with the site name: a 76px circle at the top-left with the name centred beside it. It is deliberately *not* the header's proportions — `.site-header__avatar` is 32px against a 1rem name, and scaling that ratio onto a 1200×630 card puts the face at a size that reads as a smudge in a timeline rather than a likeness.
+
+  Only a local upload is drawn. The path comes from `author_avatar_url` through `Builder::localMediaPath()`, which already refuses anything outside the media root, and a remote URL is skipped for the reason `headerAvatar()` gives — it would mean fetching an arbitrary URL on the build path. The centre-crop matches `Media::squareWebpDataUri()`, so the face on the card is framed like the face on the page, and a transparent PNG is composited onto the card ground rather than arriving as a black box.
+
+  **An unreadable avatar is skipped, never raised.** A missing file, a non-image, a directory — each falls back to exactly the card that would have been drawn without one. A card is worth more than a face on it.
+
+  The avatar joins the OG hash by path *and* mtime, so replacing the picture behind an unchanged setting still redraws the set. `OgImage::DESIGN_VERSION` goes to 5, so **the next full build redraws every card.**
+
+### Tests
+
+- New `OgImageTest` reads the drawn pixels back, because the card is the one artefact here that nobody sees from the admin, the site or the feeds — it renders on someone else's timeline, so a card that came out wrong would be invisible. It pins the 1200×630 PNG, the dark ground, that the avatar lands at the lockup position, that its corners are *empty* (a square crop would fill them), that the site name moves aside for it, that every unreadable-avatar path reproduces the plain card byte for byte, and that a full-length title still clears the taller lockup. Each was verified to fail against a deliberately broken renderer.
+- `testTheOgHashCoversTheCardDesign()` now also requires the avatar stamp, and requires it to carry the mtime.
+
+---
+
 ## [1.23.2] — 2026-08-19
 
 No schema change.

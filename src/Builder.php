@@ -1025,18 +1025,27 @@ class Builder
         $siteTitle  = $this->settings['site_title'] ?? '';
         $fontStamp  = (string) (@filemtime($this->fontDir . '/DMSans-Bold.ttf') ?: 0);
 
+        // Only a local upload is drawn, for the reason headerAvatar() gives: a
+        // remote one would mean fetching an arbitrary URL on the build path.
+        $avatarPath  = $this->localMediaPath((string) ($this->settings['author_avatar_url'] ?? ''));
+        $avatarStamp = $avatarPath === null
+            ? ''
+            : $avatarPath . '@' . (@filemtime($avatarPath) ?: 0);
+
         // The design version is in the hash because nothing else in it moves when
         // only the card's palette or type changes — a retheme would otherwise
-        // leave every post already on disk showing the old card forever.
+        // leave every post already on disk showing the old card forever. The
+        // avatar is stamped by path *and* mtime for the same reason: replacing
+        // the picture behind an unchanged setting has to redraw the set too.
         $ogHash     = hash(
             'sha256',
-            OgImage::DESIGN_VERSION . '|' . $fontStamp . '|' . $siteTitle . '|' . $post->title
+            OgImage::DESIGN_VERSION . '|' . $fontStamp . '|' . $avatarStamp . '|' . $siteTitle . '|' . $post->title
         );
 
         if ($ogHash !== $post->og_image_hash || !file_exists($ogPath)) {
             try {
                 $og = new OgImage($this->fontDir);
-                $og->generate($siteTitle, $post->title, $ogPath);
+                $og->generate($siteTitle, $post->title, $ogPath, $avatarPath ?? '');
                 $post->markOgBuilt($ogHash);
             } catch (\RuntimeException $e) {
                 // Non-fatal: log to stderr and continue.
