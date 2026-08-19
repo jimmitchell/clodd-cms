@@ -30,11 +30,19 @@ use CMS\Post;
         <?php
             $relatedUrl = rtrim($siteUrl, '/') . '/'
                 . Post::datePath($relatedPost->published_at, $relatedPost->slug, $settings['timezone'] ?? '') . '/';
-            /* $relatedPost->photos, not effectivePhotos(): that helper only
-               derives images from the body for post_kind 'photo', which is
-               excluded from this list anyway, so it could only ever return the
-               same attached rows by a longer route. */
-            $relatedThumb = $relatedPost->photos[0] ?? null;
+            /* The featured image is what a titled post is illustrated by, so it
+               comes first; the attached photo rows stay as the fallback for
+               posts written before the field existed and never backfilled.
+
+               effectiveFeaturedImage() and not the raw column, unlike the post
+               page: nothing here renders the body, so a picture derived from it
+               cannot be drawn twice.
+
+               $relatedPost->photos, not effectivePhotos(), for the second half:
+               that helper only derives images from the body for post_kind
+               'photo', which is excluded from this list anyway, so it could only
+               ever return the same attached rows by a longer route. */
+            $relatedThumb = $relatedPost->effectiveFeaturedImage() ?? $relatedPost->photos[0] ?? null;
         ?>
         <li class="related-posts__item">
             <?php if ($relatedThumb !== null): ?>

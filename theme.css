@@ -410,6 +410,61 @@ audio { width: 100%; }
     word-break: break-all;
 }
 
+/* A titled post's featured image (u-featured) — between the header and the
+   body.
+
+   A reader sees no difference between this picture and one written into the
+   body, so it must not look like one: the shadow, radius, margins and
+   wide-viewport bleed all come from the rule shared with `.prose img` below,
+   rather than being restated here where the two could drift apart. Only the
+   figure wrapper and the lightbox anchor are its own. */
+.post__featured {
+    margin: 0;
+}
+
+.post__featured-link {
+    display: block;
+    cursor: zoom-in;
+}
+
+/* Images inside a post: one written into the body, and a titled post's
+   featured image. Same object to a reader, so one definition.
+
+   In the critical half rather than beside the rest of the `.prose` rules
+   because the featured image is the Largest Contentful Paint element on a post
+   that has one — styling it from the deferred sheet would repaint the largest
+   thing on the page. Body images near the top of a post get the same benefit,
+   which they did not have before. */
+.prose img,
+.post__featured img {
+    box-shadow: 0 4px 20px rgba(var(--shadow-rgb), .10);
+    border-radius: var(--radius);
+}
+
+.prose img:not(.gallery img),
+.post__featured img {
+    display: block;
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+    margin: 2rem auto;
+}
+
+/* Wide enough to spare the room, and the picture steps out past the measure. */
+@media (min-width: 880px) {
+    .prose img:not(.gallery img),
+    .post__featured img {
+        max-width: calc(100% + 2rem);
+        width: calc(100% + 2rem);
+        margin: 2rem -1rem;
+    }
+}
+
+/* No hover fade here, deliberately, though .post__photo has one: an image in
+   the body does not fade either, and matching the body is the point. Adding it
+   to both would have meant changing every picture on the site to settle a
+   difference in one. */
+
 /* Micropub photo property (u-photo) — shown above the post body */
 .post__photos {
     display: grid;
@@ -1393,32 +1448,12 @@ audio { width: 100%; }
 .hljs-addition                 { color: #63da58; background: #1a3320; }
 .hljs-deletion                 { color: #ff8170; background: #3d1a18; }
 
-/* Images / media inside prose */
-.prose img,
+/* Images / media inside prose. The `img` rules that used to live here — shadow,
+   radius, sizing and the wide-viewport bleed — moved into the critical half so
+   they could be shared with .post__featured; see the comment there. Video and
+   audio keep their own spacing, which nothing else needs. */
 .prose video,
 .prose audio { margin-top: 1.5em; margin-bottom: 1.5em; }
-
-.prose img { box-shadow: 0 4px 20px rgba(var(--shadow-rgb), .10); border-radius: var(--radius); }
-
-.prose img:not(.gallery img) {
-    max-width: 100%;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    margin-top: 2rem;
-    margin-bottom: 2rem;
-}
-
-@media (min-width: 880px) {
-    .prose img:not(.gallery img) {
-        max-width: calc(100% + 2rem);
-        width: calc(100% + 2rem);
-        margin-left: -1rem;
-        margin-right: -1rem;
-        margin-top: 2rem;
-        margin-bottom: 2rem;
-    }
-}
 
 .prose figure { margin-top: 1.5em; }
 .prose figcaption {

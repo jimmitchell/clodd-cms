@@ -130,6 +130,8 @@ function post_to_array(\CMS\Post $post, string $siteUrl, string $timezone = ''):
         'slug'         => $post->slug,
         'content'      => $post->content,
         'excerpt'      => $post->excerpt,
+        'featured_image_url' => $post->featured_image_url,
+        'featured_image_alt' => $post->featured_image_alt,
         'status'       => $post->status,
         'published_at' => $post->published_at,
         'created_at'   => $post->created_at,
@@ -330,6 +332,12 @@ if ($resource === 'posts' && $method === 'POST' && $id === null) {
     $post->slug    = \CMS\Helpers::slugify($body['slug'] ?? $title);
     $post->content = $body['content'] ?? '';
     $post->excerpt = (($body['excerpt'] ?? '') !== '') ? $body['excerpt'] : null;
+    // Same allowlist as every other path — it reaches an href on the public page.
+    $post->featured_image_url = \CMS\Post::normaliseImageUrl(
+        (string) ($body['featured_image_url'] ?? ''),
+        $db->getSetting('site_url', '')
+    );
+    $post->featured_image_alt = (string) ($body['featured_image_alt'] ?? '');
     $post->status  = in_array($body['status'] ?? '', ['draft', 'published', 'scheduled'], true)
                    ? $body['status'] : 'draft';
 
@@ -385,6 +393,21 @@ if ($resource === 'posts' && $method === 'PUT' && $id !== null) {
     if (isset($body['content'])) $post->content = $body['content'];
     if (array_key_exists('excerpt', $body)) {
         $post->excerpt = ($body['excerpt'] !== '') ? $body['excerpt'] : null;
+    }
+    // An absent key leaves the picture alone; an empty string clears it. Same
+    // rule the XML-RPC thumbnail follows, so a client that sends only what it
+    // changed cannot drop the image by omission.
+    if (array_key_exists('featured_image_url', $body)) {
+        $post->featured_image_url = \CMS\Post::normaliseImageUrl(
+            (string) $body['featured_image_url'],
+            $db->getSetting('site_url', '')
+        );
+        if ($post->featured_image_url === null) {
+            $post->featured_image_alt = '';
+        }
+    }
+    if (array_key_exists('featured_image_alt', $body) && $post->featured_image_url !== null) {
+        $post->featured_image_alt = (string) $body['featured_image_alt'];
     }
     if (isset($body['status']) && in_array($body['status'], ['draft', 'published', 'scheduled', 'unpublished'], true)) {
         $post->status = $body['status'];

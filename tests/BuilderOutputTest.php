@@ -369,7 +369,203 @@ PHP);
         );
     }
 
+    // ── Featured image → og:image ─────────────────────────────────────────────
+
+    /**
+     * A real picture beats the generated title card in every preview that shows
+     * one, so a post that has one advertises it as og:image. This is also what
+     * puts the picture on the Mastodon preview card, which fetches the permalink
+     * for exactly this tag.
+     */
+    public function testAFeaturedImageBecomesTheOgImage(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+        $this->writeTemplate('post.php', '<meta content="<?= $ogImageUrl ?>">');
+        $this->writeMedia('lead.jpg');
+
+        // Builder reads settings once, at construction.
+        $builder = new Builder($this->config, $this->db);
+
+        $post = $this->makePublishedPost('with-lead');
+        $post->featured_image_url = '/media/lead.jpg';
+        $post->save();
+
+        $builder->buildPost($post);
+
+        $html = file_get_contents($builder->postOutputDir($post->published_at, $post->slug) . '/index.html');
+        $this->assertStringContainsString('https://example.com/media/lead.jpg', $html);
+        $this->assertStringNotContainsString('og.png', $html);
+    }
+
+    /**
+     * The title card is still generated and is still the fallback — removing a
+     * featured image has to leave something behind rather than nothing.
+     */
+    public function testWithoutAFeaturedImageTheGeneratedCardIsStillUsed(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+        $this->writeTemplate('post.php', '<meta content="<?= $ogImageUrl ?>">');
+
+        $post = $this->makePublishedPost('no-lead');
+        $this->builder->buildPost($post);
+
+        $dir  = $this->builder->postOutputDir($post->published_at, $post->slug);
+        $html = file_get_contents($dir . '/index.html');
+        // GD may be missing in CI, in which case no og.png exists and the tag is
+        // empty — either way, what must not appear is a featured image URL.
+        $this->assertStringNotContainsString('/media/', $html);
+    }
+
+    /**
+     * A stored path whose file has gone missing must not be advertised: an
+     * og:image is a URL a crawler fetches, and a 404 there is worse than the
+     * title card that still works.
+     */
+    public function testAFeaturedImageWithNoFileOnDiskIsNotAdvertised(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+        $this->writeTemplate('post.php', '<meta content="<?= $ogImageUrl ?>">');
+
+        $post = $this->makePublishedPost('missing-lead');
+        $post->featured_image_url = '/media/gone.jpg';
+        $post->save();
+
+        $this->builder->buildPost($post);
+
+        $html = file_get_contents($this->builder->postOutputDir($post->published_at, $post->slug) . '/index.html');
+        $this->assertStringNotContainsString('gone.jpg', $html);
+    }
+
+    /**
+     * A remote featured image (Micropub may send one) is advertised as-is. Its
+     * scheme was allowlisted on the way in, and checking it here would mean an
+     * outbound request on the build path. Deliberately asymmetric with the local
+     * case above, which *is* checked because we can check it for free.
+     */
+    public function testARemoteFeaturedImageIsAdvertisedWithoutBeingChecked(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+        $this->writeTemplate('post.php', '<meta content="<?= $ogImageUrl ?>">');
+
+        $builder = new Builder($this->config, $this->db);
+
+        $post = $this->makePublishedPost('remote-lead');
+        $post->featured_image_url = 'https://cdn.example.net/lead.jpg';
+        $post->save();
+
+        $builder->buildPost($post);
+
+        $html = file_get_contents($builder->postOutputDir($post->published_at, $post->slug) . '/index.html');
+        $this->assertStringContainsString('https://cdn.example.net/lead.jpg', $html);
+    }
+
+    /**
+     * The double-draw guard, checked structurally because the failure is silent.
+     *
+     * effectiveFeaturedImage() falls back to the body's leading image, and
+     * templates/post.php renders the body a few lines further down — so reading
+     * the helper there would print a derived picture twice, once in the featured
+     * figure and once in the content it was parsed out of. Only the *stored*
+     * column has a slot of its own. The cards and the related-posts list may use
+     * the helper freely: neither renders a titled post's body.
+     */
+    public function testThePostTemplateRendersOnlyTheStoredFeaturedImage(): void
+    {
+        $template = file_get_contents(dirname(__DIR__) . '/templates/post.php');
+
+        $this->assertStringContainsString('post__featured', $template, 'precondition: the slot exists');
+
+        // Comments stripped first — the template explains this rule in prose
+        // directly above the markup, and naming the helper is not calling it.
+        $code = '';
+        foreach (token_get_all($template) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $this->assertStringNotContainsString(
+            'effectiveFeaturedImage',
+            $code,
+            'templates/post.php must read featured_image_url directly, or a derived image renders twice'
+        );
+    }
+
+    /**
+     * A featured image is styled by sharing the body image's rules, never by
+     * restating them.
+     *
+     * The two are the same object to a reader — same shadow, radius, width and
+     * wide-viewport bleed — and a second copy of those declarations is how they
+     * quietly stop matching. So the invariant is structural: no rule in
+     * theme.css may target `.post__featured img` without also targeting
+     * `.prose img` in the same selector list. The figure wrapper and the
+     * lightbox anchor are exempt; they have no counterpart in the body.
+     */
+    public function testTheFeaturedImageSharesTheBodyImageStyling(): void
+    {
+        $css = file_get_contents(dirname(__DIR__) . '/theme.css');
+        $this->assertNotFalse($css);
+
+        // Strip comments so prose about the rule is not mistaken for one.
+        $css = preg_replace('!/\*.*?\*/!s', '', $css) ?? $css;
+
+        preg_match_all('/([^{}]+)\{[^{}]*\}/', $css, $rules, PREG_SET_ORDER);
+
+        $found = 0;
+        foreach ($rules as [, $selectorList]) {
+            if (!str_contains($selectorList, '.post__featured img')) {
+                continue;
+            }
+            $found++;
+            $this->assertStringContainsString(
+                '.prose img',
+                $selectorList,
+                'A rule targets .post__featured img without .prose img: '
+                . trim(preg_replace('/\s+/', ' ', $selectorList))
+                . ' — the featured image must share the body image styling, not restate it.'
+            );
+        }
+
+        $this->assertGreaterThan(0, $found, 'No .post__featured img rules found — has theme.css been restructured?');
+    }
+
+    /**
+     * And that shared styling has to be in the critical half. The featured
+     * image is the Largest Contentful Paint element on a post that has one, so
+     * styling it from the deferred sheet would repaint the biggest thing on the
+     * page after first paint.
+     */
+    public function testTheFeaturedImageStylingIsInTheCriticalHalf(): void
+    {
+        $css = file_get_contents(dirname(__DIR__) . '/theme.css');
+        $this->assertNotFalse($css);
+
+        $marker = strpos($css, '/* =END CRITICAL= */');
+        $this->assertNotFalse($marker, 'precondition: the critical-CSS marker exists');
+
+        $lastRule = strrpos($css, '.post__featured img');
+        $this->assertNotFalse($lastRule, 'precondition: the featured image is styled');
+        $this->assertLessThan(
+            $marker,
+            $lastRule,
+            '.post__featured img is styled after =END CRITICAL=, so the LCP image would restyle on deferred load.'
+        );
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Put a file in the media directory so localPath() can resolve it. */
+    private function writeMedia(string $filename): void
+    {
+        $dir = $this->root . '/content/media';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+        file_put_contents($dir . '/' . $filename, 'JPEG');
+    }
+
 
     /** Put a minimal template in place so render() has something to include. */
     private function writeTemplate(string $name, string $body): void

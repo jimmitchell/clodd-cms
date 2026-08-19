@@ -39,7 +39,8 @@ class RssFeed
         $homeUrl  = $siteUrl . '/';
 
         $posts = $this->db->select(
-            "SELECT id, title, slug, content, excerpt, published_at, updated_at, post_kind
+            "SELECT id, title, slug, content, excerpt, published_at, updated_at, post_kind,
+                    featured_image_url, featured_image_alt
                FROM posts
               WHERE status = 'published'
                 AND deleted_at IS NULL
@@ -65,8 +66,9 @@ class RssFeed
             $tz      = $this->settings['timezone'] ?? '';
             $postUrl = $siteUrl . '/' . Post::datePath($post['published_at'], $post['slug'], $tz) . '/';
             $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [])
+                     . Post::storedFeaturedHtml($post['featured_image_url'] ?? null, (string) ($post['featured_image_alt'] ?? ''), $siteUrl)
                      . Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
-                     . $this->converter->convert($post['content'])->getContent()
+                     . $this->converter->convert(Post::contentForRender((string) $post['content'], $post['featured_image_url'] ?? null))->getContent()
                      . Post::photoCaptionHtml($post['post_kind'] ?? null, $post['excerpt'] ?? null);
             $isNote  = Post::isNoteKind($post['post_kind'] ?? null);
             $xml    .= $this->itemXml(
@@ -109,8 +111,9 @@ class RssFeed
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
             $html    = Post::contextsHtml($post->contexts)
+                     . Post::storedFeaturedHtml($post->featured_image_url, $post->featured_image_alt, $siteUrl)
                      . Post::photosHtml($post->photos, $siteUrl)
-                     . $this->converter->convert($post->content)->getContent()
+                     . $this->converter->convert($post->renderableContent())->getContent()
                      . Post::photoCaptionHtml($post->post_kind, $post->excerpt);
             $xml    .= $this->itemXml(
                 title:       $post->isNote() ? null : $post->title,

@@ -85,6 +85,43 @@ ob_start();
         <?php endif; ?>
     </header>
 
+    <?php /* The featured image leads a titled post: after the metadata, before
+             the words, at the column width — the place the picture already sits
+             on every post written before the field existed.
+
+             $post->featured_image_url, deliberately, and not
+             effectiveFeaturedImage(): that helper falls back to the body's
+             leading image, which is already about to be rendered as part of
+             $html a few lines below. Reading it here would draw the picture
+             twice. Only the *stored* image has a slot of its own. */ ?>
+    <?php if (!$isNote && ($post->featured_image_url ?? '') !== ''): ?>
+    <?php
+        /* Above the fold on a post that has one, so this is the Largest
+           Contentful Paint element and must not be lazy-loaded. */
+        $featuredAttrs = [
+            // u-featured, not u-photo: an article's lead picture is not its
+            // photo property, and saying so changes how a client reads its type.
+            'class'         => 'u-featured',
+            'sizes'         => '(max-width: 44rem) 100vw, 44rem',
+            'loading'       => 'eager',
+            'fetchpriority' => 'high',
+            'decoding'      => 'sync',
+        ];
+        /* Same backstop as the photos below — without a usable href there is
+           nothing to link to, so the figure renders the picture alone. */
+        $featuredHref = Helpers::safeUrl($post->featured_image_url);
+    ?>
+    <figure class="post__featured">
+        <?php if ($featuredHref !== ''): ?>
+        <a href="<?= Helpers::e($featuredHref) ?>" class="post__featured-link" data-gallery-item>
+            <?= CMS\ImageTag::render($mediaDir, $post->featured_image_url, $post->featured_image_alt, $featuredAttrs) ?>
+        </a>
+        <?php else: ?>
+        <?= CMS\ImageTag::render($mediaDir, $post->featured_image_url, $post->featured_image_alt, $featuredAttrs) ?>
+        <?php endif; ?>
+    </figure>
+    <?php endif; ?>
+
     <?php if (!empty($post->contexts)): ?>
     <div class="post__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
     <?php endif; ?>

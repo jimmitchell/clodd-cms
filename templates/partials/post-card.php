@@ -96,13 +96,33 @@ $cardClass = 'post-card h-entry post-card--'
         </div>
         <?php endif; ?>
 
-        <?php if (!$isNote && !empty($post->photos)): $cardPhoto = $post->photos[0]; ?>
-        <?php /* A titled post's image illustrates rather than leads: thumbnail. */ ?>
+        <?php /* The featured image first, the attached photo rows as the fallback
+                 for posts written before the field existed. Safe to derive from
+                 the body here — a titled post's card shows its excerpt, never
+                 its body, so nothing can be drawn twice. */ ?>
+        <?php
+            $cardFeatured = $post->effectiveFeaturedImage();
+            $cardPhoto    = $isNote ? null : ($cardFeatured ?? $post->photos[0] ?? null);
+        ?>
+        <?php if ($cardPhoto !== null): ?>
+        <?php /* A titled post's image illustrates rather than leads: thumbnail.
+                 The mf2 class follows where the picture came from — u-featured
+                 for the lead image, u-photo only for a real photo property. */ ?>
         <figure class="post-card__photo post-card__photo--thumb">
             <?= CMS\ImageTag::render($mediaDir, $cardPhoto['url'], $cardPhoto['alt'], [
-                'class' => 'u-photo',
-                // A thumbnail, so the narrow variant is plenty at any viewport.
-                'sizes' => '160px',
+                'class' => $cardFeatured !== null ? 'u-featured' : 'u-photo',
+                /* The slot is the card's full width — .post-card__photo--thumb
+                   caps the *height* at 240px and crops, it does not shrink the
+                   picture. `sizes` said 160px, which was only ever harmless
+                   because almost no titled post had a card image to draw: until
+                   featured images, this needed a Micropub photo row. Now that
+                   every illustrated article hits it, describe the real slot, or
+                   the browser picks a candidate for a box eight times too small
+                   and the card looks soft on a retina screen.
+
+                   740px measure less the 1.5rem main padding and the 1.5rem
+                   card padding, both sides. */
+                'sizes' => '(max-width: 44rem) 100vw, 640px',
             ]) ?>
         </figure>
         <?php endif; ?>

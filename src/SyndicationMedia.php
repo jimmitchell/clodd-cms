@@ -123,14 +123,17 @@ final class SyndicationMedia
         return null;
     }
 
-    // ── Private ───────────────────────────────────────────────────────────────
-
     /**
      * Map a photo URL to its file in the media directory, or null when the URL
      * points somewhere else (a remote host, an inline data URI, a path outside
      * /media/) or the file is missing.
+     *
+     * Public because the featured image needs the same answer: Builder resolves
+     * it to size an og:image, and Syndication uploads it as the Bluesky card
+     * thumbnail. The basename() below is what keeps a crafted URL inside the
+     * media directory, so route every such lookup through here.
      */
-    private static function localPath(string $url, string $mediaDir, string $siteUrl): ?string
+    public static function localPath(string $url, string $mediaDir, string $siteUrl = ''): ?string
     {
         $url = trim($url);
         if ($url === '') {
@@ -157,6 +160,8 @@ final class SyndicationMedia
         $file = rtrim($mediaDir, '/\\') . '/' . basename(rawurldecode($path));
         return is_file($file) ? $file : null;
     }
+
+    // ── Private ───────────────────────────────────────────────────────────────
 
     /** Composite an image onto a white background, dropping any alpha channel. */
     private static function flattenOnWhite(\GdImage $image): \GdImage

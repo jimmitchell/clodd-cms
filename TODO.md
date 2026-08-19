@@ -14,6 +14,24 @@
   curl -s -A "facebookexternalhit/1.1" "https://bsky.app/profile/jimmitchell.org/post/RKEY" | grep og:description
   ```
 
+- [ ] **Backfill preview cards on posts syndicated before 1.21.2.** Neither fix in 1.21.1/1.21.2 reaches backwards, so every copy made before the deploy is still missing the card it should have had. Two different problems with two different prospects, so decide them separately.
+
+  **Scope, measured 2026-08-18** against the last 133 statuses (back to 2025-09-19): 27 link back to jimmitchell.org, and **13 of those have no Mastodon preview card**. The other 14 do — which confirms the diagnosis, because a race is exactly what an intermittent result looks like. Where the build happened to finish before Mastodon's crawler arrived the card came out fine. On Bluesky the picture is simpler and worse: **no titled post has ever had a card**, since `app.bsky.embed.external` did not exist here until 1.21.1.
+
+  **Mastodon — probably possible, unverified.** Mastodon re-runs its link crawler when a status is *edited*, so touching each of the 13 statuses may regenerate the card from OG tags that are now served correctly. This is a guess about Mastodon's internals and has not been tested; **try it by hand on one old post before writing anything**. The machinery already exists — `Mastodon::editPost()` via `Syndication::update()` — so if the guess holds, the work is a small script over posts whose `mastodon_url` is set and whose status has `card: null`, not new plumbing. The cost is that each one gains an "edited" marker for a change no reader asked for, which may not be worth it for a card on a post from last year. Consider capping it at the recent ones.
+
+  **Bluesky — not possible, don't try.** Adding an embed means `putRecord`, and the AppView does not re-index a record it has already seen (the entry above, and `CLAUDE.md`). The record would gain a correct card that nobody can see. Delete-and-repost is the only lever that works and it costs the URL plus the likes and replies on the old record — not worth it for a thumbnail. Leave these alone.
+
+  Check what a given status actually has before touching it — do not judge by eye in the web UI, which renders a cached card either way:
+
+  ```
+  curl -s https://indieweb.social/api/v1/statuses/STATUS_ID \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['card'])"
+
+  curl -s "https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=at://jimmitchell.org/app.bsky.feed.post/RKEY&depth=0" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['thread']['post']['record'].get('embed'))"
+  ```
+
 - [x] **A scheduled post sent over XML-RPC publishes immediately.** Confirmed on prod 2026-08-15, right after the 1.19.0 deploy. **Fixed in 1.19.3** — the cause was the second suspect below: the `_gmt` date variants most WordPress clients send were never read, so `$pubAt` came back null and fell through to *now*. Verified in prod with MarsEdit 2026-08-16. The admin path schedules correctly, so this is specific to XML-RPC — and it is almost certainly pre-existing rather than caused by 1.19.0, since none of that release touched date parsing.
 
   The status ternary is **not** the bug. Both write paths already read the same way and both look right:

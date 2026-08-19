@@ -309,8 +309,19 @@ final class Syndication
             // titled post; a note has none, and neither does any post built
             // without GD. Left null when it is missing — the card still shows,
             // without a picture.
-            $ogPath  = $this->outputDir . '/posts/' . $datePath . '/og.png';
-            $ogImage = is_file($ogPath) ? $ogPath : null;
+            //
+            // A featured image outranks the generated title card, matching what
+            // the permalink advertises as og:image and so what Mastodon puts on
+            // its own card. It is *only* ever the thumbnail: putting it in
+            // $images below would make the record an image post, and images
+            // outrank the external card (Bluesky::postToBluesky()), costing
+            // every titled post the link card it should have.
+            $featured = $post->effectiveFeaturedImage();
+            $ogPath   = $this->outputDir . '/posts/' . $datePath . '/og.png';
+            $ogImage  = ($featured !== null
+                    ? SyndicationMedia::localPath($featured['url'], $this->mediaDir, $siteUrl)
+                    : null)
+                ?? (is_file($ogPath) ? $ogPath : null);
 
             $effective = $post->effectiveExcerpt();
             $excerpt   = $effective !== null ? strip_tags($effective) : Helpers::truncate($post->content, 280);

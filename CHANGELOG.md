@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.22.0] — 2026-08-18
+
+Schema v30: `posts.featured_image_url` and `posts.featured_image_alt`, both added by `ALTER TABLE` with no backfill.
+
+### Added
+
+- **Featured images for titled posts.** A titled post can now carry a lead picture as real data rather than as the first paragraph of its body. It renders between the post header and the words — where the picture on an imported post already sits — and, because the CMS now knows what it is, it becomes the post's image everywhere else too: `og:image` on the permalink, the thumbnail on home-page and archive cards, the related-posts thumbnail, JSON Feed's `item.image`, and the preview card on Mastodon and Bluesky.
+
+  Settable from four places. The admin editor gets a **Featured image** panel that reuses the existing media grid — Choose puts the grid into a pick mode instead of adding a second browser — with its own alt-text field. Over XML-RPC it reads WordPress's `wp_post_thumbnail` (and `post_thumbnail`), accepting an attachment id, a bare media id, or a URL, and writes the value back out on both outgoing structs so a client can read back what it set. Over Micropub it is the mf2 `featured` property, handled in create, in `replace`/`add`/`delete`, and reported by `q=source`. The admin REST API carries it as `featured_image_url`/`featured_image_alt` in both directions, so the Obsidian client can see it.
+
+  It is styled by *sharing* the body image's rules rather than restating them — same shadow, radius, width and wide-viewport bleed — so the two cannot drift apart. Those rules moved from the deferred half of `theme.css` into the critical half to do it, which also stops body images near the top of a post restyling after first paint, as they used to. Two tests pin it: no rule may target `.post__featured img` without also targeting `.prose img`, and that styling must sit above `=END CRITICAL=`, because the featured image is the Largest Contentful Paint element on a post that has one.
+
+  The markup is `u-featured`, deliberately not `u-photo`: an article's lead picture is not its photo property, and saying otherwise changes how a Micropub client reads the post's type. `Post::save()` clears both columns for a note, so flipping an article to an aside or a photo cannot leave a picture that nothing renders.
+
+- **A derived fallback, so nothing had to change to benefit.** `Post::effectiveFeaturedImage()` returns the stored image, or — on a titled post with none — the body's leading image, mirroring the `effectivePhotos()` pair that already solves this for photo posts. Every post written before the field existed therefore advertises its lead picture immediately, with no migration and no client support: MarsEdit works today whether or not it offers a thumbnail field, because putting the image at the top of the post is enough.
+
+  The contract is the same one `photosOrBodyImages()` carries and is load-bearing in the same way: the helper is for consumers that *report* the image as data. Anything that renders it beside the body reads `featured_image_url` directly, or a derived picture is drawn twice — once in the featured figure and once in the content it was parsed out of. `templates/post.php` reads the raw column; the cards and the related list, which never render a titled post's body, use the helper. `BuilderOutputTest` asserts that from the template source, comments stripped, because the failure is silent and only visible on the page.
+
+- **The picture cannot be drawn twice, whatever a client sends.** Setting a featured image that is *also* the body's leading image is reachable two ordinary ways — a Micropub client round-tripping `q=source` reads back the derived `featured` and may send it as a stored one, and an author can pick a featured image they had already pasted at the top of the post. `Post::contentForRender()` drops the body's copy on an exact URL match, so the featured figure is the only one. It is applied in `Builder` (page and preview) and in all three feeds, so no write path has to know the rule and the page and feeds cannot disagree. A *different* picture at the top of the body is left alone — that is a legitimate thing to have below a lead image. Nothing stored is rewritten; only what is rendered.
+
+- **`bin/promote-featured-images.php`** converts derived to stored: for each titled post whose body begins with an image it moves the picture into the field and out of the content, and clears `content_hash` so the next build rewrites the page. Output is unchanged — the image moves from a `<p>` into the featured figure. Dry run by default, since it rewrites post bodies; `--force` writes, `--limit=N` caps a first pass.
+
+### Fixed
+
+- **Images uploaded from MarsEdit never got their WebP companions.** `xmlrpc_save_media()` wrote the file and the `media` row by hand and skipped `Media::generateWebp()`, which every other upload path calls — so `ImageTag::render()` fell back to a bare `<img>` for anything posted from MarsEdit, and the whole responsive pipeline quietly missed an entire upload route. It now generates them like the rest.
+
+- **The upload response carried no id.** `metaWeblog.newMediaObject` and `wp.uploadFile` answered with a URL alone, which left a WordPress client nothing to put in `wp_post_thumbnail` — the featured-image field was unreachable by construction. Both now return `id`/`attachment_id`, offset the same way `wp.getMediaLibrary` reports them, plus `file` and `type`.
+
+- **The `hidden` attribute did nothing to any button in the admin.** The browser's `[hidden] { display: none }` comes from the UA stylesheet, which any author rule setting `display` outranks — so `.btn { display: inline-flex }` had quietly made the attribute inert on every button on every admin page. (The lone `.tag-autocomplete[hidden]` rule was a local patch for the same thing.) One `[hidden] { display: none !important }` in the reset fixes it everywhere.
+
+- **A card image described a slot eight times too small.** `templates/partials/post-card.php` asked for `sizes="160px"` while `.post-card__photo--thumb` caps the *height* and crops at the card's full width. It was harmless only because a titled post needed a Micropub photo row to have a card image at all; featured images make it the common case, so it now describes the real slot and stops picking a soft candidate for retina screens.
+
+### Notes
+
+- **A featured image is a link card thumbnail, never an attachment.** `Syndication::payload()` uses it in place of the generated `og.png` for the Bluesky card, and the permalink's `og:image` gives Mastodon the same picture. It is deliberately kept out of `images`: a Bluesky record holds exactly one embed and an image embed outranks the external card, so attaching it would silently cost every titled post the link card 1.21.1 added. `SyndicationTest` pins that.
+
+- The generated title card is still built and is still the fallback, so removing a featured image leaves something behind. A stored path whose file is missing is not advertised — an `og:image` is a URL a crawler fetches, and a 404 there is worse than the card that still works.
+
+---
+
 ## [1.21.2] — 2026-08-18
 
 No schema change. Finishes the job 1.21.1 started, one release too early.

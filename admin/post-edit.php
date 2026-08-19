@@ -79,6 +79,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $snapExcerpt     = $post?->excerpt;
     $snapContent     = $post?->content;
     $snapPostKind    = $post?->post_kind ?? 'standard';
+    $snapFeatured    = $post?->featured_image_url;
+    $snapFeaturedAlt = $post?->featured_image_alt ?? '';
     $wasPublished    = $post?->status === 'published';
 
     // Where the post currently lives on disk. Captured before the form is applied
@@ -96,6 +98,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $post->slug      = trim($_POST['slug']    ?? '');
     $post->content   = $_POST['content'] ?? '';
     $post->excerpt   = trim($_POST['excerpt'] ?? '') ?: null;
+
+    // The featured image comes from the media picker, so it is always a
+    // site-relative /media/ path — but it reaches an href on the public page,
+    // so it goes through the same scheme allowlist as a Micropub photo rather
+    // than being trusted for arriving over a session. Post::save() clears both
+    // columns when the post is a note, so the panel being hidden is enough.
+    $post->featured_image_url = Post::normaliseImageUrl(
+        (string) ($_POST['featured_image_url'] ?? ''),
+        $db->getSetting('site_url', '')
+    );
+    $post->featured_image_alt = $post->featured_image_url !== null
+        ? trim($_POST['featured_image_alt'] ?? '')
+        : '';
 
     if ($post->slug !== '') {
         $post->slug = Helpers::slugify($post->slug);
@@ -343,10 +358,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // which on an ordinary typo-fix save is four HTTP round-trips whose
         // answers are all thrown away.
         //
-        // The payload is built from these six fields plus photos and contexts,
+        // The payload is built from these seven fields plus photos and contexts,
         // and this handler cannot change those two — the photo and context
         // editors are Micropub-side. Anything here that alters what a status
         // says alters one of these.
+        //
+        // featured_image_url is in the list even though no status prints it: it
+        // is the picture Bluesky uploads as its link card thumbnail, and what
+        // the permalink advertises as og:image and so what Mastodon puts on its
+        // own card (Syndication::payload()). Changing it changes the copy.
         //
         // post_kind belongs in the list even though no status prints it: it is
         // what decides whether the copy links home at all, because a note
@@ -358,7 +378,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             || $post->published_at !== $snapPublishedAt
             || $post->excerpt      !== $snapExcerpt
             || $post->content      !== $snapContent
-            || $post->post_kind    !== $snapPostKind;
+            || $post->post_kind    !== $snapPostKind
+            || $post->featured_image_url !== $snapFeatured;
 
         // Rebuild this post + selectively rebuild neighbors and shared resources.
         // Anything public now, or public before this save, needs the pass; a
@@ -393,6 +414,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 || $post->published_at !== $snapPublishedAt
                 || $post->excerpt      !== $snapExcerpt
                 || $post->post_kind    !== $snapPostKind
+                // The card thumbnail on the home page and every archive, and
+                // the image the feeds carry.
+                || $post->featured_image_url !== $snapFeatured
+                || $post->featured_image_alt !== $snapFeaturedAlt
                 || $post->isNote()
                 || !empty($addedCategoryIds)
                 || !empty($removedCategoryIds);
@@ -753,6 +778,46 @@ if ($post->published_at) {
                     <a href="/admin/tags.php" class="form-hint" style="display:block;margin-top:.25rem">Manage tags →</a>
                 </div>
 
+                <!-- Featured image panel -->
+                <?php /* Titled posts only — a note leads with its own photos and
+                         has no featured slot. Hidden rather than omitted so the
+                         inputs stay in the form and a post flipped back to an
+                         article keeps the picture it had. Post::save() clears
+                         the columns for a note either way, so this is
+                         presentation, not enforcement — the same arrangement the
+                         Pixelfed checkbox uses. */ ?>
+                <div class="panel" id="featured-block"<?= $post->isNote() ? ' hidden' : '' ?>>
+                    <h2>Featured image</h2>
+                    <input type="hidden" name="featured_image_url" id="featured_image_url"
+                           value="<?= Helpers::e((string) $post->featured_image_url) ?>">
+
+                    <div id="featured-preview"<?= ($post->featured_image_url ?? '') === '' ? ' hidden' : '' ?>>
+                        <?php /* No src attribute at all when there is nothing to
+                                 show — src="" re-requests the current page. */ ?>
+                        <img id="featured-preview-img"
+                             <?php $featuredPreview = Helpers::safeUrl((string) $post->featured_image_url); ?>
+                             <?= $featuredPreview !== '' ? 'src="' . Helpers::e($featuredPreview) . '"' : '' ?>
+                             alt=""
+                             style="display:block;width:100%;height:auto;border-radius:var(--radius);margin-bottom:.5rem">
+                        <label for="featured_image_alt">Alt text</label>
+                        <input type="text" name="featured_image_alt" id="featured_image_alt"
+                               value="<?= Helpers::e($post->featured_image_alt) ?>"
+                               placeholder="Describe the picture…">
+                        <p class="form-hint">Shown to anyone who cannot see the image, and read out by screen readers.</p>
+                    </div>
+
+                    <p class="form-hint" id="featured-empty"<?= ($post->featured_image_url ?? '') !== '' ? ' hidden' : '' ?>>
+                        No featured image. It leads the post page and illustrates the post everywhere else — the home page card, the feeds, and the preview card on Mastodon and Bluesky.
+                    </p>
+
+                    <?php if (!empty($mediaItems)): ?>
+                    <button type="button" id="featured-choose-btn" class="btn btn--secondary btn--sm"
+                            style="margin-top:.5rem">Choose image</button>
+                    <?php endif; ?>
+                    <button type="button" id="featured-remove-btn" class="btn btn--secondary btn--sm"
+                            style="margin-top:.5rem"<?= ($post->featured_image_url ?? '') === '' ? ' hidden' : '' ?>>Remove</button>
+                </div>
+
                 <!-- Media insert panel -->
                 <?php if (!empty($mediaItems)): ?>
                 <div class="panel">
@@ -762,6 +827,7 @@ if ($post->published_at) {
                             style="margin-bottom:.5rem"
                             aria-label="Select multiple images to insert as a gallery">Select for gallery</button>
                     <p class="form-hint" id="gallery-hint" style="margin-bottom:.5rem">Select 2+ images, then click Insert gallery.</p>
+                    <p class="form-hint" id="featured-pick-hint" style="margin-bottom:.5rem" hidden>Click an image to make it the featured image.</p>
                     <div class="media-grid" id="media-insert-grid">
                         <?php foreach ($mediaItems as $m): ?>
                         <?php
@@ -814,13 +880,18 @@ window._existingTags = <?= json_encode(array_values(array_map(fn($t) => ['name' 
 // Pixelfed only takes photo posts, so its checkbox follows the kind select.
 // The server decides too — an unchecked box on a post saved as an article is
 // never read — so this is presentation, not enforcement.
+// A featured image belongs to a titled post, so its panel follows the kind
+// select the other way round. Same rule: the server clears the columns for a
+// note regardless (Post::save()), so this is presentation, not enforcement.
 (function () {
-    var kind  = document.getElementById('post_kind');
-    var block = document.getElementById('pixelfed-block');
-    if (!kind || !block) return;
+    var kind     = document.getElementById('post_kind');
+    var pixelfed = document.getElementById('pixelfed-block');
+    var featured = document.getElementById('featured-block');
+    if (!kind) return;
 
     kind.addEventListener('change', function () {
-        block.hidden = kind.value !== 'photo';
+        if (pixelfed) pixelfed.hidden = kind.value !== 'photo';
+        if (featured) featured.hidden = kind.value !== 'standard';
     });
 })();
 </script>

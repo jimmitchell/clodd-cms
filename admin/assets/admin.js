@@ -332,8 +332,9 @@ function setAction(action) {
     if (!grid) return;
 
     grid.addEventListener('click', (e) => {
-        // Don't single-insert when gallery-select mode is active.
+        // Don't single-insert while the grid is being used to pick something.
         if (grid.classList.contains('gallery-select-mode')) return;
+        if (grid.classList.contains('featured-select-mode')) return;
 
         const btn = e.target.closest('[data-url]');
         if (!btn) return;
@@ -389,8 +390,16 @@ function setAction(action) {
     }
 
     function enterGalleryMode() {
+        // One grid, two ways of using it. Cancel the other one through its own
+        // button so its state unwinds properly rather than being stranded on.
+        if (grid.classList.contains('featured-select-mode')) {
+            document.getElementById('featured-choose-btn')?.click();
+        }
         galleryMode = true;
         grid.classList.add('gallery-select-mode');
+        // Symmetric with the featured picker: one selection mode at a time, so
+        // the way into the other goes away while this one is running.
+        document.getElementById('featured-choose-btn')?.setAttribute('hidden', '');
         toggleBtn.textContent = 'Cancel';
         toggleBtn.classList.add('btn--danger');
         toggleBtn.classList.remove('btn--secondary');
@@ -400,6 +409,7 @@ function setAction(action) {
         galleryMode = false;
         selected.clear();
         grid.classList.remove('gallery-select-mode');
+        document.getElementById('featured-choose-btn')?.removeAttribute('hidden');
         grid.querySelectorAll('.media-thumb--selected').forEach(el => el.classList.remove('media-thumb--selected'));
         toggleBtn.textContent = 'Select for gallery';
         toggleBtn.classList.remove('btn--danger');
@@ -449,6 +459,102 @@ function setAction(action) {
 
         exitGalleryMode();
     });
+})();
+
+// ── Featured image picker ─────────────────────────────────────────────────────
+// Reuses the media insert grid rather than adding a second one: Choose puts it
+// into a pick mode, the next image click fills the hidden inputs the form
+// submits, and the panel shows what was chosen.
+
+(function initFeaturedImage() {
+    const urlInput  = document.getElementById('featured_image_url');
+    const altInput  = document.getElementById('featured_image_alt');
+    const preview   = document.getElementById('featured-preview');
+    const previewImg = document.getElementById('featured-preview-img');
+    const empty     = document.getElementById('featured-empty');
+    const chooseBtn = document.getElementById('featured-choose-btn');
+    const removeBtn = document.getElementById('featured-remove-btn');
+    const grid       = document.getElementById('media-insert-grid');
+    const pickHint   = document.getElementById('featured-pick-hint');
+    const galleryBtn = document.getElementById('gallery-select-btn');
+    const galleryHint = document.getElementById('gallery-hint');
+    if (!urlInput || !preview || !empty || !removeBtn) return;
+
+    let pickMode = false;
+
+    function render() {
+        const has = urlInput.value !== '';
+        preview.hidden   = !has;
+        empty.hidden     = has;
+        removeBtn.hidden = !has;
+    }
+
+    /**
+     * The picker writes to a hidden input, and assigning `.value` in script
+     * fires no event — so the dirty tracker above never sees it and #update-btn
+     * stays disabled. Choosing or removing a featured image and changing
+     * nothing else would then look like a save that does nothing at all.
+     */
+    function markDirty() {
+        urlInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function exitPickMode() {
+        if (!grid || !chooseBtn) return;
+        pickMode = false;
+        grid.classList.remove('featured-select-mode');
+        if (pickHint)     pickHint.hidden = true;
+        if (galleryBtn)   galleryBtn.hidden = false;
+        if (galleryHint)  galleryHint.hidden = false;
+        chooseBtn.textContent = 'Choose image';
+        chooseBtn.classList.remove('btn--danger');
+        chooseBtn.classList.add('btn--secondary');
+    }
+
+    function enterPickMode() {
+        if (!grid || !chooseBtn) return;
+        pickMode = true;
+        grid.classList.add('featured-select-mode');
+        if (pickHint) pickHint.hidden = false;
+        // Only one selection mode at a time, so the way into the other goes
+        // away — along with its instructions, which say the opposite of these.
+        if (galleryBtn)  galleryBtn.hidden = true;
+        if (galleryHint) galleryHint.hidden = true;
+        chooseBtn.textContent = 'Cancel';
+        chooseBtn.classList.add('btn--danger');
+        chooseBtn.classList.remove('btn--secondary');
+        grid.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    chooseBtn?.addEventListener('click', () => {
+        pickMode ? exitPickMode() : enterPickMode();
+    });
+
+    removeBtn.addEventListener('click', () => {
+        urlInput.value = '';
+        if (altInput) altInput.value = '';
+        render();
+        markDirty();
+    });
+
+    grid?.addEventListener('click', (e) => {
+        if (!pickMode) return;
+        const thumb = e.target.closest('.media-thumb[data-type="image"]');
+        if (!thumb || !thumb.dataset.url) return;
+
+        urlInput.value = thumb.dataset.url;
+        if (previewImg) previewImg.src = thumb.dataset.url;
+        // Seed the alt text from the file name only when there is nothing to
+        // lose — a name is a starting point, not a description, so never
+        // overwrite one the author already wrote.
+        if (altInput && altInput.value === '') altInput.value = thumb.dataset.name || '';
+        render();
+        markDirty();
+        exitPickMode();
+        altInput?.focus();
+    });
+
+    render();
 })();
 
 // ── Tag pill widget ───────────────────────────────────────────────────────────

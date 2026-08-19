@@ -31,7 +31,8 @@ class JsonFeed
         $desc    = $this->settings['site_description'] ?? '';
 
         $posts = $this->db->select(
-            "SELECT id, title, slug, content, excerpt, published_at, updated_at, post_kind
+            "SELECT id, title, slug, content, excerpt, published_at, updated_at, post_kind,
+                    featured_image_url, featured_image_alt
                FROM posts
               WHERE status = 'published'
                 AND deleted_at IS NULL
@@ -60,8 +61,9 @@ class JsonFeed
             $postUrl = $siteUrl . '/' . Post::datePath($post['published_at'], $post['slug'], $this->settings['timezone'] ?? '') . '/';
             $photos  = $photosById[(int) $post['id']] ?? [];
             $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [])
+                     . Post::storedFeaturedHtml($post['featured_image_url'] ?? null, (string) ($post['featured_image_alt'] ?? ''), $siteUrl)
                      . Post::photosHtml($photos, $siteUrl)
-                     . $this->converter->convert($post['content'])->getContent()
+                     . $this->converter->convert(Post::contentForRender((string) $post['content'], $post['featured_image_url'] ?? null))->getContent()
                      . Post::photoCaptionHtml($post['post_kind'] ?? null, $post['excerpt'] ?? null);
             $isNote  = Post::isNoteKind($post['post_kind'] ?? null);
 
@@ -75,11 +77,21 @@ class JsonFeed
             if (!$isNote) {
                 $item['title'] = $post['title'];
             }
-            // The image is reported from the effective photos, which fall back
-            // to the body for an admin-written photo post. $photos above stays
-            // the raw rows: photosHtml() prepends them to the content, so a
-            // body-derived image would render twice in content_html.
-            $itemPhotos = Post::photosOrBodyImages($photos, (string) $post['content'], $post['post_kind'] ?? null);
+            // The image a titled post is illustrated by is its featured one, so
+            // that comes first; the effective photos are the fallback, and they
+            // in turn fall back to the body for an admin-written photo post.
+            // $photos above stays the raw rows: photosHtml() prepends them to
+            // the content, so a body-derived image would render twice in
+            // content_html.
+            $itemFeatured = Post::featuredOrLeadingImage(
+                $post['featured_image_url'] ?? null,
+                (string) ($post['featured_image_alt'] ?? ''),
+                (string) $post['content'],
+                $post['post_kind'] ?? null
+            );
+            $itemPhotos = $itemFeatured !== null
+                ? [$itemFeatured]
+                : Post::photosOrBodyImages($photos, (string) $post['content'], $post['post_kind'] ?? null);
             if ($itemPhotos !== []) {
                 $imageUrl = (string) $itemPhotos[0]['url'];
                 $item['image'] = str_starts_with($imageUrl, '/') ? $siteUrl . $imageUrl : $imageUrl;
@@ -132,8 +144,9 @@ class JsonFeed
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
             $html    = Post::contextsHtml($post->contexts)
+                     . Post::storedFeaturedHtml($post->featured_image_url, $post->featured_image_alt, $siteUrl)
                      . Post::photosHtml($post->photos, $siteUrl)
-                     . $this->converter->convert($post->content)->getContent()
+                     . $this->converter->convert($post->renderableContent())->getContent()
                      . Post::photoCaptionHtml($post->post_kind, $post->excerpt);
 
             $item = [
@@ -146,9 +159,11 @@ class JsonFeed
             if (!$post->isNote()) {
                 $item['title'] = $post->title;
             }
-            // See render() above: reported from the effective photos, while
-            // photosHtml() at :135 keeps the raw rows so nothing renders twice.
-            $itemPhotos = $post->effectivePhotos();
+            // See render() above: the featured image first, then the effective
+            // photos, while photosHtml() above keeps the raw rows so nothing
+            // renders twice.
+            $itemFeatured = $post->effectiveFeaturedImage();
+            $itemPhotos   = $itemFeatured !== null ? [$itemFeatured] : $post->effectivePhotos();
             if ($itemPhotos !== []) {
                 $imageUrl = (string) $itemPhotos[0]['url'];
                 $item['image'] = str_starts_with($imageUrl, '/') ? $siteUrl . $imageUrl : $imageUrl;

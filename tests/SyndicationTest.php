@@ -391,6 +391,45 @@ final class SyndicationTest extends TestCase
         $this->assertSame('https://example.com/2026/08/01/a-proper-post/', $payload['url']);
     }
 
+    /**
+     * A featured image is the link card's *thumbnail*, and only that.
+     *
+     * It must never join `images`. A Bluesky record holds exactly one embed and
+     * an image embed outranks the external card (Bluesky::postToBluesky()), so
+     * attaching the lead picture would silently cost every titled post that has
+     * one the card 1.21.1 gave it — a regression that looks like nothing at all
+     * from here and only shows up on bsky.app.
+     */
+    public function testAFeaturedImageIsTheCardThumbnailAndNotAnAttachment(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $mediaDir = sys_get_temp_dir() . '/media';
+        if (!is_dir($mediaDir)) {
+            mkdir($mediaDir, 0775, true);
+        }
+        $file = $mediaDir . '/lead_' . bin2hex(random_bytes(4)) . '.jpg';
+        file_put_contents($file, 'JPEG');
+
+        try {
+            $post = $this->savedPost();
+            $post->title        = 'An illustrated post';
+            $post->excerpt      = 'The short version.';
+            $post->slug         = 'illustrated';
+            $post->status       = 'published';
+            $post->published_at = '2026-08-01 09:00:00';
+            $post->featured_image_url = '/media/' . basename($file);
+            $post->save();
+
+            $payload = $this->payloadFor($post);
+
+            $this->assertSame($file, $payload['og_image'], 'the card thumbnail is the featured image');
+            $this->assertSame([], $payload['images'], 'a featured image must never be attached as media');
+        } finally {
+            unlink($file);
+        }
+    }
+
     /** A note is its own words: no link back, because it is not a trailer. */
     public function testANoteSyndicatesWithNoLinkBack(): void
     {

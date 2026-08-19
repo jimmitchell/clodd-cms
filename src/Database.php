@@ -42,7 +42,7 @@ class Database
     // maintain on every analytics beacon write. No index removes the need to
     // aggregate a third of the table; only pre-aggregation would, and that is
     // not worth building for a dashboard nobody loads in a loop.
-    private const SCHEMA_VERSION = 29;
+    private const SCHEMA_VERSION = 30;
 
     public function __construct(private string $dbPath)
     {
@@ -810,6 +810,20 @@ class Database
         // re-indexing, the answer changes on its own and the warning stops.
         $this->pdo->exec("ALTER TABLE posts ADD COLUMN bluesky_verify_at DATETIME");
         $this->pdo->exec("ALTER TABLE posts ADD COLUMN bluesky_stale     INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private function applySchemaV30(): void
+    {
+        // A titled post's featured image: the picture that leads the page, and
+        // the one every metadata consumer reaches for — og:image, the card
+        // thumbnails, JSON Feed's item.image, the Bluesky link card thumb.
+        //
+        // A URL and its alt text rather than a media_id, because both of the
+        // things that resolve a picture here do it from the URL already
+        // (ImageTag::render(), SyndicationMedia::localPath()), and Micropub may
+        // legitimately send one that has no media row behind it.
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN featured_image_url TEXT");
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN featured_image_alt TEXT NOT NULL DEFAULT ''");
     }
 
     /** Insert or update a single settings row. */

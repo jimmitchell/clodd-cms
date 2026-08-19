@@ -17,6 +17,7 @@ A lightweight flat-file CMS with a PHP/SQLite admin panel and a fully static HTM
 - **Scheduling** — set a future publish date; posts promote automatically on next admin load
 - **Categories & tags** — full taxonomy system; posts can belong to multiple categories and tags; archive pages generated at `/category/{slug}/` and `/tag/{slug}/`; tag input is a pill-style picker with autocomplete against existing tags
 - **Related posts** — optional block at the foot of titled posts linking up to three others by shared categories and tags, scored so the closest match wins over the most recent; off by default, switched on in Settings → Content
+- **Featured images** — a titled post's lead picture, set from the editor, MarsEdit (`wp_post_thumbnail`) or Micropub (`featured`); renders above the body as `u-featured` and becomes the post's `og:image`, card thumbnail, feed image, and social preview card. A post that simply begins with an image gets the same treatment automatically, so nothing had to be migrated
 - **Media library** — drag-and-drop uploads with MIME validation; images, video, and audio supported (50 MB limit)
 - **Image galleries** — select multiple images in the post editor and insert a `[gallery]` shortcode; renders as a Mondrian-style tiled CSS Grid (curated layouts per image count 1–7; larger sets chunk into stacked sibling blocks that visually merge into one continuous tile field) with a looping lightbox
 - **Atom feed** — generated automatically at `/feed.xml`; embeds [Byline](https://bylinespec.org/1.0) elements so feed readers can show your name, bio, avatar, and verified social links
@@ -196,6 +197,26 @@ Each published post generates:
 
 The paginated index (`index.html`, `page/2/index.html`, …) and all three feeds (`feed.xml`, `feed.rss`, `feed.json`) are rebuilt on publish and when settings change.
 
+### Featured images
+
+A titled post can carry a **featured image** — the picture that leads the page, set from the *Featured image* panel in the editor sidebar (pick from the media library, with its own alt-text field). It renders between the post header and the body, and opens in the lightbox. It is styled by sharing the rules that style an image written into the post body, so the two are indistinguishable: same shadow, same corner radius, same width, and both step out past the text column on screens 880px and wider.
+
+Because the CMS knows what it is, the featured image is also the post's image everywhere else: `og:image` on the permalink (in place of the generated title card), the thumbnail on home-page and archive cards, the related-posts thumbnail, `item.image` in JSON Feed, and the preview card on Mastodon and Bluesky. It is marked up as `u-featured`, not `u-photo` — an article's lead picture is not its photo property.
+
+A post with **no** featured image whose body *begins* with an image gets the same treatment automatically, using that image. This is how every post written before the field existed behaves, so nothing had to be migrated — and it means MarsEdit works whether or not it offers a thumbnail field, since putting the picture at the top of the post is enough. The image is not moved or duplicated; it keeps rendering where it was written.
+
+If a featured image happens to be the *same* picture the body opens with, the body's copy is dropped when the page and feeds are rendered, so it never appears twice. A different picture at the top of the body is left where it is. Stored content is never rewritten by this — only what gets rendered.
+
+To convert those to real featured images:
+
+```bash
+php bin/promote-featured-images.php            # dry run — reports, writes nothing
+php bin/promote-featured-images.php --force    # move the picture into the field
+php bin/build.php
+```
+
+Featured images are titled-post only. Notes and photo posts lead with their own photos; switching a post to an aside or photo clears the field.
+
 ### Aside notes
 
 Asides are titleless short-form posts intended for IndieWeb-style notes. In the post editor, set **Post kind** to *Aside*; the title field becomes optional, the slug is hidden (it's auto-assigned from the post id on save), and a live character counter appears under the content showing both Bluesky-grapheme and Mastodon-character counts.
@@ -359,6 +380,8 @@ When PHP's GD extension is compiled with FreeType support, the CMS generates a 1
 
 The font files at `fonts/og/` must be present. The Docker image includes FreeType.
 
+A post with a [featured image](#featured-images) advertises that picture as its `og:image` instead. The title card is still generated and stays the fallback, so removing the featured image leaves something behind.
+
 ---
 
 ## Mastodon, Bluesky & Pixelfed Integration
@@ -459,6 +482,10 @@ The CMS exposes a WordPress-compatible XML-RPC API at `/admin/xmlrpc.php`. In Ma
 
 MarsEdit will show both a **Posts** and a **Pages** section. All post and page CRUD operations, media uploads, and the media library work from MarsEdit. The endpoint also supports the MetaWeblog API (for clients that prefer it) at the same URL.
 
+**Featured images** arrive as WordPress's `wp_post_thumbnail` (or `post_thumbnail`) in the post struct. The endpoint accepts an attachment id, a bare media-library id, or a URL, and returns the value on the way back out so a client can read back what it set. Uploads (`metaWeblog.newMediaObject`, `wp.uploadFile`) return `id` and `attachment_id` for exactly this purpose. An **absent** key leaves an existing featured image alone — clients that send only the fields they changed cannot drop the picture by omission; an empty string clears it.
+
+If your client offers no featured-image field, put the picture at the top of the post body instead — see [Featured images](#featured-images).
+
 ---
 
 ## Micropub / iA Writer
@@ -482,6 +509,8 @@ The endpoint accepts all three Micropub content types:
 | `multipart/form-data` | Same as form-encoded plus one or many `photo` file parts (uploaded via the existing media validator and prepended to the post body as Markdown image lines) |
 
 A client-supplied `summary` is stored as the post's excerpt and used verbatim by Mastodon/Bluesky syndication and feeds, replacing the auto-derived fallback.
+
+The mf2 `featured` property sets a titled post's [featured image](#featured-images). Values take the same shapes as `photo` — a bare URL or `{"value": "…", "alt": "…"}` — and only the first is used, since a post has one lead picture. It is supported in `replace`, `add` and `delete` updates, and reported by `q=source`.
 
 ### Queries
 
@@ -570,6 +599,8 @@ The CMS exposes a lightweight REST API at `/admin/api/`. Authentication is HTTP 
 | `GET` | `/admin/api/settings` | Read site settings (sensitive keys excluded) |
 
 Write endpoints (`POST`/`PUT`) accept `application/json`. Creating or updating a published post triggers the same static rebuild as the admin UI (post HTML, index, feed).
+
+Posts carry `featured_image_url` and `featured_image_alt` in both directions. On `PUT`, an absent `featured_image_url` leaves the existing picture alone and an empty string clears it — the same rule the XML-RPC thumbnail follows.
 
 CORS is restricted to the origin matching the configured `site_url`; falls back to `*` only when `site_url` is unset. Native app clients (iOS, Xcode) are unaffected — they do not send `Origin` headers.
 

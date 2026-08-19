@@ -1,6 +1,16 @@
 /* ── Reset & base ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* The `hidden` attribute has to actually hide things. The browser's own rule
+   for it is `[hidden] { display: none }` from the UA stylesheet, which any
+   author rule setting `display` beats — so `.btn { display: inline-flex }`
+   silently made the attribute inert on every button on every admin page, and
+   any element given a display of its own has the same problem. The lone
+   `.tag-autocomplete[hidden]` rule further down is a local patch for the same
+   thing. !important because the whole point is to outrank the display rule the
+   element already has. */
+[hidden] { display: none !important; }
+
 :root {
     --color-bg:        #f5f5f5;
     --color-surface:   #ffffff;
@@ -959,6 +969,23 @@ th:last-child { text-align: right; }
 .gallery-select-mode .media-thumb[data-type="image"]:hover {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(37,99,235,.35);
+}
+
+/* Featured image pick mode — the same grid, picking one instead of several, so
+   it answers the pointer the same way. Non-images dim: a featured image is an
+   image, and there is nothing to click on a video tile here. */
+.featured-select-mode .media-thumb[data-type="image"] {
+    cursor: pointer;
+}
+
+.featured-select-mode .media-thumb[data-type="image"]:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.35);
+}
+
+.featured-select-mode .media-thumb:not([data-type="image"]) {
+    opacity: .4;
+    cursor: default;
 }
 
 .media-thumb--selected {

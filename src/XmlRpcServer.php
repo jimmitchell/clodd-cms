@@ -192,7 +192,10 @@ class XmlRpcServer
                     $this->fault(400, 'Invalid media object: name and bits are required.');
                 }
 
-                echo XmlRpc::encodeResponse($this->xmlrpc_save_media($originalName, $mimeType, $bits));
+                echo XmlRpc::encodeResponse($this->xmlrpc_media_struct(
+                    $this->xmlrpc_save_media($originalName, $mimeType, $bits),
+                    $mimeType
+                ));
                 break;
 
             // ════════════════════════════════════════════════════════════════════════
@@ -811,7 +814,10 @@ class XmlRpcServer
                     $this->fault(400, 'Invalid upload: name and bits are required.');
                 }
 
-                echo XmlRpc::encodeResponse($this->xmlrpc_save_media($originalName, $mimeType, $bits));
+                echo XmlRpc::encodeResponse($this->xmlrpc_media_struct(
+                    $this->xmlrpc_save_media($originalName, $mimeType, $bits),
+                    $mimeType
+                ));
                 break;
 
             // ── Unknown method ────────────────────────────────────────────────────────
@@ -897,7 +903,23 @@ class XmlRpcServer
             'categories'     => array_column($post->categories, 'name'),
             'post_status'    => $post->status,
             'wp_post_format' => $this->xmlrpc_format_from_post($post),
+            // Sent back as an absolute URL rather than an attachment id: the id
+            // only exists for a picture that came through our media library, and
+            // a featured image may have arrived from Micropub as a bare URL. A
+            // client that echoes this struct back round-trips either way —
+            // xmlrpc_apply_featured_image() takes both forms.
+            'wp_post_thumbnail' => $this->xmlrpc_featured_url($post, $siteUrl),
         ];
+    }
+
+    /** A post's stored featured image as an absolute URL, or '' when it has none. */
+    private function xmlrpc_featured_url(Post $post, string $siteUrl): string
+    {
+        $url = (string) $post->featured_image_url;
+        if ($url === '') {
+            return '';
+        }
+        return str_starts_with($url, '/') ? rtrim($siteUrl, '/') . $url : $url;
     }
 
     /**
@@ -1101,6 +1123,12 @@ class XmlRpcServer
         // Post kind (WordPress post_format). 'aside' = titleless note.
         $this->xmlrpc_apply_kind($post, $struct);
 
+        // Featured image (WordPress wp_post_thumbnail). Applied in the mapper
+        // rather than beside each save() so newPost and editPost are covered by
+        // construction — there are four post handlers and the ones that got
+        // edited one at a time are exactly the ones that went wrong before.
+        $this->xmlrpc_apply_featured_image($post, $struct);
+
         // Title
         if (isset($struct['title'])) {
             $post->title = trim((string) $struct['title']);
@@ -1265,7 +1293,15 @@ class XmlRpcServer
             $this->fault(500, 'Failed to write media file.');
         }
 
-        $this->db->insert('media', [
+        // The WebP companions every other upload path writes. Without them an
+        // image posted from MarsEdit renders as a bare <img> forever, because
+        // ImageTag::render() falls back when the companions are missing — the
+        // whole responsive pipeline quietly skipped a whole upload route.
+        if (in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
+            (new Media($this->db, $mediaDir, $maxBytes))->generateWebp($mediaDir . '/' . $filename);
+        }
+
+        $id = $this->db->insert('media', [
             'filename'      => $filename,
             'original_name' => $originalName,
             'mime_type'     => $mimeType,
@@ -1273,7 +1309,91 @@ class XmlRpcServer
             'uploaded_at'   => date('Y-m-d H:i:s'),
         ]);
 
-        return ['url' => rtrim($this->siteUrl, '/') . '/media/' . $filename];
+        return [
+            'id'       => $id,
+            'filename' => $filename,
+            'url'      => rtrim($this->siteUrl, '/') . '/media/' . $filename,
+        ];
+    }
+
+    /**
+     * The upload response both media methods answer with.
+     *
+     * `id` and `attachment_id` are what a WordPress client needs before it can
+     * name a featured image at all: wp_post_thumbnail is an attachment id, so a
+     * response carrying only a URL leaves the client nothing to send back. The
+     * id is offset the same way wp.getMediaLibrary reports it, so the two agree.
+     *
+     * @param array{id:int,filename:string,url:string} $saved
+     * @return array<string,mixed>
+     */
+    private function xmlrpc_media_struct(array $saved, string $mimeType): array
+    {
+        return [
+            'id'            => (string) ($saved['id'] + self::MEDIA_ID_OFFSET),
+            'attachment_id' => (string) ($saved['id'] + self::MEDIA_ID_OFFSET),
+            'file'          => $saved['filename'],
+            'url'           => $saved['url'],
+            'type'          => $mimeType,
+        ];
+    }
+
+    /**
+     * Apply a featured image from a post struct, if the client sent one.
+     *
+     * WordPress names it `wp_post_thumbnail` and its value is an attachment id;
+     * `post_thumbnail` is what wp.getPost answers with, so accept it back too.
+     * A bare URL is accepted as well — not every client that wants to set a lead
+     * picture speaks in attachment ids, and the media endpoint hands out URLs.
+     *
+     * An **absent** key leaves the field alone. An edit struct that never
+     * mentions the thumbnail must not clear one, the same rule
+     * xmlrpc_kind_from_struct() follows for the post format. An empty string is
+     * a client saying "none", and does clear it.
+     *
+     * Mutates $post; the caller saves.
+     */
+    private function xmlrpc_apply_featured_image(Post $post, array $struct): void
+    {
+        $raw = $struct['wp_post_thumbnail'] ?? $struct['post_thumbnail'] ?? null;
+        if ($raw === null || is_array($raw)) {
+            return;
+        }
+
+        $value = trim((string) $raw);
+        if ($value === '' || $value === '0') {
+            $post->featured_image_url = null;
+            $post->featured_image_alt = '';
+            return;
+        }
+
+        if (ctype_digit($value)) {
+            // Offset first, then the bare row id — a client echoing back what
+            // wp.getMediaLibrary gave it sends the offset form, and one that
+            // read the id straight out of an upload response may not.
+            $id  = (int) $value;
+            $row = $this->db->selectOne(
+                "SELECT filename, original_name FROM media WHERE id = :id",
+                ['id' => $id >= self::MEDIA_ID_OFFSET ? $id - self::MEDIA_ID_OFFSET : $id]
+            );
+            if ($row === null) {
+                return;
+            }
+            $post->featured_image_url = '/media/' . rawurlencode((string) $row['filename']);
+            // No alt travels with a thumbnail id. The original filename is a
+            // placeholder the author can fix in the admin, and better than the
+            // empty string a screen reader gets otherwise.
+            if ($post->featured_image_alt === '') {
+                $post->featured_image_alt = (string) $row['original_name'];
+            }
+            return;
+        }
+
+        // A URL. Same allowlist as everywhere else — it reaches an href.
+        $url = Post::normaliseImageUrl($value, $this->siteUrl);
+        if ($url !== null) {
+            $post->featured_image_url = $url;
+        }
     }
 
     /**
@@ -1518,7 +1638,10 @@ class XmlRpcServer
             'comment_status'    => 'closed',
             'ping_status'       => 'closed',
             'post_format'       => $this->xmlrpc_format_from_post($post),
-            'post_thumbnail'    => '',
+            // See postToStruct() — a URL rather than an attachment id, so a
+            // featured image that never came through the media library still
+            // round-trips.
+            'post_thumbnail'    => $this->xmlrpc_featured_url($post, $siteUrl),
             'terms'             => array_merge(
                 array_map(fn($c) => [
                     'term_id'  => (string) $c['id'],
@@ -1544,6 +1667,9 @@ class XmlRpcServer
     private function applyWpPostStruct(Post $post, array $struct, string $timezone): void
     {
         $this->xmlrpc_apply_kind($post, $struct);
+
+        // See $this->applyStruct() — same field, same reason for living here.
+        $this->xmlrpc_apply_featured_image($post, $struct);
 
         if (isset($struct['post_title'])) {
             $post->title = trim((string) $struct['post_title']);

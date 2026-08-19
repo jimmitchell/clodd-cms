@@ -37,6 +37,9 @@ class Post
     public ?string $webmentions_sent_at = null;
     public string  $post_kind    = 'standard';
     public ?string $deleted_at   = null;
+    /** The picture that leads a titled post — see effectiveFeaturedImage(). */
+    public ?string $featured_image_url = null;
+    public string  $featured_image_alt = '';
 
     /** @var array<array<string,mixed>>  [['id'=>int,'name'=>string,'slug'=>string,'description'=>string], ...] */
     public array $categories = [];
@@ -402,6 +405,15 @@ class Post
      */
     public function save(): bool
     {
+        // A featured image belongs to a titled post. Flipping one to an aside
+        // or a photo clears it on the object, not just in the row — the build
+        // that follows a save reads this object, and a stale value would render
+        // a featured figure on a post that no longer has the slot for one.
+        if ($this->isNote()) {
+            $this->featured_image_url = null;
+            $this->featured_image_alt = '';
+        }
+
         $data = [
             'title'         => $this->title,
             'slug'          => $this->slug,
@@ -413,6 +425,8 @@ class Post
             'bluesky_skip'  => $this->bluesky_skip,
             'pixelfed_skip' => $this->pixelfed_skip,
             'post_kind'     => $this->post_kind,
+            'featured_image_url' => $this->featured_image_url,
+            'featured_image_alt' => $this->featured_image_alt,
             'updated_at'    => date('Y-m-d H:i:s'),
         ];
 
@@ -680,6 +694,187 @@ class Post
     public function effectivePhotos(): array
     {
         return self::photosOrBodyImages($this->photos, $this->content, $this->post_kind);
+    }
+
+    // ── Featured image (the stored one, or the body's leading image) ──────────
+
+    /**
+     * Normalise an image URL for storage: same-origin absolutes become
+     * site-relative, and anything whose scheme Helpers::safeUrl() refuses is
+     * rejected outright. Returns null when there is nothing usable.
+     *
+     * A featured image URL reaches an `href` in templates/post.php, and an href
+     * is a live sink where a `src` is inert — the same reasoning that put this
+     * check on Micropub photos when the 1.15.2 lightbox turned them into links.
+     * One definition, called from both places.
+     */
+    public static function normaliseImageUrl(string $url, string $siteUrl = ''): ?string
+    {
+        $url     = trim($url);
+        $siteUrl = rtrim($siteUrl, '/');
+        if ($url === '') {
+            return null;
+        }
+        if ($siteUrl !== '' && str_starts_with($url, $siteUrl . '/')) {
+            $url = substr($url, strlen($siteUrl));
+        }
+        // Checked after the origin rewrite, so a same-site absolute URL is
+        // judged in the site-relative form that is actually stored.
+        return Helpers::safeUrl($url) === '' ? null : $url;
+    }
+
+    /**
+     * The body's first image, but only when nothing but whitespace precedes it.
+     *
+     * This is the "featured image" of every post written before the field
+     * existed — the WordPress import left the picture as the opening paragraph,
+     * and MarsEdit writes them the same way. An image further down the body is
+     * an illustration and is not returned.
+     *
+     * @return array{url:string,alt:string}|null
+     */
+    public static function leadingBodyImage(string $body): ?array
+    {
+        $first = self::imagesInBody($body)[0] ?? null;
+        if ($first === null) {
+            return null;
+        }
+
+        // Whatever the body opens with has to *be* that image. Strip the things
+        // that are not content — leading whitespace, an HTML comment, and the
+        // paragraph wrapper an image written as HTML usually arrives in — then
+        // require an image at the very front. A sentence in front of it means
+        // the picture illustrates the post rather than leading it.
+        $lead = ltrim($body);
+        $lead = preg_replace('/^(?:<!--.*?-->\s*)+/s', '', $lead) ?? $lead;
+        $lead = preg_replace('/^<p\b[^>]*>\s*/i', '', $lead) ?? $lead;
+
+        return preg_match('/^(?:!\[[^\]]*\]\(|<img\b)/i', $lead) === 1 ? $first : null;
+    }
+
+    /**
+     * The body with its leading image removed, for promoting that image into
+     * the featured field without rendering it twice.
+     *
+     * Returns the body unchanged when leadingBodyImage() finds nothing, so it
+     * is safe to call on anything. The paragraph an HTML image usually arrives
+     * wrapped in goes with it — an empty <p> left behind would print as a gap.
+     */
+    public static function withoutLeadingImage(string $body): string
+    {
+        if (self::leadingBodyImage($body) === null) {
+            return $body;
+        }
+
+        $lead = '/^(\s*(?:<!--.*?-->\s*)*)'
+              . '(?:<p\b[^>]*>\s*(?:!\[[^\]]*\]\([^)]*\)|<img\b[^>]*>)\s*<\/p>'
+              . '|!\[[^\]]*\]\([^)]*\)'
+              . '|<img\b[^>]*>)'
+              . '\s*/is';
+
+        $stripped = preg_replace($lead, '', $body, 1);
+        return $stripped === null ? $body : ltrim($stripped);
+    }
+
+    /**
+     * The body to render, with a leading image removed when it is the same
+     * picture as the stored featured image.
+     *
+     * Without this the picture appears twice — once in the featured figure and
+     * once at the top of the body — and there are two ordinary ways to arrive
+     * there. A Micropub client that round-trips `q=source` reads back the
+     * derived `featured` property and may send it as a stored one while the
+     * image is still in the body; and an author can pick a featured image in
+     * the editor that they had already pasted at the top of the post.
+     *
+     * Guarding here rather than at each write path means the page and the feeds
+     * cannot disagree, and no client has to know the rule. It is deliberately
+     * an exact URL match: a *different* picture at the top of the body is a
+     * legitimate thing to have below a featured image.
+     */
+    public static function contentForRender(string $content, ?string $featuredUrl): string
+    {
+        $featuredUrl = $featuredUrl !== null ? trim($featuredUrl) : '';
+        if ($featuredUrl === '') {
+            return $content;
+        }
+
+        $leading = self::leadingBodyImage($content);
+        if ($leading === null || $leading['url'] !== $featuredUrl) {
+            return $content;
+        }
+
+        return self::withoutLeadingImage($content);
+    }
+
+    /** contentForRender() for this post. */
+    public function renderableContent(): string
+    {
+        return self::contentForRender($this->content, $this->featured_image_url);
+    }
+
+    /**
+     * The featured image this post *has*, whichever way it was written: the
+     * stored one, else the body's leading image on a titled post.
+     *
+     * **This is for consumers that report the post's image as data** — og:image,
+     * the card and related-post thumbnails, JSON Feed's item.image, the Bluesky
+     * link card thumbnail. Anything that *renders* the image beside the body
+     * must read `$post->featured_image_url` directly, or a derived image is
+     * drawn twice: once in the featured slot and once in the body it came from.
+     * The same contract photosOrBodyImages() carries, for the same reason.
+     *
+     * Only titled posts derive. A note leads with its own photos and has no
+     * featured slot, and an aside is not an article with a picture at the top.
+     *
+     * @return array{url:string,alt:string}|null
+     */
+    public static function featuredOrLeadingImage(?string $url, string $alt, string $content, ?string $postKind): ?array
+    {
+        $url = $url !== null ? trim($url) : '';
+        if ($url !== '') {
+            return ['url' => $url, 'alt' => $alt];
+        }
+        if (($postKind ?? 'standard') !== 'standard') {
+            return null;
+        }
+        return self::leadingBodyImage($content);
+    }
+
+    /** featuredOrLeadingImage() for this post. */
+    public function effectiveFeaturedImage(): ?array
+    {
+        return self::featuredOrLeadingImage(
+            $this->featured_image_url,
+            $this->featured_image_alt,
+            $this->content,
+            $this->post_kind
+        );
+    }
+
+    /**
+     * Render a *stored* featured image as an h-entry figure (u-featured), for
+     * the feed generators; templates render their own markup.
+     *
+     * Takes the raw column value rather than effectiveFeaturedImage() on
+     * purpose: a derived image is one the body already contains, and the feeds
+     * ship the whole body, so deriving here would put it in the entry twice.
+     * Empty string when there is no stored image — the caller concatenates.
+     *
+     * u-featured and not u-photo: an article's lead picture is not its photo
+     * property, and saying otherwise changes how a client reads its type.
+     */
+    public static function storedFeaturedHtml(?string $url, string $alt = '', string $siteUrl = ''): string
+    {
+        $url = $url !== null ? trim($url) : '';
+        if ($url === '') {
+            return '';
+        }
+        if ($siteUrl !== '' && str_starts_with($url, '/')) {
+            $url = rtrim($siteUrl, '/') . $url;
+        }
+        return '<figure><img class="u-featured" src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8')
+             . '" alt="' . htmlspecialchars($alt, ENT_QUOTES, 'UTF-8') . '"></figure>';
     }
 
     /**
@@ -1404,6 +1599,8 @@ class Post
         $post->webmentions_sent_at = $row['webmentions_sent_at'] ?? null;
         $post->post_kind           = $row['post_kind']           ?? 'standard';
         $post->deleted_at          = $row['deleted_at']          ?? null;
+        $post->featured_image_url  = $row['featured_image_url']  ?? null;
+        $post->featured_image_alt  = (string) ($row['featured_image_alt'] ?? '');
 
         return $post;
     }

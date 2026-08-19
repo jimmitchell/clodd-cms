@@ -201,15 +201,10 @@ function mp_parse_photo_values(array $vals, string $siteUrl): array
             $url = trim((string) $val);
             $alt = '';
         }
-        if ($url === '') {
-            continue;
-        }
-        if ($siteUrl !== '' && str_starts_with($url, $siteUrl . '/')) {
-            $url = substr($url, strlen($siteUrl));
-        }
-        // Checked after the origin rewrite above, so a same-site absolute URL
-        // is judged in the site-relative form that is actually stored.
-        if (\CMS\Helpers::safeUrl($url) === '') {
+        // Origin rewrite plus the scheme allowlist, shared with the featured
+        // image so there is one definition rather than two drifting ones.
+        $url = \CMS\Post::normaliseImageUrl($url, $siteUrl);
+        if ($url === null) {
             continue;
         }
         $rows[] = ['url' => $url, 'alt' => $alt, 'media_id' => null];
@@ -311,6 +306,21 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
             }
             return ((string) $p['alt'] === '') ? $url : ['value' => $url, 'alt' => (string) $p['alt']];
         }, $sourcePhotos);
+    }
+
+    // effectiveFeaturedImage(), for the same reason: a post written before the
+    // field existed keeps its lead picture at the top of the body, and a client
+    // asking for the source still needs to be told the post has one.
+    $sourceFeatured = $post->effectiveFeaturedImage();
+    if ($sourceFeatured !== null) {
+        $featuredUrl = (string) $sourceFeatured['url'];
+        if ($siteUrl !== '' && str_starts_with($featuredUrl, '/')) {
+            $featuredUrl = $siteUrl . $featuredUrl;
+        }
+        $featuredAlt = (string) $sourceFeatured['alt'];
+        $props['featured'] = [
+            $featuredAlt === '' ? $featuredUrl : ['value' => $featuredUrl, 'alt' => $featuredAlt],
+        ];
     }
 
     foreach (\CMS\Post::CONTEXT_KINDS as $kind) {
@@ -798,6 +808,14 @@ if ($action === 'update') {
                 $touchedPhotos = true;
                 break;
 
+            // No touched flag: this lives on the post row, which
+            // $post->save() writes. An empty value list clears it.
+            case 'featured':
+                $featured = mp_parse_photo_values($vals, $updSiteUrl)[0] ?? null;
+                $post->featured_image_url = $featured['url'] ?? null;
+                $post->featured_image_alt = (string) ($featured['alt'] ?? '');
+                break;
+
             case 'in-reply-to':
             case 'like-of':
             case 'repost-of':
@@ -855,6 +873,15 @@ if ($action === 'update') {
         } elseif ($prop === 'photo') {
             $newPhotos     = array_merge($newPhotos, mp_parse_photo_values($vals, $updSiteUrl));
             $touchedPhotos = true;
+        } elseif ($prop === 'featured') {
+            // A post has one featured image, so there is nothing to append to.
+            // Adding one where none is set is the useful reading; adding one
+            // over an existing one would silently discard whichever lost.
+            $featured = mp_parse_photo_values($vals, $updSiteUrl)[0] ?? null;
+            if ($featured !== null && ($post->featured_image_url ?? '') === '') {
+                $post->featured_image_url = $featured['url'];
+                $post->featured_image_alt = (string) $featured['alt'];
+            }
         } elseif (in_array($prop, \CMS\Post::CONTEXT_KINDS, true)) {
             foreach (mp_context_urls_from_values($prop, $vals) as $ctxUrl) {
                 $newContexts[] = ['kind' => $prop, 'url' => $ctxUrl];
@@ -890,6 +917,13 @@ if ($action === 'update') {
                 $applyCategories($kept);
             }
             $touchedTerms = true;
+        } elseif ($prop === 'featured') {
+            // delete: [featured]        (empty $vals) → clear it
+            // delete: {featured: [url]}               → clear it if it matches
+            if (empty($vals) || in_array((string) $post->featured_image_url, $normalizePhotoUrls($vals), true)) {
+                $post->featured_image_url = null;
+                $post->featured_image_alt = '';
+            }
         } elseif ($prop === 'summary') {
             $post->excerpt = null;
         } elseif (in_array($prop, \CMS\Post::CONTEXT_KINDS, true)) {
@@ -1031,6 +1065,15 @@ if (!empty($photoFiles)) {
     }
 }
 
+// ── Featured image (the mf2 `featured` property) ─────────────────────────────
+// One picture, parsed the same way a photo is — it accepts both a bare URL and
+// an {value, alt} object, and applies the scheme allowlist an href needs.
+// Post::save() drops it for a note, so no kind check is needed here.
+
+$featuredRow = isset($properties['featured']) && is_array($properties['featured'])
+    ? (mp_parse_photo_values($properties['featured'], $mpSiteUrl)[0] ?? null)
+    : null;
+
 // ── Contexts: reply/like/repost/bookmark targets ────────────────────────────
 
 $contextRows = mp_parse_context_values($properties);
@@ -1108,6 +1151,10 @@ $post->content      = $content;
 $post->excerpt      = $summary !== '' ? $summary : null;
 $post->status       = $status;
 $post->published_at = $publishedAt;
+if ($featuredRow !== null) {
+    $post->featured_image_url = $featuredRow['url'];
+    $post->featured_image_alt = (string) $featuredRow['alt'];
+}
 
 // mp-syndicate-to: when the property is present, syndicate only to the listed
 // target uids (empty list = none). Absent = default auto-syndication.

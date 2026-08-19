@@ -121,7 +121,10 @@ class Builder
         // Generate OG image first so the URL is available to the HTML template.
         $ogImageUrl = $this->buildOgImage($post);
 
-        $html = $this->renderBody($post->content);
+        // renderableContent(), not ->content: when the stored featured image is
+        // the same picture the body opens with, the body's copy comes out — the
+        // featured figure above is already showing it.
+        $html = $this->renderBody($post->renderableContent());
 
         // On a photo post the picture is the Largest Contentful Paint element,
         // and it is as often written inline in the body as attached as a
@@ -940,7 +943,8 @@ class Builder
             $post->published_at = date('Y-m-d H:i:s');
         }
 
-        $html = $this->renderBody($post->content);
+        // See buildPost() — the same de-duplication, so a preview matches.
+        $html = $this->renderBody($post->renderableContent());
 
         $rendered = $this->render('post.php', [
             'post'         => $post,
@@ -1006,9 +1010,16 @@ class Builder
         $ogPath   = $this->outputDir . '/posts/' . $datePath . '/og.png';
         $siteUrl  = rtrim($this->settings['site_url'] ?? '', '/');
 
+        // A real picture beats a text card in every preview that shows one, so
+        // a featured image is what Mastodon and every other OG consumer gets.
+        // The title card is still generated below as the fallback — removing
+        // the featured image has to leave something behind.
+        $featuredUrl = $this->featuredOgUrl($post, $siteUrl);
+
         if (!extension_loaded('gd')) {
             // Return existing URL if the image was previously generated.
-            return file_exists($ogPath) ? $siteUrl . '/' . $datePath . '/og.png' : '';
+            return $featuredUrl
+                ?? (file_exists($ogPath) ? $siteUrl . '/' . $datePath . '/og.png' : '');
         }
 
         $siteTitle  = $this->settings['site_title'] ?? '';
@@ -1026,7 +1037,39 @@ class Builder
             }
         }
 
-        return file_exists($ogPath) ? $siteUrl . '/' . $datePath . '/og.png' : '';
+        return $featuredUrl
+            ?? (file_exists($ogPath) ? $siteUrl . '/' . $datePath . '/og.png' : '');
+    }
+
+    /**
+     * The post's featured image as an absolute URL, or null when it has none.
+     *
+     * effectiveFeaturedImage(), so a post that was written with its picture at
+     * the top of the body — every WordPress import, and anything MarsEdit sent
+     * before the thumbnail field existed — advertises that picture too.
+     *
+     * An og:image has to be a URL a crawler can actually fetch, so one of our
+     * own paths is checked against the media directory first — a stored path
+     * whose file has gone missing would advertise a 404 in place of a title card
+     * that still works. A remote URL (Micropub may send one) is taken on trust:
+     * its scheme was allowlisted on the way in, and there is nothing to check
+     * here that would not mean an outbound request on the build path.
+     */
+    private function featuredOgUrl(Post $post, string $siteUrl): ?string
+    {
+        $featured = $post->effectiveFeaturedImage();
+        if ($featured === null) {
+            return null;
+        }
+
+        $url = $featured['url'];
+        if (!str_starts_with($url, '/')) {
+            return $url;
+        }
+
+        return SyndicationMedia::localPath($url, $this->mediaDir, $siteUrl) !== null
+            ? $siteUrl . $url
+            : null;
     }
 
     /**
