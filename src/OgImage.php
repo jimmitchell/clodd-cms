@@ -31,7 +31,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 3;
+    public const DESIGN_VERSION = 4;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -42,10 +42,10 @@ class OgImage
     private const TITLE_COLOR = [237, 230, 220];  // #EDE6DC --color-text
     private const META_COLOR  = [163, 154, 142];  // #A39A8E --color-muted
 
-    // Type scale. On the page the site name is the smaller of the two and the
-    // title carries the weight; the card exaggerates that gap because a preview
-    // is read at thumbnail size in a timeline, where only the title survives.
-    private const META_SIZE  = 26;
+    // Type scale. The title carries the card — a preview is read at thumbnail
+    // size in a timeline, where it is the only line that survives — but the site
+    // name still has to be legible at that size, which is what sets its floor.
+    private const META_SIZE  = 36;
     private const TITLE_MAX  = 61;
     private const TITLE_MIN  = 32;
 

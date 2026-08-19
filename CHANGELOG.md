@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.23.2] — 2026-08-19
+
+No schema change.
+
+### Changed
+
+- **The OG card's site name goes back up to 36pt.** 1.23.0 dropped it to 26 on the reasoning that only the title survives at thumbnail size; the name has to stay legible there too, and against the now-smaller 61pt title it reads as a byline rather than a footnote. The clearance guard absorbs it — a four-line title still sets at 52pt and clears the name.
+
+  `OgImage::DESIGN_VERSION` goes to 4, so **the next full build redraws every card again.**
+
+---
+
 ## [1.23.1] — 2026-08-19
 
 No schema change.
