@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.23.1] — 2026-08-19
+
+No schema change.
+
+### Changed
+
+- **The OG card's post title is set about 20% smaller** — the fit range drops from 76 down to 61, with the 32 floor unchanged. 76 crowded the frame on the one- and two-line titles that are the common case. Long titles that the fit loop was already setting below 61 are unaffected.
+
+  `OgImage::DESIGN_VERSION` goes to 3, so **the next full build redraws every card again.**
+
+---
+
 ## [1.23.0] — 2026-08-19
 
 No schema change.

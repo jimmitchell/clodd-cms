@@ -31,7 +31,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 2;
+    public const DESIGN_VERSION = 3;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -46,7 +46,7 @@ class OgImage
     // title carries the weight; the card exaggerates that gap because a preview
     // is read at thumbnail size in a timeline, where only the title survives.
     private const META_SIZE  = 26;
-    private const TITLE_MAX  = 76;
+    private const TITLE_MAX  = 61;
     private const TITLE_MIN  = 32;
 
     /**
@@ -61,8 +61,8 @@ class OgImage
 
     /**
      * Looser than the 1.1 `.post__title` uses on the page. That value is set for
-     * 27px type; DM Sans carries a 1.30em ascender-to-descender, so at 76px the
-     * page value runs the lines into each other.
+     * 27px type; DM Sans carries a 1.30em ascender-to-descender, so at display
+     * size the page value runs the lines into each other.
      */
     private const TITLE_LINE_HEIGHT = 1.2;
 
