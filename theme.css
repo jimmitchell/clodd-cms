@@ -1706,12 +1706,32 @@ audio { width: 100%; }
 }
 
 @media (max-width: 600px) {
-    /* One column, and the rules become the separators of a plain list. Stated
-       explicitly rather than left to auto-fit: two 11rem columns still fit at
-       this width, which would strand the third item alone on its own row. */
+    /* Tighter here than on the desktop grid: one column stacks the block far
+       taller, and it is the last thing before .post-nav. */
+    .related-posts {
+        margin-top: 2.25rem;
+    }
+
+    .related-posts__title {
+        margin-bottom: .75rem;
+    }
+
+    /* One column. Stated explicitly rather than left to auto-fit: two 11rem
+       columns still fit at this width, which would strand the third item
+       alone on its own row. */
     .related-posts__list {
         grid-template-columns: 1fr;
-        gap: 1.25rem;
+        gap: 1rem;
+    }
+
+    /* And no rules in one column. The hairline exists to give a row of mixed
+       items — one with a thumbnail, two without — a shared top edge, and a
+       single-column list has no row to align. Stacked, the three lines read
+       as empty headings sitting above the titles they belong to, so the gap
+       does the separating instead. */
+    .related-posts__item {
+        border-top: 0;
+        padding-top: 0;
     }
 }
 
