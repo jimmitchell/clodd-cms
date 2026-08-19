@@ -6,6 +6,7 @@ namespace CMS\Tests;
 
 use CMS\Builder;
 use CMS\Database;
+use CMS\OgImage;
 use CMS\Post;
 use PHPUnit\Framework\TestCase;
 
@@ -551,6 +552,84 @@ PHP);
             $marker,
             $lastRule,
             '.post__featured img is styled after =END CRITICAL=, so the LCP image would restyle on deferred load.'
+        );
+    }
+
+    /**
+     * The OG card is the site's dark scheme, not a palette of its own.
+     *
+     * A social preview is the first thing most readers see of a post, so a card
+     * drawn in colours that no longer match the site is a brand mismatch nobody
+     * notices — it renders on someone else's timeline, never on a page anyone
+     * here looks at. The three constants in OgImage are the dark-mode
+     * `--color-bg`, `--color-text` and `--color-muted` from theme.css, and this
+     * pins them to the values still declared there.
+     */
+    public function testTheOgCardUsesTheThemesDarkPalette(): void
+    {
+        $css = file_get_contents(dirname(__DIR__) . '/theme.css');
+        $this->assertNotFalse($css);
+
+        // The [data-theme="dark"] block is the manual-toggle copy of the tokens;
+        // the prefers-color-scheme block above it declares the same values.
+        $start = strpos($css, '[data-theme="dark"]');
+        $this->assertNotFalse($start, 'precondition: theme.css declares a dark token block');
+        $block = substr($css, $start, (int) strpos($css, '}', $start) - $start);
+
+        $expected = [];
+        foreach (['bg', 'text', 'muted'] as $token) {
+            $this->assertSame(
+                1,
+                preg_match('/--color-' . $token . ':\s*(#[0-9A-Fa-f]{6})/', $block, $m),
+                "precondition: --color-$token is declared in the dark block"
+            );
+            $expected[$token] = strtoupper($m[1]);
+        }
+
+        $og  = new \ReflectionClass(OgImage::class);
+        $map = [
+            'BG_COLOR'    => 'bg',
+            'TITLE_COLOR' => 'text',
+            'META_COLOR'  => 'muted',
+        ];
+
+        foreach ($map as $constant => $token) {
+            [$r, $g, $b] = $og->getConstant($constant);
+            $this->assertSame(
+                $expected[$token],
+                sprintf('#%02X%02X%02X', $r, $g, $b),
+                "OgImage::$constant has drifted from theme.css --color-$token."
+            );
+        }
+    }
+
+    /**
+     * And a retheme has to reach the cards already on disk.
+     *
+     * Builder::buildOgImage() redraws only when the hash it stamped last time
+     * changes, and that hash is over the text and the font file — neither of
+     * which moves when only the palette or the type scale does. So the design
+     * version is in the hash, and bumping it is what republishes the set.
+     */
+    public function testTheOgHashCoversTheCardDesign(): void
+    {
+        $src = file_get_contents(dirname(__DIR__) . '/src/Builder.php');
+        $this->assertNotFalse($src);
+
+        $src = preg_replace('!/\*.*?\*/!s', '', $src) ?? $src;
+        $src = preg_replace('!//[^\n]*!', '', $src) ?? $src;
+
+        $this->assertSame(
+            1,
+            preg_match('/\$ogHash\s*=\s*hash\(([^;]*)\);/s', $src, $m),
+            'precondition: buildOgImage() still computes $ogHash with hash()'
+        );
+
+        $this->assertStringContainsString(
+            'OgImage::DESIGN_VERSION',
+            $m[1],
+            'The OG hash omits OgImage::DESIGN_VERSION, so a card retheme would '
+            . 'leave every post already built showing the old design.'
         );
     }
 

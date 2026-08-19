@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.23.0] — 2026-08-19
+
+No schema change.
+
+### Changed
+
+- **The generated OG card now wears the site's own colours and type.** The title card drawn for a titled post with no featured image was a leftover default — near-black `#121212`, pure white, and a grey `#999` — which is not a palette that appears anywhere on the site. It is now the dark scheme verbatim: `#1A1715` behind, `#EDE6DC` for the post title, `#A39A8E` for the site name, all three read straight off the dark-mode tokens in `theme.css`. The typeface was already DM Sans and stays DM Sans; `fonts/og/` holds the static TTF cut of it because GD cannot read the variable `.woff2` the pages load.
+
+  The type scale changed with it. The site name drops from 36 to 26 and the title rises to a 76-down-to-32 fit, because a preview is read at thumbnail size in a timeline where only the title survives. The title block is hung off the foot of the card rather than centred, so a two-word title and a four-line one share a baseline and a run of cards reads as a set.
+
+  `OgImage::DESIGN_VERSION` is now part of the hash `Builder::buildOgImage()` stamps. Nothing else in that hash moves when only the palette or the type scale does, so without it every post already on disk would have kept its old card — **the next full build redraws the whole set.**
+
+### Fixed
+
+- **A long title no longer runs off the OG card.** Two overflows were reachable: a title still too long at the smallest size grew upwards through the site name and off the top, and a single unbreakable word — a URL, a hashtag — ran off the right edge at any size, because the wrapper never breaks inside a word. Both are now trimmed to fit with an ellipsis.
+
+### Tests
+
+- Two structural tests, both verified to fail when the thing they guard is undone: `OgImage`'s three colour constants must still equal the dark-mode `--color-bg` / `--color-text` / `--color-muted` declared in `theme.css`, and the OG hash must still include `OgImage::DESIGN_VERSION`.
+
+---
+
 ## [1.22.0] — 2026-08-18
 
 Schema v30: `posts.featured_image_url` and `posts.featured_image_alt`, both added by `ALTER TABLE` with no backfill.

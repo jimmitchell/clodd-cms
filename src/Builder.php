@@ -1024,7 +1024,14 @@ class Builder
 
         $siteTitle  = $this->settings['site_title'] ?? '';
         $fontStamp  = (string) (@filemtime($this->fontDir . '/DMSans-Bold.ttf') ?: 0);
-        $ogHash     = hash('sha256', $fontStamp . '|' . $siteTitle . '|' . $post->title);
+
+        // The design version is in the hash because nothing else in it moves when
+        // only the card's palette or type changes — a retheme would otherwise
+        // leave every post already on disk showing the old card forever.
+        $ogHash     = hash(
+            'sha256',
+            OgImage::DESIGN_VERSION . '|' . $fontStamp . '|' . $siteTitle . '|' . $post->title
+        );
 
         if ($ogHash !== $post->og_image_hash || !file_exists($ogPath)) {
             try {
