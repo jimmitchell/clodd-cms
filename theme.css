@@ -409,6 +409,18 @@ audio { width: 100%; }
     width: 100%;
 }
 
+/* Page one only, and only so `.home-intro`'s top margin can be read literally.
+   `.site-main` has no top padding or border, so a first child's top margin
+   collapses into this one and the larger of the two wins — which is why the
+   intro's top margin used to be written as `0` and made no difference either
+   way. Making the wrapper a block formatting context stops the collapse, so the
+   intro's 1rem is 1rem *added* to whatever margin the breakpoint gives here,
+   which is what makes it work at all three widths without restating the sum.
+   Scoped with `:has()` so post and page templates keep collapsing as before —
+   `.page, .post { margin-top: .7rem }` is swallowed on purpose. Browsers without
+   `:has()` fall back to the collapsed spacing, which is what shipped before. */
+.site-main:has(.home-intro) { display: flow-root; }
+
 .site-main--wide {
     max-width: var(--max-wide);
 }
@@ -769,8 +781,16 @@ audio { width: 100%; }
 /* No rule under the greeting — whitespace does the separating. A line here reads
    as a masthead and makes the intro feel like site furniture rather than a
    sentence someone wrote. */
+/* The 1rem top is not a taste value — it is page two's gap, copied. `.post-list`
+   opens with the h-feed's `<data class="p-name">`, which is empty but still takes
+   a grid cell, so every page's first card sits one `gap` (1rem) below the top of
+   the list. Page one is the only page with something above that list, and without
+   the same 1rem the intro would start higher than the card it replaces, so the
+   feed would appear to shift as you paged. If that `<data>` ever stops being a
+   grid item, this comes off with it — and see the `:has()` rule on `.site-main`,
+   without which this margin collapses away and does nothing. */
 .home-intro {
-    margin: .5rem 0 2.5rem;
+    margin: 1rem 0 2.5rem;
 }
 
 .home-intro__text {
@@ -816,7 +836,7 @@ audio { width: 100%; }
    the page, so it can sit closer and smaller without losing its footing. */
 @media (min-width: 640px) {
     .home-intro {
-        margin: 0 0 1.5rem;
+        margin: 1rem 0 1.5rem;
         padding: 1.15rem 1.25rem;
         border: 1px solid var(--color-border);
         border-radius: var(--radius);

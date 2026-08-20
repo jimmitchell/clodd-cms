@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.26.2] — 2026-08-20
+
+No schema change.
+
+### Fixed
+
+- **The home intro now starts where page two's first card does.** `.post-list` opens with the h-feed's `<data class="p-name">`, which renders nothing but still takes a grid cell, so the first card on every page sits one `gap` — 1rem — below the top of the list. Page one is the only page with anything above that list, and the intro was not carrying the same 1rem, so the feed appeared to shift up as you paged.
+
+  The margin it needed could not simply be written on `.home-intro`: `.site-main` has no top padding or border, so a first child's top margin collapses into the wrapper's and the larger of the two wins — which is why the intro's top margin was `0` at ≥640px and made no difference either way. `.site-main:has(.home-intro)` is now a block formatting context, which stops the collapse and lets `.home-intro { margin-top: 1rem }` mean 1rem *added* to whatever margin the breakpoint sets. Verified equal at 1280px, 620px and 500px — 45px, 45px and 48px, page one against page two.
+
+  Scoped with `:has()` so the post and page templates keep collapsing as they did; `.page, .post { margin-top: .7rem }` is swallowed on purpose. A browser without `:has()` gets the old collapsed spacing.
+
+---
+
 ## [1.26.1] — 2026-08-20
 
 No schema change.
