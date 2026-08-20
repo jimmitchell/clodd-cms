@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.26.1] — 2026-08-20
+
+No schema change.
+
+### Changed
+
+- **Body leading tightens from 1.6667 to 1.5556** — 28px on the 18px root where it was 30. Leading is read against the x-height rather than the em, and 1.26.0 swapped in a face whose x-height is .461em against the .504 the old value was tuned for; at the old setting the lines of a paragraph read as separate objects rather than a block. The new value keeps the same whole-pixel logic the old one had: 28/18, where 1.6667 was 30/18.
+
+---
+
 ## [1.26.0] — 2026-08-20
 
 No schema change.

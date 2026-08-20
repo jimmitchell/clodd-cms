@@ -13,7 +13,8 @@
    against .504) on an identical cap height, so lowercase reads a touch smaller
    at the same font-size while headings and the lettered UI land where they
    always did. The type scale is left as it was rather than scaled to
-   compensate — the face is meant to look like itself. */
+   compensate — the face is meant to look like itself. The leading is not:
+   see `body` below. */
 
 @font-face {
     font-family: 'GT Walsheim';
@@ -156,9 +157,14 @@ html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
 }
 
 
+/* 28px on the 18px root, where it was 30. Leading is set against the x-height
+   rather than the em, and Walsheim's is the shorter of the two faces — the
+   value tuned for DM Sans left the lines of a paragraph reading as separate
+   objects instead of a block. Keep it a whole pixel at the root size: 1.5556
+   is 28/18, the way 1.6667 was 30/18. */
 body {
     font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    line-height: 1.6667;
+    line-height: 1.5556;
     color: var(--color-text);
     background: var(--color-bg);
     -webkit-font-smoothing: antialiased;
