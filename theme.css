@@ -1039,6 +1039,7 @@ audio { width: 100%; }
 .post-card__photo--thumb img {
     max-height: 240px;
     object-fit: cover;
+    margin-bottom: 1rem;
 }
 
 .post-card--note .post-card__date a,
