@@ -1,25 +1,52 @@
 /* ── Clodd CMS — Public Theme ─────────────────────────────────────────────── */
 
-/* ── DM Sans — self-hosted variable font (Google Fonts, OFL license) ─────────
-   Sets everything on the site: UI, prose, and headings. Subset to latin +
-   latin-ext; the weight axis is clamped to 200–800, the range the theme
-   actually asks for. DM Sans also ships an optical-size axis — it is pinned
-   at 14 here rather than kept live, because carrying it costs 29 KB on the
-   preloaded critical path for an adjustment nothing on the page is large
-   enough to show. */
+/* ── GT Walsheim — self-hosted, four static cuts ─────────────────────────────
+   Sets everything on the site: UI, prose, and headings. It replaces the DM Sans
+   variable font, and the swap costs the weight axis: GT Walsheim ships here as
+   four discrete files, so the family has exactly **two weights, 400 and 700**,
+   and nothing in between. Ask for 500 or 600 anywhere below and the browser
+   rounds it — down to 400, up to 700 — which is why every rule in this file
+   states 400 or 700 outright. Keep it that way: a `font-weight: 600` that
+   silently renders as 700 is a lie the next reader has to run to catch.
+
+   Walsheim also sets a shorter x-height than the outgoing face did (.461em
+   against .504) on an identical cap height, so lowercase reads a touch smaller
+   at the same font-size while headings and the lettered UI land where they
+   always did. The type scale is left as it was rather than scaled to
+   compensate — the face is meant to look like itself. */
 
 @font-face {
-    font-family: 'DM Sans';
-    src: url('/fonts/DMSans-Variable.woff2') format('woff2');
-    font-weight: 200 800;
+    font-family: 'GT Walsheim';
+    src: url('/fonts/GTWalsheim-Regular.woff2') format('woff2');
+    font-weight: 400;
     font-style:  normal;
     font-display: swap;
 }
 
 @font-face {
-    font-family: 'DM Sans';
-    src: url('/fonts/DMSans-Variable-Italic.woff2') format('woff2');
-    font-weight: 200 800;
+    font-family: 'GT Walsheim';
+    src: url('/fonts/GTWalsheim-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style:  normal;
+    font-display: swap;
+}
+
+/* Walsheim's slanted cuts are true obliques, not a separate italic design.
+   They are still what `font-style: italic` has to resolve to — declaring them
+   here is what stops the browser synthesising a skew from the roman. */
+
+@font-face {
+    font-family: 'GT Walsheim';
+    src: url('/fonts/GTWalsheim-Oblique.woff2') format('woff2');
+    font-weight: 400;
+    font-style:  italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'GT Walsheim';
+    src: url('/fonts/GTWalsheim-BoldOblique.woff2') format('woff2');
+    font-weight: 700;
     font-style:  italic;
     font-display: swap;
 }
@@ -130,7 +157,7 @@ html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
 
 
 body {
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     line-height: 1.6667;
     color: var(--color-text);
     background: var(--color-bg);
@@ -143,8 +170,8 @@ body {
 
 /* .site-main { flex: 1; width: 100%; } */
 
-/* Headings run tighter than body copy — DM Sans sets a little loose at display
-   sizes. Uppercase micro-labels (.webmentions__title and friends) set their own
+/* Headings run tighter than body copy — Walsheim's round, geometric caps set
+   a little loose at display sizes. Uppercase micro-labels (.webmentions__title and friends) set their own
    positive tracking and keep it, since class beats element. */
 h1, h2, h3, h4, h5, h6 { letter-spacing: -0.02em; }
 
@@ -538,7 +565,7 @@ audio { width: 100%; }
     padding: .1rem .5rem;
     border-radius: var(--radius);
     font-size: .75rem;
-    font-weight: 500;
+    font-weight: 400;
     line-height: 1.4;
     text-decoration: none;
     transition: color .15s, border-color .15s;
@@ -562,7 +589,7 @@ audio { width: 100%; }
 
 /* ── Prose styles ─────────────────────────────────────────────────────────── */
 .prose {
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 1rem;
     /* line-height: 1.6; */
 }
@@ -575,7 +602,7 @@ audio { width: 100%; }
 .prose h4,
 .prose h5,
 .prose h6 {
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     line-height: 1.25;
     margin-top: 2em;
     margin-bottom: .5em;
@@ -620,7 +647,7 @@ audio { width: 100%; }
     max-width: 100px;
 }
 
-.prose strong { font-weight: 600; }
+.prose strong { font-weight: 700; }
 .prose em     { font-style: italic; }
 .prose u { text-decoration: none; border-bottom: 1px solid var(--color-muted) }
 
@@ -648,7 +675,7 @@ audio { width: 100%; }
     text-align: left;
 }
 
-.prose th { background: var(--color-code-bg); font-weight: 600; }
+.prose th { background: var(--color-code-bg); font-weight: 700; }
 
 /* Code */
 .prose code {
@@ -722,9 +749,16 @@ audio { width: 100%; }
 }
 
 /* ── Home intro (representative h-card) ───────────────────────────────────────
-   A greeting, not a card. It deliberately has no frame, avatar, or fill: the
-   feed below is all cards, so the one thing that isn't a post shouldn't look
-   like one. Set in the reading face because it is a sentence, not chrome. */
+   A greeting, set in the reading face because it is a sentence, not chrome.
+
+   Its frame is width-dependent, and that is the whole point of this section.
+   On a wide screen the feed below is two columns of cards, so an unframed
+   sentence floating above the grid reads as orphaned page furniture; the panel
+   at the foot of this block gives it a body of its own. On a phone the feed is
+   a single column and the intro is already the first thing on screen with
+   nothing beside it to be confused with — a frame there costs a gutter of
+   reading width and buys nothing. So the frame is opt-in at ≥640px rather than
+   opt-out below it: the narrow layout is the base, the panel is the addition. */
 
 /* No rule under the greeting — whitespace does the separating. A line here reads
    as a masthead and makes the intro feel like site furniture rather than a
@@ -734,7 +768,7 @@ audio { width: 100%; }
 }
 
 .home-intro__text {
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 1rem;
     /* line-height: 1.55; */
     text-wrap: pretty;
@@ -769,6 +803,29 @@ audio { width: 100%; }
     width: .95rem;
     height: .95rem;
     margin-right: .3rem;
+}
+
+/* Desktop and up: the greeting becomes a panel. The social row tightens with it
+   — inside a frame the row is a caption on a block rather than a line adrift on
+   the page, so it can sit closer and smaller without losing its footing. */
+@media (min-width: 640px) {
+    .home-intro {
+        margin: 0 0 1.5rem;
+        padding: 1.15rem 1.25rem;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--color-code-bg);
+    }
+
+    .home-intro__social {
+        gap: .75rem;
+        font-size: .8rem;
+    }
+
+    .home-intro__social .social-link svg {
+        width: .8rem;
+        height: .8rem;
+    }
 }
 
 /* ── Post list / index ────────────────────────────────────────────────────── */
@@ -832,7 +889,7 @@ audio { width: 100%; }
 }
 
 .post-card__title {
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 1.3rem;
     font-weight: 700;
     line-height: 1.2;
@@ -874,7 +931,7 @@ audio { width: 100%; }
 }
 
 .post-card__excerpt {
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--color-muted);
     font-size: .95rem;
     flex: 1;
@@ -1273,7 +1330,7 @@ audio { width: 100%; }
     outline: none;
     color: var(--color-text);
     /* The reading face, so the query looks like the prose it searches. */
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 1.5rem;
     line-height: 1.3;
     padding: 0;
@@ -1539,7 +1596,7 @@ audio { width: 100%; }
 .footnotes {
     font-size: .85rem;
     color: var(--color-muted);
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .footnotes ol { padding-left: 1.5em; }
@@ -1551,7 +1608,7 @@ audio { width: 100%; }
     vertical-align: super;
     line-height: 0;
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .footnote-backref {
@@ -1572,7 +1629,7 @@ audio { width: 100%; }
 .post__syndication a {
     color: var(--color-muted);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 400;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     padding: .1rem .5rem;
@@ -1676,7 +1733,7 @@ audio { width: 100%; }
 .related-posts__link {
     display: block;
     font-size: .9rem;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.3;
     color: var(--color-text);
     text-decoration: none;
@@ -1765,7 +1822,7 @@ audio { width: 100%; }
 
 .post-nav__link {
     font-size: .9rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--color-text);
     text-decoration: none;
     line-height: 1.3;
@@ -1808,7 +1865,7 @@ audio { width: 100%; }
 
 .error-page__message {
     font-size: 1.5rem;
-    font-weight: 600;
+    font-weight: 700;
     margin: 0 0 .5rem;
 }
 
@@ -2172,7 +2229,7 @@ audio { width: 100%; }
 
 .wm-group-label {
     font-size: .8rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--color-muted);
     margin-bottom: .9rem;
 }
@@ -2203,7 +2260,7 @@ audio { width: 100%; }
 }
 
 .wm-reply__author {
-    font-weight: 600;
+    font-weight: 700;
     font-size: .875rem;
     color: var(--color-text);
     text-decoration: none;

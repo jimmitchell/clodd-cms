@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.26.0] — 2026-08-20
+
+No schema change.
+
+### Changed
+
+- **The site is set in GT Walsheim**, replacing DM Sans across UI, prose and headings. Four self-hosted static cuts — roman and oblique at 400 and 700 — take over from the two variable files, and `fonts/` holds only those; the DM Sans WOFF2s and the OFL notice that covered them are gone.
+
+  **The family has exactly two weights.** Where the variable font offered a live 200–800 axis, Walsheim here is 400 or 700 and nothing between, so the ten rules that asked for 500 or 600 now state what the browser was going to round them to anyway: the tag chip and the syndication link drop to 400, and `strong`, table headings, footnote references, the related-post and post-nav links, the 404 message, and the webmention labels go to 700. Nothing moves on the page — the point is that the stylesheet no longer says one thing and renders another.
+
+  **The obliques are declared rather than synthesised.** Walsheim's slanted cuts are true obliques, not a separate italic design, but they are still what `font-style: italic` has to resolve to; without the two `@font-face` rules the browser would skew the roman instead.
+
+  Walsheim sets a shorter x-height than DM Sans did — .461em against .504 — on an identical cap height, so lowercase reads a touch smaller at the same `font-size` while headings and the lettered UI land where they always did. The type scale is left as it was rather than scaled to compensate.
+
+- **Both romans are preloaded now, not one.** The variable font put every weight in a single file; four static cuts put the bold in its own request, and the first screen is mostly bold — the site name, every card title, the post title. Discovering it from the stylesheet cost a second hop and a visible reflow on the largest text on the page, so `templates/base.php` pulls the regular and the bold forward together (96 KB). The obliques stay behind, for the reason the roman-only preload was written: they set the occasional `<em>`, and preloading them competes for bandwidth with the faces actually needed to paint.
+
+- **The generated OG card follows the site into Walsheim.** `fonts/og/` now holds the TTF cut of it, because GD still cannot read the `.woff2` the pages load. `OgImage::DESIGN_VERSION` goes to 6, so **the next full build redraws every card** — without that bump the hash would not have moved and every card already on disk would have kept its old face on a build reporting success.
+
+- **The OG title's leading opens from 1.2 to 1.3**, and not by taste. A line of GT Walsheim Bold carrying both an ascender and a descender measures about 1.21em of ink, so the old value set lines that physically overlapped — the "p" of *swapping* into the "t" of *typeface* on the line below. Walsheim's extenders are long against its x-height, which is why the value tuned for the previous face does not survive the swap. There is still room for `TITLE_LINES_MAX` lines at `TITLE_MAX` with the avatar drawn, and no more.
+
+---
+
 ## [1.24.0] — 2026-08-19
 
 No schema change.

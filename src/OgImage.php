@@ -15,10 +15,10 @@ use RuntimeException;
  *
  * The card is the site's dark scheme, not a palette of its own. Its three
  * colours are lifted verbatim from the dark-mode tokens in `theme.css`, and
- * the type is the same DM Sans the site loads — `fonts/og/` holds the static
- * TTF cut of it because GD cannot read the variable `.woff2` the pages use.
- * A social preview is usually the first thing anyone sees of a post, so it
- * should look like the page it opens.
+ * the type is the same GT Walsheim the site loads — `fonts/og/` holds the TTF
+ * cut of it because GD cannot read the `.woff2` the pages use. A social
+ * preview is usually the first thing anyone sees of a post, so it should look
+ * like the page it opens.
  *
  * Change any of that and bump DESIGN_VERSION, or every post already on disk
  * keeps its old card: `Builder::buildOgImage()` only redraws when the hash it
@@ -31,7 +31,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 5;
+    public const DESIGN_VERSION = 6;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -71,11 +71,18 @@ class OgImage
     private const AVATAR_GAP  = 26;
 
     /**
-     * Looser than the 1.1 `.post__title` uses on the page. That value is set for
-     * 27px type; DM Sans carries a 1.30em ascender-to-descender, so at display
-     * size the page value runs the lines into each other.
+     * Looser than the 1.1 `.post__title` uses on the page, and not by taste:
+     * a line of GT Walsheim Bold carrying both an ascender and a descender
+     * measures about 1.21em of ink, so anything at or under that value sets
+     * lines that physically overlap — a "p" into the "t" on the line below.
+     * Walsheim's extenders are long against its x-height, which is why the 1.2
+     * that worked for the previous face does not work for this one. The value
+     * here is the ink plus a little under a tenth of an em of air.
+     *
+     * Raising it costs lines: with an avatar drawn there is room for exactly
+     * TITLE_LINES_MAX at TITLE_MAX, and no more.
      */
-    private const TITLE_LINE_HEIGHT = 1.2;
+    private const TITLE_LINE_HEIGHT = 1.3;
 
     private string $fontRegular;
     private string $fontBold;
@@ -89,13 +96,13 @@ class OgImage
         }
 
         if (
-            file_exists($fontDir . '/DMSans-Regular.ttf') &&
-            file_exists($fontDir . '/DMSans-Bold.ttf')
+            file_exists($fontDir . '/GTWalsheim-Regular.ttf') &&
+            file_exists($fontDir . '/GTWalsheim-Bold.ttf')
         ) {
-            $this->fontRegular = $fontDir . '/DMSans-Regular.ttf';
-            $this->fontBold    = $fontDir . '/DMSans-Bold.ttf';
+            $this->fontRegular = $fontDir . '/GTWalsheim-Regular.ttf';
+            $this->fontBold    = $fontDir . '/GTWalsheim-Bold.ttf';
         } else {
-            throw new RuntimeException('DMSans-Regular.ttf and DMSans-Bold.ttf not found in ' . $fontDir);
+            throw new RuntimeException('GTWalsheim-Regular.ttf and GTWalsheim-Bold.ttf not found in ' . $fontDir);
         }
     }
 

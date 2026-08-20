@@ -1023,7 +1023,7 @@ class Builder
         }
 
         $siteTitle  = $this->settings['site_title'] ?? '';
-        $fontStamp  = (string) (@filemtime($this->fontDir . '/DMSans-Bold.ttf') ?: 0);
+        $fontStamp  = (string) (@filemtime($this->fontDir . '/GTWalsheim-Bold.ttf') ?: 0);
 
         // Only a local upload is drawn, for the reason headerAvatar() gives: a
         // remote one would mean fetching an arbitrary URL on the build path.

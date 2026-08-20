@@ -376,7 +376,7 @@ Both the Atom and RSS feeds embed [Byline 1.0](https://bylinespec.org/1.0) eleme
 
 ## Open Graph Images
 
-When PHP's GD extension is compiled with FreeType support, the CMS generates a 1200×630 PNG for each published post. The image includes the post title and site name rendered in DM Sans. Images are cached by a hash of the title + site name; they regenerate only when either changes.
+When PHP's GD extension is compiled with FreeType support, the CMS generates a 1200×630 PNG for each published post. The image includes the post title and site name rendered in GT Walsheim. Images are cached by a hash of the title + site name; they regenerate only when either changes.
 
 The font files at `fonts/og/` must be present. The Docker image includes FreeType.
 
@@ -641,7 +641,7 @@ Log entries older than 90 days are pruned automatically on a ~1% probabilistic c
 /feed.json                  → JSON Feed 1.1
 /media/{filename}           → content/media/ alias
 /theme.css                  → public stylesheet
-/fonts/                     → DM Sans web font files
+/fonts/                     → GT Walsheim web font files
 ```
 
 Stale pagination pages and unpublished post/page files are removed automatically on rebuild.
@@ -663,7 +663,7 @@ The public theme is a single file, `theme.css`, edited directly — there is no 
 
 Dark mode activates automatically when the system preference is `dark`. The toggle button in the header overrides this and persists the choice in `localStorage`. An inline script in `<head>` applies the stored preference before the stylesheet loads, preventing any flash of the wrong color scheme.
 
-The site is set entirely in [DM Sans](https://fonts.google.com/specimen/DM+Sans) — UI, prose, and headings alike (self-hosted variable WOFF2, OFL license). To add custom styles without editing `theme.css`, use **Settings → Custom CSS**.
+The site is set entirely in [GT Walsheim](https://www.grillitype.com/typeface/gt-walsheim) — UI, prose, and headings alike (self-hosted WOFF2, four static cuts: roman and oblique in 400 and 700). The family has no weights between those two, so `theme.css` asks only for 400 or 700. To add custom styles without editing `theme.css`, use **Settings → Custom CSS**.
 
 ### Critical CSS
 
@@ -704,7 +704,7 @@ clodd-cms/
 │   └── media/              # Uploaded files (not committed)
 ├── data/                   # SQLite database (not committed)
 ├── docker/                 # Docker-specific Nginx config, PHP ini, entrypoint
-├── fonts/                  # DM Sans WOFF2 files + OG image fonts (fonts/og/)
+├── fonts/                  # GT Walsheim WOFF2 files + OG image fonts (fonts/og/)
 ├── src/                    # PHP source classes (namespace CMS\)
 │   ├── ActivityLog.php     # Admin activity logger
 │   ├── Auth.php            # Login, session, CSRF, rate limiting, TOTP 2FA
