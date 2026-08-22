@@ -166,11 +166,86 @@ final class SyndicationTest extends TestCase
         );
     }
 
+    /**
+     * The three reference shapes, resolved through the definitions at the foot
+     * of the body. Before this they yielded nothing and the definition line
+     * itself survived flattening, so a note pointing somewhere by reference
+     * reached the timeline as a literal "[label]: https://…".
+     */
+    public function testLinkUrlsResolvesEveryReferenceShape(): void
+    {
+        $md = "Full [this piece][piece], collapsed [Piece][], shortcut [followup].\n\n"
+            . '[piece]: https://example.org/piece "A title"' . "\n"
+            . '[followup]: <https://example.org/followup>' . "\n";
+
+        $this->assertSame(
+            ['https://example.org/piece', 'https://example.org/followup'],
+            Post::linkUrls($md)
+        );
+    }
+
+    /**
+     * A label is only a link once something defines it — the same test
+     * CommonMark applies. That is what keeps an ordinary bracketed aside from
+     * being read as one, and what makes an unused definition contribute
+     * nothing.
+     */
+    public function testAnUndefinedLabelIsNotALink(): void
+    {
+        $md = "Nothing to see: [sic], [a][b].\n\n[unused]: https://example.org/never\n";
+
+        $this->assertSame([], Post::linkUrls($md));
+        $this->assertSame('Nothing to see: [sic], a.', Post::plaintextFromMarkdown($md));
+    }
+
+    /** Labels compare trimmed, whitespace-collapsed and case-folded. */
+    public function testAReferenceLabelIsMatchedLoosely(): void
+    {
+        $md = "[one][A] and [My  Ref][]\n\n[a]: https://example.org/one\n[my ref]: https://example.org/two\n";
+
+        $this->assertSame(['https://example.org/one', 'https://example.org/two'], Post::linkUrls($md));
+    }
+
+    /**
+     * A reference image is the picture itself, like any other. The guard that
+     * keeps `![alt][x]` off the list leaves `[x]` sitting there looking exactly
+     * like a shortcut, so the status trailed the file it had just attached.
+     */
+    public function testAReferenceImageIsNotALink(): void
+    {
+        $md = "Look: ![a flower][flower], and again ![flower].\n\n[flower]: https://example.org/flower.jpg\n";
+
+        $this->assertSame([], Post::linkUrls($md));
+        $this->assertSame('Look: , and again .', Post::plaintextFromMarkdown($md));
+    }
+
+    /** A `[^1]` label is a GFM footnote, not a link, and is left alone. */
+    public function testAFootnoteDefinitionIsNotALinkDefinition(): void
+    {
+        $md = "Style[^1] matters.\n\n[^1]: Just a note.\n";
+
+        $this->assertSame([], Post::linkUrls($md));
+        $this->assertStringContainsString('[^1]', Post::plaintextFromMarkdown($md));
+    }
+
+    /**
+     * A definition line is machinery, not words. Left in, it reached
+     * og:description, the search index and every syndicated status verbatim.
+     */
+    public function testDefinitionLinesLeaveNothingBehindWhenFlattened(): void
+    {
+        $md = "The words.\n\n[piece]: https://example.org/piece \"A title\"\n"
+            . '[followup]: <https://example.org/followup>' . "\n";
+
+        $this->assertSame('The words.', Post::plaintextFromMarkdown($md, true));
+    }
+
     /** Only what a reader can follow: no mailto:, no javascript:, no relative path. */
     public function testLinkUrlsTakesOnlyHttpUrls(): void
     {
         $md = '[mail](mailto:jim@example.com), [script](javascript:alert(1)), '
-            . '[local](/2026/08/a-post/), [real](https://example.com/x).';
+            . "[local](/2026/08/a-post/), [rel][r], [real](https://example.com/x).\n\n"
+            . "[r]: /2026/08/another/\n";
 
         $this->assertSame(['https://example.com/x'], Post::linkUrls($md));
     }

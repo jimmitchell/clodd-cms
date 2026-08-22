@@ -238,15 +238,47 @@ function setAction(action) {
         ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
         : null;
 
+    // Mirrors Post::LINK_DEFINITION — `[label]: url "Optional title"`. A label
+    // opening with ^ is a GFM footnote, not a link.
+    const linkDefinition = () =>
+        /^[ ]{0,3}\[(?!\^)([^\]\n]+)\]:[ \t]*<?([^\s<>]+)>?(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$/gm;
+
+    // Mirrors Post::linkLabel(): trimmed, inner whitespace collapsed, folded.
+    function linkLabel(label) {
+        return label.trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    // Mirrors Post::linkDefinitions(). A Map, not an object, so a label like
+    // "constructor" cannot collide with something already on the prototype.
+    function linkDefinitions(md) {
+        const defs = new Map();
+        const re   = linkDefinition();
+        let m;
+        while ((m = re.exec(md)) !== null) {
+            const label = linkLabel(m[1]);
+            if (!defs.has(label)) defs.set(label, m[2]);
+        }
+        return defs;
+    }
+
     function plaintextFromMarkdown(md) {
-        let t = md;
+        const defs = linkDefinitions(md);
+        // Definition lines go first, off the raw source: stripping tags eats an
+        // angle-bracketed target and leaves a bare "[label]:" behind.
+        let t = md.replace(linkDefinition(), '');           // link definitions
         t = t.replace(/<[^>]+>/g, '');                      // HTML tags
         t = t.replace(/^#{1,6}[ \t]+/gm, '');               // headings
         t = t.replace(/(\*{1,3}|_{1,3})([\s\S]+?)\1/g, '$2'); // bold/italic
         t = t.replace(/~~([\s\S]+?)~~/g, '$1');             // strikethrough
         t = t.replace(/`+[^`]*`+/g, '');                    // inline code
         t = t.replace(/!\[[^\]]*\]\([^\)]*\)/g, '');        // images
+        t = t.replace(/!\[[^\]]*\]\[[^\]]*\]/g, '');        // ref images
         t = t.replace(/\[([^\]]+)\]\([^\)]*\)/g, '$1');     // links
+        t = t.replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1');     // ref links
+        if (defs.size) {                                    // shortcut refs
+            t = t.replace(/(!?)\[([^\][]+)\]/g, (whole, bang, label) =>
+                !defs.has(linkLabel(label)) ? whole : (bang === '!' ? '' : label));
+        }
         // Mirrors Post::plaintextFromMarkdown($md, true): spaces and tabs
         // collapse, line breaks survive, and a run of blank lines counts as the
         // one paragraph break it renders as.
@@ -259,11 +291,22 @@ function setAction(action) {
     // Mirrors Post::linkUrls(): the URLs a note trails its body with, since
     // flattening the Markdown keeps a link's words and drops its address.
     function linkUrls(md) {
-        const re = /(?<!!)\[[^\]]*\]\(\s*<?(https?:\/\/[^\s<>()]+)|<a\b[^>]*?\bhref\s*=\s*["'](https?:\/\/[^"']+)["']|<(https?:\/\/[^\s<>]+)>/gi;
+        const defs = linkDefinitions(md);
+        const re = /(?<!!)\[[^\]]*\]\(\s*<?(?<inline>https?:\/\/[^\s<>()]+)|(?<!!)\[(?<refText>[^\]]*)\]\[(?<refLabel>[^\]]*)\]|<a\b[^>]*?\bhref\s*=\s*["'](?<anchor>https?:\/\/[^"']+)["']|<(?<auto>https?:\/\/[^\s<>]+)>|(?<![!\]])\[(?<shortcut>[^\][]+)\](?![ \t]*[[(:])/gi;
         const urls = [];
         let m;
         while ((m = re.exec(md)) !== null) {
-            const url = (m[1] || m[2] || m[3]).replace(/&amp;/gi, '&');
+            const g = m.groups;
+            let url = g.inline || g.anchor || g.auto;
+            if (!url) {
+                // undefined tells an alternative that did not match from one
+                // that matched empty — `[text][]` names its label with its own
+                // words.
+                const label = g.refLabel !== undefined ? (g.refLabel || g.refText) : g.shortcut;
+                url = label === undefined ? undefined : defs.get(linkLabel(label));
+            }
+            if (!url || !/^https?:\/\//i.test(url)) continue;
+            url = url.replace(/&amp;/gi, '&');
             if (!urls.includes(url)) urls.push(url);
         }
         return urls;

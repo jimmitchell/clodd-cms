@@ -1317,6 +1317,16 @@ class Post
     }
 
     /**
+     * A link definition at the foot of a body: `[label]: url "Optional title"`.
+     *
+     * Up to three spaces of indent, an optionally angle-bracketed target, and an
+     * optional title in quotes or parentheses — CommonMark's shape. A label
+     * opening with `^` is a GFM footnote, not a link, and is left alone.
+     */
+    private const LINK_DEFINITION = '/^\h{0,3}\[(?!\^)([^\]\n]+)\]:\h*<?([^\s<>]+)>?'
+        . '(?:\h+(?:"[^"\n]*"|\'[^\'\n]*\'|\([^)\n]*\)))?\h*$/m';
+
+    /**
      * Strip common Markdown syntax and HTML tags, returning normalized plain text.
      *
      * $keepBreaks keeps the body's line structure instead of flattening it to a
@@ -1324,14 +1334,47 @@ class Post
      */
     public static function plaintextFromMarkdown(string $md, bool $keepBreaks = false): string
     {
-        $text = strip_tags($md);
+        // Read off the raw source: strip_tags() eats an angle-bracketed target
+        // before it could be seen, and a definition can sit anywhere.
+        $definitions = self::linkDefinitions($md);
+
+        // A definition line is machinery, not words — the reader follows the
+        // [text][label] elsewhere in the body, never this. Left in, it reached
+        // og:description, the search index and every syndicated status as a
+        // literal "[label]: https://…".
+        //
+        // Off the raw source, and so before strip_tags(): that eats an
+        // angle-bracketed target whole, and what it leaves behind — a bare
+        // "[label]:" — no longer looks like a definition to anything.
+        $text = preg_replace(self::LINK_DEFINITION, '', $md);          // link definitions
+        $text = strip_tags($text);
         $text = preg_replace('/^#{1,6}\h+/m', '', $text);              // headings
         $text = preg_replace('/(\*{1,3}|_{1,3})(.*?)\1/s', '$2', $text); // bold/italic
         $text = preg_replace('/~~(.+?)~~/s', '$1', $text);             // strikethrough
         $text = preg_replace('/`+[^`]*`+/', '', $text);                // inline code
         $text = preg_replace('/!\[[^\]]*\]\([^\)]*\)/', '', $text);    // images
+        $text = preg_replace('/!\[[^\]]*\]\[[^\]]*\]/', '', $text);    // ref images
         $text = preg_replace('/\[([^\]]+)\]\([^\)]*\)/', '$1', $text); // links
         $text = preg_replace('/\[([^\]]+)\]\[[^\]]*\]/', '$1', $text); // ref links
+        // Shortcut references — `[label]` standing alone, its URL at the foot
+        // of the body. Only ones something actually defines: that is what tells
+        // a link from an ordinary bracketed aside like "[sic]", and it is the
+        // same test CommonMark applies before rendering one as a link at all.
+        if ($definitions !== []) {
+            $text = preg_replace_callback(
+                '/(!?)\[([^\]\[]+)\]/',
+                static function (array $m) use ($definitions): string {
+                    if (!isset($definitions[self::linkLabel($m[2])])) {
+                        return $m[0];
+                    }
+
+                    // `![label]` is the picture itself, and goes the way every
+                    // other image here goes.
+                    return $m[1] === '!' ? '' : $m[2];
+                },
+                $text
+            );
+        }
         $text = preg_replace('/^>\h*/m', '', $text);                   // blockquotes
         $text = preg_replace('/^[-*_]{3,}\h*$/m', '', $text);         // hr
 
@@ -1361,38 +1404,103 @@ class Post
      * a note syndicates as plain text with no permalink beside it, so the URL
      * has nowhere else to be. Syndication puts these on the end.
      *
-     * Three forms, matched in one pass so document order is preserved:
-     * `[text](url)`, a raw `<a href>`, and an autolink `<url>` — the last
-     * because strip_tags() eats those whole, taking the words with them.
-     * Images are skipped: a status that trailed the file it just attached
-     * would be noise. Reference-style links are not resolved; their definition
-     * line survives flattening with the URL still in it.
+     * Every form, matched in one pass so document order is preserved:
+     * `[text](url)`, a raw `<a href>`, an autolink `<url>` — that one because
+     * strip_tags() eats them whole, taking the words with them — and the three
+     * reference shapes `[text][label]`, `[text][]` and `[label]`, resolved
+     * through the definitions at the foot of the body.
+     *
+     * Images are skipped: a status that trailed the file it just attached would
+     * be noise. So is anything that is not http(s) — a mailto:, a relative
+     * path, or a definition target that turns out to be neither.
      *
      * @return string[]
      */
     public static function linkUrls(string $md): array
     {
+        $definitions = self::linkDefinitions($md);
+
+        // Ordered alternation, and the order is load-bearing: `[text](url)` and
+        // `[text][label]` have to be tried before the bare `[label]` shortcut,
+        // or every one of them would match as a shortcut on its opening
+        // bracket. The shortcut's lookahead refuses the same three characters
+        // from the other side, so a link whose target this does not take —
+        // `[local](/a/path)` — yields nothing rather than falling through to
+        // the shortcut branch and resolving as a label.
+        //
+        // Its lookbehind refuses a closing bracket for the sake of `![alt][x]`:
+        // the `(?<!!)` on the reference branch stops that matching as a link,
+        // which leaves `[x]` sitting there looking exactly like a shortcut, and
+        // the picture would have trailed its own file.
         $pattern = '~'
             . '(?<!!)\[[^\]]*\]\(\s*<?(?P<inline>https?://[^\s<>()]+)'
+            . '|(?<!!)\[(?P<refText>[^\]]*)\]\[(?P<refLabel>[^\]]*)\]'
             . '|<a\b[^>]*?\bhref\s*=\s*["\'](?P<anchor>https?://[^"\']+)["\']'
             . '|<(?P<auto>https?://[^\s<>]+)>'
+            . '|(?<![!\]])\[(?P<shortcut>[^\]\[]+)\](?!\h*[\[(:])'
             . '~i';
 
-        if (!preg_match_all($pattern, $md, $matches, PREG_SET_ORDER)) {
+        if (!preg_match_all($pattern, $md, $matches, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL)) {
             return [];
         }
 
         $urls = [];
         foreach ($matches as $match) {
-            foreach (['inline', 'anchor', 'auto'] as $form) {
-                if (($match[$form] ?? '') !== '') {
-                    $urls[] = html_entity_decode($match[$form], ENT_QUOTES | ENT_HTML5, 'UTF-8');
-                    break;
+            // Null tells an alternative that did not match from one that
+            // matched empty — `[text][]` names its label with its own words.
+            $url = $match['inline'] ?? $match['anchor'] ?? $match['auto'] ?? null;
+
+            if ($url === null) {
+                $label = $match['refLabel'] ?? null;
+                if ($label !== null) {
+                    $label = $label !== '' ? $label : (string) $match['refText'];
+                } else {
+                    $label = $match['shortcut'];
                 }
+
+                $url = $label === null ? null : ($definitions[self::linkLabel($label)] ?? null);
             }
+
+            if ($url === null || preg_match('~^https?://~i', $url) !== 1) {
+                continue;
+            }
+
+            $urls[] = html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         }
 
         return array_values(array_unique($urls));
+    }
+
+    /**
+     * The link definitions in a body, keyed by normalised label.
+     *
+     * First definition wins, as CommonMark says. An unused one contributes
+     * nothing on its own — a definition is only a link once something in the
+     * body refers to it.
+     *
+     * @return array<string,string>
+     */
+    private static function linkDefinitions(string $md): array
+    {
+        if (!preg_match_all(self::LINK_DEFINITION, $md, $matches, PREG_SET_ORDER)) {
+            return [];
+        }
+
+        $definitions = [];
+        foreach ($matches as $match) {
+            $definitions[self::linkLabel($match[1])] ??= $match[2];
+        }
+
+        return $definitions;
+    }
+
+    /**
+     * A reference label as CommonMark compares them: trimmed, inner whitespace
+     * collapsed, case folded. `[My Ref]` and `[my   ref]` are the same link.
+     */
+    private static function linkLabel(string $label): string
+    {
+        return mb_strtolower(trim((string) preg_replace('/\s+/', ' ', $label)), 'UTF-8');
     }
 
     // ── Slug helpers ──────────────────────────────────────────────────────────

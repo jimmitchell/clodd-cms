@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.28.1] — 2026-08-22
+
+No schema change.
+
+### Fixed
+
+- **Reference-style links resolve, and their definition lines stop leaking into plain text.** 1.28.0 read the three forms a link can take inline and left the reference shapes alone, so a note written as `[this piece][piece]` still lost its address — and worse, the `[piece]: https://…` line at the foot of the body had never been stripped when flattening, so it reached `og:description`, the search index and every syndicated status verbatim.
+
+  `Post::linkUrls()` now resolves `[text][label]`, `[text][]` and the bare `[label]` shortcut through the body's definitions, and `Post::plaintextFromMarkdown()` drops the definition lines and unwraps a resolved shortcut. Labels compare as CommonMark compares them — trimmed, inner whitespace collapsed, case folded — and a label is only a link once something defines it, which is what keeps an ordinary bracketed aside like `[sic]` intact and an unused definition silent.
+
+  Definitions are read and removed from the *raw* source, before `strip_tags()`: that eats an angle-bracketed target whole, and the bare `[label]:` it leaves behind no longer looks like a definition to anything.
+
+  Two things that only show up in the corners: a `[^1]` label is a GFM footnote rather than a link and is left alone; and a reference image needed a guard of its own, because the rule that keeps `![alt][x]` off the list leaves `[x]` sitting there looking exactly like a shortcut — the status trailed the file it had just attached.
+
+  The admin's character counter mirrors all of it. The two implementations were diffed across twelve bodies and agree exactly.
+
+---
+
 ## [1.28.0] — 2026-08-22
 
 No schema change.
