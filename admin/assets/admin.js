@@ -256,6 +256,19 @@ function setAction(action) {
         return t.trim();
     }
 
+    // Mirrors Post::linkUrls(): the URLs a note trails its body with, since
+    // flattening the Markdown keeps a link's words and drops its address.
+    function linkUrls(md) {
+        const re = /(?<!!)\[[^\]]*\]\(\s*<?(https?:\/\/[^\s<>()]+)|<a\b[^>]*?\bhref\s*=\s*["'](https?:\/\/[^"']+)["']|<(https?:\/\/[^\s<>]+)>/gi;
+        const urls = [];
+        let m;
+        while ((m = re.exec(md)) !== null) {
+            const url = (m[1] || m[2] || m[3]).replace(/&amp;/gi, '&');
+            if (!urls.includes(url)) urls.push(url);
+        }
+        return urls;
+    }
+
     function graphemeCount(s) {
         if (segmenter) {
             let n = 0;
@@ -283,7 +296,14 @@ function setAction(action) {
 
     function update() {
         if (kindSelect.value === 'standard') return;
-        const text   = plaintextFromMarkdown(getSyndicatedText());
+        // Mirrors SyndicationText::compose() for a note: the flattened body,
+        // then a blank line, then the links it would otherwise have lost. A URL
+        // the body already writes out in full is not repeated.
+        const source = getSyndicatedText();
+        const body   = plaintextFromMarkdown(source);
+        const links  = linkUrls(source).filter(u => !body.includes(u));
+        const text   = [body, links.join('\n')].filter(Boolean).join('\n\n');
+
         const chars  = [...text].length;     // code points — matches PHP mb_strlen
         const graphs = graphemeCount(text);
 

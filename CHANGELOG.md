@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.28.0] — 2026-08-22
+
+No schema change.
+
+### Added
+
+- **A note now trails the URLs its links point at.** Flattening Markdown to plain text keeps a link's words and drops the address they point at — right for an excerpt sitting next to the real thing, wrong for a note. A note syndicates with no permalink beside it, so `Just read [this piece](https://example.org/piece) on type.` reached Mastodon and Bluesky as a sentence about a page the reader had no way to get to.
+
+  `Post::linkUrls()` reads the three forms a body can carry — `[text](url)`, a raw `<a href>`, and an autolink `<url>`, the last because `strip_tags()` eats those whole — in document order, without repeats, http(s) only. Images are skipped; a status trailing the file it just attached would be noise. `Post::noteLinks()` reads them from whichever of the caption and the body `noteText()` read, so the links a status trails are the links in the words it carries.
+
+  They arrive as a block on the end, one per line, and `SyndicationText::compose()` treats them as fixed for the same reason the context and the permalink are fixed: a note trimmed to fit its link is still the note, and one that kept every word but lost the thing it was pointing at is not. A URL the body already writes out in full — a bare one, or a link whose words are its own address — is left alone rather than said twice.
+
+  Mastodon and Pixelfed linkify a bare URL themselves. Bluesky does not, so `Bluesky::buildFacets()` now covers the trailer as well as the permalink and the context lines; an unfacetted URL there is dead text.
+
+  A titled post trails nothing: it links home, and the permalink carries its links as links.
+
+  The admin's Bluesky/Mastodon character counter mirrors the trailer, so what it counts is still what gets sent.
+
+---
+
 ## [1.27.0] — 2026-08-22
 
 No schema change.

@@ -1352,6 +1352,49 @@ class Post
         return trim($text);
     }
 
+    /**
+     * The http(s) URLs the links in a Markdown body point at, in the order they
+     * appear and without repeats.
+     *
+     * plaintextFromMarkdown() keeps a link's words and drops its URL, which is
+     * right for an excerpt sitting next to the real thing and wrong for a note:
+     * a note syndicates as plain text with no permalink beside it, so the URL
+     * has nowhere else to be. Syndication puts these on the end.
+     *
+     * Three forms, matched in one pass so document order is preserved:
+     * `[text](url)`, a raw `<a href>`, and an autolink `<url>` — the last
+     * because strip_tags() eats those whole, taking the words with them.
+     * Images are skipped: a status that trailed the file it just attached
+     * would be noise. Reference-style links are not resolved; their definition
+     * line survives flattening with the URL still in it.
+     *
+     * @return string[]
+     */
+    public static function linkUrls(string $md): array
+    {
+        $pattern = '~'
+            . '(?<!!)\[[^\]]*\]\(\s*<?(?P<inline>https?://[^\s<>()]+)'
+            . '|<a\b[^>]*?\bhref\s*=\s*["\'](?P<anchor>https?://[^"\']+)["\']'
+            . '|<(?P<auto>https?://[^\s<>]+)>'
+            . '~i';
+
+        if (!preg_match_all($pattern, $md, $matches, PREG_SET_ORDER)) {
+            return [];
+        }
+
+        $urls = [];
+        foreach ($matches as $match) {
+            foreach (['inline', 'anchor', 'auto'] as $form) {
+                if (($match[$form] ?? '') !== '') {
+                    $urls[] = html_entity_decode($match[$form], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    break;
+                }
+            }
+        }
+
+        return array_values(array_unique($urls));
+    }
+
     // ── Slug helpers ──────────────────────────────────────────────────────────
 
     /**
@@ -1677,14 +1720,36 @@ class Post
      */
     public function noteText(bool $keepBreaks = false): string
     {
-        if ($this->isPhoto()) {
-            $caption = trim((string) $this->excerpt);
-            if ($caption !== '') {
-                return $caption;
-            }
+        $caption = $this->photoCaption();
+        if ($caption !== '') {
+            return $caption;
         }
 
         return trim(self::plaintextFromMarkdown($this->content, $keepBreaks));
+    }
+
+    /**
+     * The URLs the links in a note point at — see Post::linkUrls().
+     *
+     * Read from whichever of the caption and the body noteText() read, so the
+     * links a status trails are the links in the words it carries.
+     *
+     * @return string[]
+     */
+    public function noteLinks(): array
+    {
+        $caption = $this->photoCaption();
+
+        return self::linkUrls($caption !== '' ? $caption : $this->content);
+    }
+
+    /**
+     * A photo post's stored caption, trimmed; '' for any other kind, and for a
+     * photo post that has none. The one place the caption-or-body rule lives.
+     */
+    private function photoCaption(): string
+    {
+        return $this->isPhoto() ? trim((string) $this->excerpt) : '';
     }
 
     /**

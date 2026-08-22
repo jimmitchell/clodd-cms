@@ -142,6 +142,53 @@ final class SyndicationTest extends TestCase
         $this->assertSame('First line. A new paragraph.', $post->noteText());
     }
 
+    // ── Link trailer ──────────────────────────────────────────────────────────
+
+    /**
+     * Flattening a body keeps a link's words and drops the address they point
+     * at. A note has no permalink beside it to fall back on, so a note that
+     * existed to point somewhere syndicated as a sentence about nothing.
+     *
+     * Three forms, in document order and without repeats. An image is not a
+     * link the reader can follow, and a status trailing the file it just
+     * attached would be noise.
+     */
+    public function testLinkUrlsFindsEveryFormOfLinkInOrder(): void
+    {
+        $md = "Read [this piece](https://example.com/a \"A title\") and "
+            . '<a href="https://example.com/b">that one</a>.' . "\n\n"
+            . 'Then <https://example.com/c>, plus ![a picture](https://example.com/img.jpg) '
+            . 'and [the first again](https://example.com/a).';
+
+        $this->assertSame(
+            ['https://example.com/a', 'https://example.com/b', 'https://example.com/c'],
+            Post::linkUrls($md)
+        );
+    }
+
+    /** Only what a reader can follow: no mailto:, no javascript:, no relative path. */
+    public function testLinkUrlsTakesOnlyHttpUrls(): void
+    {
+        $md = '[mail](mailto:jim@example.com), [script](javascript:alert(1)), '
+            . '[local](/2026/08/a-post/), [real](https://example.com/x).';
+
+        $this->assertSame(['https://example.com/x'], Post::linkUrls($md));
+    }
+
+    /**
+     * noteLinks() reads whichever of the caption and the body noteText() read,
+     * so the links a status trails are the links in the words it carries.
+     */
+    public function testAPhotoPostTrailsTheLinksInItsCaption(): void
+    {
+        $post = $this->photoPost(
+            '![A flower](/content/media/2026/08/flower.jpg)',
+            'Shot with [this lens](https://example.com/lens).'
+        );
+
+        $this->assertSame(['https://example.com/lens'], $post->noteLinks());
+    }
+
     // ── Mastodon status body ──────────────────────────────────────────────────
 
     /**
@@ -492,6 +539,105 @@ final class SyndicationTest extends TestCase
 
         $this->assertSame('', $payload['url']);
         $this->assertSame('Just a thought.', $payload['excerpt']);
+        $this->assertSame([], $payload['links']);
+    }
+
+    /**
+     * A note that points somewhere has to carry the address, or the copy is a
+     * sentence about a page the reader cannot reach.
+     */
+    public function testANoteTrailsTheUrlsItsLinksPointAt(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $post = $this->savedPost();
+        $post->post_kind    = 'aside';
+        $post->content      = 'Just read [this piece](https://example.org/piece) on type.';
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+
+        $payload = $this->payloadFor($post);
+
+        $this->assertSame('Just read this piece on type.', $payload['excerpt']);
+        $this->assertSame(['https://example.org/piece'], $payload['links']);
+    }
+
+    /**
+     * A bare URL survives flattening on its own, so trailing it would say the
+     * same address twice — as would a link whose words *are* its URL.
+     */
+    public function testAUrlTheNoteAlreadyWritesOutIsNotRepeated(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $post = $this->savedPost();
+        $post->post_kind    = 'aside';
+        $post->content      = 'See https://example.org/bare and [https://example.org/same](https://example.org/same).';
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+
+        $this->assertSame([], $this->payloadFor($post)['links']);
+    }
+
+    /**
+     * A titled post links home, and the permalink carries the body's links as
+     * links. Trailing them would say the same thing twice and crowd out the
+     * excerpt to do it.
+     */
+    public function testATitledPostTrailsNothing(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $post = $this->savedPost();
+        $post->title        = 'A proper post';
+        $post->slug         = 'a-proper-post';
+        $post->content      = 'With [a link](https://example.org/elsewhere) in the body.';
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+
+        $this->assertSame([], $this->payloadFor($post)['links']);
+    }
+
+    /**
+     * The trailer is fixed, like the context and the permalink: a note trimmed
+     * to fit its link is still the note, and one that kept every word but lost
+     * the thing it was pointing at is not.
+     */
+    public function testTheExcerptGivesGroundToTheTrailerRatherThanTheOtherWayRound(): void
+    {
+        $link = 'https://example.org/' . str_repeat('a', 40);
+        $text = SyndicationText::compose('', '', str_repeat('word ', 60), '', 100, [$link]);
+
+        $this->assertStringEndsWith("\n\n" . $link, $text);
+        $this->assertStringStartsWith('word word', $text);
+        $this->assertLessThanOrEqual(100, mb_strlen($text));
+    }
+
+    /**
+     * Nothing on Bluesky linkifies a bare URL on the reader's behalf, so a
+     * trailer with no facet over it is dead text — which is the whole reason
+     * the links are carried as far as the client rather than left in a string.
+     */
+    public function testBlueskyFacetsTheTrailingLinks(): void
+    {
+        $links  = ['https://example.org/one', 'https://example.org/two'];
+        $text   = SyndicationText::compose('', '', 'Two of them.', '', 300, $links);
+        $client = new Bluesky('handle.example.com', 'app-password');
+
+        $build = new \ReflectionMethod(Bluesky::class, 'buildFacets');
+        $build->setAccessible(true);
+        $facets = $build->invoke($client, $text, '', ...$links);
+
+        $this->assertCount(2, $facets);
+        foreach ($facets as $i => $facet) {
+            $start = $facet['index']['byteStart'];
+            $this->assertSame(
+                $links[$i],
+                substr($text, $start, $facet['index']['byteEnd'] - $start),
+                'the facet must cover exactly its own URL'
+            );
+            $this->assertSame($links[$i], $facet['features'][0]['uri']);
+        }
     }
 
     /**

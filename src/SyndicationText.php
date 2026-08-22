@@ -16,15 +16,26 @@ final class SyndicationText
 {
     /**
      * Compose a status from any non-empty subset of {context, title, excerpt,
-     * url}, joined by blank lines and trimmed to $limit characters.
+     * url, links}, joined by blank lines and trimmed to $limit characters.
      *
      * Only the excerpt gives ground. The context lines say what the post is
      * replying to, the title names it and the URL is the way back to it, so a
      * copy that dropped any of them would be worse than a shorter one.
+     *
+     * $links is the trailer a note carries: the URLs its own links point at,
+     * which flattening the body to plain text would otherwise drop (see
+     * Post::linkUrls()). They go last, one per line, and are fixed for the same
+     * reason the rest are — a note trimmed to fit its link is still the note,
+     * and one that kept every word but lost the thing it was pointing at is
+     * not. Empty for a titled post, which links home instead.
+     *
+     * @param string[] $links
      */
-    public static function compose(string $context, string $title, string $excerpt, string $url, int $limit): string
+    public static function compose(string $context, string $title, string $excerpt, string $url, int $limit, array $links = []): string
     {
-        $fixed      = array_filter([$context, $title, $url], static fn(string $p): bool => $p !== '');
+        $trailer = implode("\n", array_filter($links, static fn(string $l): bool => $l !== ''));
+
+        $fixed      = array_filter([$context, $title, $url, $trailer], static fn(string $p): bool => $p !== '');
         $hasExcerpt = $excerpt !== '';
         $separators = max(0, count($fixed) + (int) $hasExcerpt - 1) * 2;
         $reserved   = array_sum(array_map('mb_strlen', $fixed)) + $separators;
@@ -37,7 +48,7 @@ final class SyndicationText
             $excerpt = $budget < 2 ? '' : rtrim(mb_substr($excerpt, 0, $budget - 1)) . '…';
         }
 
-        $parts = array_filter([$context, $title, $excerpt, $url], static fn(string $p): bool => $p !== '');
+        $parts = array_filter([$context, $title, $excerpt, $url, $trailer], static fn(string $p): bool => $p !== '');
         return implode("\n\n", $parts);
     }
 

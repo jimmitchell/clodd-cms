@@ -72,17 +72,20 @@ class Bluesky
      * @param  string|null $cardImagePath
      *         Local path to the post's OG image, used as the link card's
      *         thumbnail. Null when the post has none (notes, or GD missing).
+     * @param  string[] $links
+     *         URLs to trail the text with, each one facetted — see
+     *         Post::linkUrls().
      * @return array{url:string,rkey:string}|null
      */
-    public function postToBluesky(string $context, string $title, string $excerpt, string $url, array $images = [], ?string $cardImagePath = null): ?array
+    public function postToBluesky(string $context, string $title, string $excerpt, string $url, array $images = [], ?string $cardImagePath = null, array $links = []): ?array
     {
         $session = $this->createSession();
         if ($session === false) {
             return null;
         }
 
-        $text   = $this->buildText($context, $title, $excerpt, $url);
-        $facets = $this->buildFacets($text, $url, ...SyndicationText::urlsIn($context));
+        $text   = $this->buildText($context, $title, $excerpt, $url, $links);
+        $facets = $this->buildFacets($text, $url, ...$links, ...SyndicationText::urlsIn($context));
         $embed  = $this->buildImageEmbed($session['jwt'], $images);
 
         // Bluesky builds no preview card of its own. Unlike Mastodon, nothing
@@ -119,6 +122,7 @@ class Bluesky
      * which is why they are told apart.
      *
      * @param  array<array{path:string,mime:string,alt:string}> $images
+     * @param  string[] $links
      * @return self::EDIT_*
      */
     public function editPost(
@@ -127,7 +131,8 @@ class Bluesky
         string $title,
         string $excerpt,
         string $url,
-        array $images = []
+        array $images = [],
+        array $links = []
     ): string {
         $session = $this->createSession();
         if ($session === false) {
@@ -135,7 +140,7 @@ class Bluesky
             return self::EDIT_FAILED;
         }
 
-        $result = $this->rewriteRecord($session, $rkey, $context, $title, $excerpt, $url, $images);
+        $result = $this->rewriteRecord($session, $rkey, $context, $title, $excerpt, $url, $images, $links);
 
         // A swapRecord that no longer matches means the record moved under us
         // between the read and the write — usually something the PDS or the
@@ -145,7 +150,7 @@ class Bluesky
         // collision is a fight worth losing.
         if ($result === self::EDIT_STALE_SWAP) {
             self::log("retrying {$rkey} against its current cid after an InvalidSwap");
-            $result = $this->rewriteRecord($session, $rkey, $context, $title, $excerpt, $url, $images);
+            $result = $this->rewriteRecord($session, $rkey, $context, $title, $excerpt, $url, $images, $links);
         }
 
         return $result === self::EDIT_STALE_SWAP ? self::EDIT_FAILED : $result;
@@ -268,6 +273,7 @@ class Bluesky
      *
      * @param  array{did:string,jwt:string}                      $session
      * @param  array<array{path:string,mime:string,alt:string}>  $images
+     * @param  string[]                                          $links
      * @return self::EDIT_*|self::EDIT_STALE_SWAP
      */
     private function rewriteRecord(
@@ -277,7 +283,8 @@ class Bluesky
         string $title,
         string $excerpt,
         string $url,
-        array $images
+        array $images,
+        array $links = []
     ): string {
         $existing = $this->fetchRecord($session['did'], $rkey);
         if ($existing === null) {
@@ -285,8 +292,8 @@ class Bluesky
         }
         $record = $existing['record'];
 
-        $text   = $this->buildText($context, $title, $excerpt, $url);
-        $facets = $this->buildFacets($text, $url, ...SyndicationText::urlsIn($context));
+        $text   = $this->buildText($context, $title, $excerpt, $url, $links);
+        $facets = $this->buildFacets($text, $url, ...$links, ...SyndicationText::urlsIn($context));
 
         // Blobs already on the PDS are reused, so fixing a typo on a photo post
         // rewrites the words without pushing the pictures over the wire again.
@@ -422,19 +429,25 @@ class Bluesky
 
     /**
      * Compose post text within Bluesky's 300-grapheme limit.
-     * Layout: any non-empty subset of {context, title, excerpt, url} joined by
-     * blank lines.
+     * Layout: any non-empty subset of {context, title, excerpt, url, links}
+     * joined by blank lines.
+     *
+     * @param string[] $links
      */
-    private function buildText(string $context, string $title, string $excerpt, string $url): string
+    private function buildText(string $context, string $title, string $excerpt, string $url, array $links = []): string
     {
-        return SyndicationText::compose($context, $title, $excerpt, $url, self::TEXT_LIMIT);
+        return SyndicationText::compose($context, $title, $excerpt, $url, self::TEXT_LIMIT, $links);
     }
 
     /**
      * Build the AT Protocol facets that make each URL in the text clickable —
-     * the post's own URL, and the ones the reply/like/repost/bookmark lines
-     * point at. Byte offsets (not character offsets) are what the protocol
-     * wants.
+     * the post's own URL, the ones a note trails its body with, and the ones
+     * the reply/like/repost/bookmark lines point at. Byte offsets (not
+     * character offsets) are what the protocol wants.
+     *
+     * Nothing on Bluesky linkifies a bare URL on the reader's behalf, so a
+     * trailer with no facet over it is dead text — which is the whole reason
+     * the links are carried this far rather than left in the string.
      *
      * The URLs are named rather than found by scanning the text, because the
      * excerpt is truncated to fit and a URL cut short by that would otherwise

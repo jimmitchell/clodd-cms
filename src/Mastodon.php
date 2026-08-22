@@ -44,11 +44,13 @@ class Mastodon
      *         plain text — see Post::contextsText().
      * @param  array<array{path:string,mime:string,alt:string}> $images
      *         Local image files to attach — see SyndicationMedia::forPost().
+     * @param  string[] $links
+     *         URLs to trail the text with — see Post::linkUrls().
      * @return array{url:string,id:string}|null
      */
-    public function tootPost(string $context, string $title, string $excerpt, string $postUrl, array $images = []): ?array
+    public function tootPost(string $context, string $title, string $excerpt, string $postUrl, array $images = [], array $links = []): ?array
     {
-        $text = $this->buildText($context, $title, $excerpt, $postUrl);
+        $text = $this->buildText($context, $title, $excerpt, $postUrl, $links);
 
         $mediaIds = $this->uploadAll($images);
 
@@ -73,6 +75,7 @@ class Mastodon
      * where they are instead of pushing them over the wire again.
      *
      * @param array<array{path:string,mime:string,alt:string}> $images
+     * @param string[] $links
      */
     public function editPost(
         string $statusId,
@@ -80,9 +83,10 @@ class Mastodon
         string $title,
         string $excerpt,
         string $postUrl,
-        array $images = []
+        array $images = [],
+        array $links = []
     ): bool {
-        $text = $this->buildText($context, $title, $excerpt, $postUrl);
+        $text = $this->buildText($context, $title, $excerpt, $postUrl, $links);
 
         $current = $this->fetchStatus($statusId);
         if ($current === null) {
@@ -263,12 +267,18 @@ class Mastodon
 
     /**
      * Compose toot text within Mastodon's 500-character limit.
-     * Layout: any non-empty subset of {context, title, excerpt, url} joined by
-     * blank lines.
+     * Layout: any non-empty subset of {context, title, excerpt, url, links}
+     * joined by blank lines.
+     *
+     * Nothing linkifies the trailer here: Mastodon turns a bare URL in a status
+     * into a link itself. Bluesky does not, which is why its copy of this
+     * builds facets over the same URLs.
+     *
+     * @param string[] $links
      */
-    protected function buildText(string $context, string $title, string $excerpt, string $url): string
+    protected function buildText(string $context, string $title, string $excerpt, string $url, array $links = []): string
     {
-        return SyndicationText::compose($context, $title, $excerpt, $url, static::TEXT_LIMIT);
+        return SyndicationText::compose($context, $title, $excerpt, $url, static::TEXT_LIMIT, $links);
     }
 
     /**

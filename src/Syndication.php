@@ -66,7 +66,8 @@ final class Syndication
                 $payload['title'],
                 $payload['excerpt'],
                 $payload['url'],
-                $payload['images']
+                $payload['images'],
+                $payload['links']
             );
             if ($result !== null) {
                 $post->markTooted($result['url'], $result['id']);
@@ -82,7 +83,8 @@ final class Syndication
                 $payload['excerpt'],
                 $payload['url'],
                 $payload['images'],
-                $payload['og_image']
+                $payload['og_image'],
+                $payload['links']
             );
             if ($result !== null) {
                 $post->markBluesky($result['url'], $result['rkey']);
@@ -97,7 +99,8 @@ final class Syndication
                 $payload['title'],
                 $payload['excerpt'],
                 $payload['url'],
-                $payload['images']
+                $payload['images'],
+                $payload['links']
             );
             if ($result !== null) {
                 $post->markPixelfed($result['url'], $result['id']);
@@ -128,7 +131,8 @@ final class Syndication
                 $payload['title'],
                 $payload['excerpt'],
                 $payload['url'],
-                $payload['images']
+                $payload['images'],
+                $payload['links']
             );
         }
 
@@ -143,7 +147,8 @@ final class Syndication
                 $payload['title'],
                 $payload['excerpt'],
                 $payload['url'],
-                $payload['images']
+                $payload['images'],
+                $payload['links']
             );
 
             if ($edit === Bluesky::EDIT_WRITTEN) {
@@ -161,7 +166,8 @@ final class Syndication
                 $payload['title'],
                 $payload['excerpt'],
                 $payload['url'],
-                $payload['images']
+                $payload['images'],
+                $payload['links']
             );
         }
     }
@@ -277,7 +283,7 @@ final class Syndication
      * the same line the page and the feeds open with — a reply that arrives on
      * Mastodon with no sign of what it is replying to is not the reply.
      *
-     * @return array{context:string,title:string,excerpt:string,url:string,images:array<array{path:string,mime:string,alt:string}>}|null
+     * @return array{context:string,title:string,excerpt:string,url:string,links:string[],images:array<array{path:string,mime:string,alt:string}>}|null
      */
     private function payload(Post $post): ?array
     {
@@ -302,6 +308,15 @@ final class Syndication
             // networks render a newline as a newline. Flattening it would send
             // a different post than the one on the site.
             $excerpt = $post->noteText(true);
+
+            // Flattening also keeps a link's words and drops its URL, and a
+            // note has no permalink beside it for the reader to fall back on —
+            // so the URLs go on the end. One the body already writes out in
+            // full is left alone rather than said twice.
+            $links = array_values(array_filter(
+                $post->noteLinks(),
+                static fn(string $link): bool => !str_contains($excerpt, $link)
+            ));
         } else {
             $datePath = Post::datePath((string) $post->published_at, $post->slug, $this->db->getSetting('timezone', ''));
             $url      = $siteUrl . '/' . $datePath . '/';
@@ -328,6 +343,11 @@ final class Syndication
 
             $effective = $post->effectiveExcerpt();
             $excerpt   = $effective !== null ? strip_tags($effective) : Helpers::truncate($post->content, 280);
+
+            // A titled post links home, and the permalink carries the body's
+            // links as links. Trailing them here would say the same thing
+            // twice and crowd out the excerpt to do it.
+            $links = [];
         }
 
         // Photos ride along with the text so a photo post looks native on every
@@ -353,6 +373,7 @@ final class Syndication
             'title'    => $post->title,
             'excerpt'  => $excerpt,
             'url'      => $url,
+            'links'    => $links,
             'images'   => $images,
             'og_image' => $ogImage,
         ];

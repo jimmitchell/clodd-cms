@@ -51,9 +51,10 @@ final class Pixelfed extends Mastodon
      * recording a copy that was never created.
      *
      * @param array<array{path:string,mime:string,alt:string}> $images
+     * @param string[] $links
      * @return array{url:string,id:string}|null
      */
-    public function tootPost(string $context, string $title, string $excerpt, string $postUrl, array $images = []): ?array
+    public function tootPost(string $context, string $title, string $excerpt, string $postUrl, array $images = [], array $links = []): ?array
     {
         if ($images === []) {
             self::log('skipping a post with no pictures: Pixelfed does not accept a status without media');
@@ -66,7 +67,7 @@ final class Pixelfed extends Mastodon
             return null;
         }
 
-        return $this->post($this->buildText($context, $title, $excerpt, $postUrl), $mediaIds);
+        return $this->post($this->buildText($context, $title, $excerpt, $postUrl, $links), $mediaIds);
     }
 
     /**
