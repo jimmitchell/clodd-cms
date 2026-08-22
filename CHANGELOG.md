@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.27.0] — 2026-08-22
+
+No schema change.
+
+### Fixed
+
+- **Line breaks in a note now survive syndication.** `Post::plaintextFromMarkdown()` finished with `preg_replace('/\s+/', ' ', $text)`, which is right for the two things it was written for — a slug and a one-line excerpt — and wrong for the third. A note (an aside or a photo post) syndicates as its *whole* body, so every paragraph the author typed arrived at Mastodon, Bluesky and Pixelfed as a single unbroken run of text, reading as a different post than the one on the site.
+
+  The method now takes `$keepBreaks`, and `Post::noteText()` passes it through. Spaces and tabs still collapse and every line is still trimmed; only the newlines stay, with a run of three or more cut back to one blank line — the site renders any run of them as a single paragraph break, so anything more would be a gap no reader of the post would see.
+
+  `Syndication::payload()` is the one caller that asks for it. `Builder::buildSearchIndex()` keeps the flattened text it always had: that JSON is matched against, never read, and its entries render as one-line result cards. A titled post is unaffected either way — it syndicates its excerpt, and a stored one has always kept its breaks.
+
+  The admin's Bluesky/Mastodon character counter mirrors the new normalisation, so what it counts is still what gets sent.
+
+---
+
 ## [1.26.2] — 2026-08-20
 
 No schema change.

@@ -247,6 +247,12 @@ function setAction(action) {
         t = t.replace(/`+[^`]*`+/g, '');                    // inline code
         t = t.replace(/!\[[^\]]*\]\([^\)]*\)/g, '');        // images
         t = t.replace(/\[([^\]]+)\]\([^\)]*\)/g, '$1');     // links
+        // Mirrors Post::plaintextFromMarkdown($md, true): spaces and tabs
+        // collapse, line breaks survive, and a run of blank lines counts as the
+        // one paragraph break it renders as.
+        t = t.replace(/[^\S\n]+/g, ' ');
+        t = t.replace(/ *\n */g, '\n');
+        t = t.replace(/\n{3,}/g, '\n\n');
         return t.trim();
     }
 

@@ -1318,8 +1318,11 @@ class Post
 
     /**
      * Strip common Markdown syntax and HTML tags, returning normalized plain text.
+     *
+     * $keepBreaks keeps the body's line structure instead of flattening it to a
+     * single line. Only syndication asks for that — see noteText().
      */
-    public static function plaintextFromMarkdown(string $md): string
+    public static function plaintextFromMarkdown(string $md, bool $keepBreaks = false): string
     {
         $text = strip_tags($md);
         $text = preg_replace('/^#{1,6}\h+/m', '', $text);              // headings
@@ -1331,6 +1334,20 @@ class Post
         $text = preg_replace('/\[([^\]]+)\]\[[^\]]*\]/', '$1', $text); // ref links
         $text = preg_replace('/^>\h*/m', '', $text);                   // blockquotes
         $text = preg_replace('/^[-*_]{3,}\h*$/m', '', $text);         // hr
+
+        if ($keepBreaks) {
+            // Runs of spaces and tabs still collapse, and every line is
+            // trimmed, but the newlines themselves stay. Three or more in a
+            // row become one blank line — the site renders any run of them as
+            // a single paragraph break, so anything more would be a gap the
+            // reader never sees here.
+            $text = preg_replace('/[^\S\n]+/', ' ', $text);
+            $text = preg_replace('/ *\n */', "\n", $text);
+            $text = preg_replace('/\n{3,}/', "\n\n", $text);
+
+            return trim($text);
+        }
+
         $text = preg_replace('/\s+/', ' ', $text);
         return trim($text);
     }
@@ -1648,8 +1665,17 @@ class Post
      * excerpt and its words in the body. Falling back to the body picks those
      * up, and still returns '' for an admin photo post whose body is nothing
      * but the image.
+     *
+     * $keepBreaks keeps the paragraph and line breaks the author typed.
+     * Syndication passes true: a note goes out as its *whole* body, so
+     * flattening it hands Mastodon and Bluesky one unbroken wall of text where
+     * the site shows several paragraphs. The search index leaves it false —
+     * that JSON is matched against, never read.
+     *
+     * A photo caption is stored as plain text and so keeps its breaks either
+     * way; only trailing whitespace is taken off it.
      */
-    public function noteText(): string
+    public function noteText(bool $keepBreaks = false): string
     {
         if ($this->isPhoto()) {
             $caption = trim((string) $this->excerpt);
@@ -1658,7 +1684,7 @@ class Post
             }
         }
 
-        return trim(self::plaintextFromMarkdown($this->content));
+        return trim(self::plaintextFromMarkdown($this->content, $keepBreaks));
     }
 
     /**

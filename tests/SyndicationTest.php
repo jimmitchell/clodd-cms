@@ -95,6 +95,53 @@ final class SyndicationTest extends TestCase
         $this->assertSame('Reading the docs again, for the third time.', $post->noteText());
     }
 
+    /**
+     * A note goes out as its whole body, so the paragraphs the author typed have
+     * to reach the network. Every newline used to collapse into a space, which
+     * sent one wall of text where the site shows several paragraphs.
+     */
+    public function testAsideKeepsItsParagraphBreaks(): void
+    {
+        $post            = new Post($this->db);
+        $post->post_kind = 'aside';
+        $post->content   = "First line.\nSecond line.\n\nA new paragraph.";
+
+        $this->assertSame(
+            "First line.\nSecond line.\n\nA new paragraph.",
+            $post->noteText(true)
+        );
+    }
+
+    /**
+     * Spaces and tabs still collapse, trailing whitespace still goes, and a run
+     * of blank lines is the one paragraph break the site renders it as — a
+     * status should not carry a gap no reader of the post would see.
+     */
+    public function testKeepingBreaksStillNormalisesTheRestOfTheWhitespace(): void
+    {
+        $post            = new Post($this->db);
+        $post->post_kind = 'aside';
+        $post->content   = "Spaced   out.   \n\n\n\n  Way down here.\t\tAfter a tab.";
+
+        $this->assertSame(
+            "Spaced out.\n\nWay down here. After a tab.",
+            $post->noteText(true)
+        );
+    }
+
+    /**
+     * The search index is matched against, never read, and its entries render
+     * as one-line result cards — so it keeps the flattened text it always had.
+     */
+    public function testTheDefaultStillFlattensForTheSearchIndex(): void
+    {
+        $post            = new Post($this->db);
+        $post->post_kind = 'aside';
+        $post->content   = "First line.\n\nA new paragraph.";
+
+        $this->assertSame('First line. A new paragraph.', $post->noteText());
+    }
+
     // ── Mastodon status body ──────────────────────────────────────────────────
 
     /**

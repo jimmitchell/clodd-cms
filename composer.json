@@ -1,6 +1,6 @@
 {
     "name": "clodd-cms/cms",
-    "version": "1.26.2",
+    "version": "1.27.0",
     "description": "A lightweight flat-file CMS with PHP admin panel and static HTML output",
     "type": "project",
     "require": {

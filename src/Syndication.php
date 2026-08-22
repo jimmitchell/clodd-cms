@@ -297,8 +297,11 @@ final class Syndication
         $ogImage = null;
 
         if ($post->isNote()) {
-            $url     = '';
-            $excerpt = $post->noteText();
+            $url = '';
+            // Breaks kept: a note syndicates as its whole body, and both
+            // networks render a newline as a newline. Flattening it would send
+            // a different post than the one on the site.
+            $excerpt = $post->noteText(true);
         } else {
             $datePath = Post::datePath((string) $post->published_at, $post->slug, $this->db->getSetting('timezone', ''));
             $url      = $siteUrl . '/' . $datePath . '/';
