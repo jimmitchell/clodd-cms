@@ -238,11 +238,10 @@ ob_start();
         <?php endif; ?>
     </footer>
     <?php if ($showWebmention): ?>
-    <?php /* A real form posting cross-origin, not a JS-only widget: the endpoint
-             sends no CORS headers, so webmentions.js can post it but cannot read
-             the reply. With JS off — or running last week's cached copy — the
-             native POST still lands and the browser ends up on webmention.io's
-             202 page.
+    <?php /* A real form posting cross-origin, not a JS-only widget. With JS off —
+             or running a copy of webmentions.js cached before it learned about
+             this form — the native POST still lands and the browser ends up on
+             webmention.io's own confirmation page.
 
              The hidden target is $canonical, the same URL #webmentions queries
              below. If the two ever drift, a mention is accepted against a URL

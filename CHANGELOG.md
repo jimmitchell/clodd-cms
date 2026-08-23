@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.30.0] — 2026-08-23
+
+No schema change.
+
+### Changed
+
+- **The submission form now reports what actually happened.** 1.29.0 posted the mention and said "Sent", on the belief that the endpoint sent no CORS headers and the reply could not be read. That belief came from probing `GET` and `OPTIONS`, which indeed send none. The `POST` sends `access-control-allow-origin: *`, and so does the per-mention status URL it returns — every outcome was readable all along.
+
+  So the form reads them. A `201` hands back a status URL, which is polled every two seconds for about twenty until webmention.io finishes verifying; a `4xx` carries an `error_description` shown as-is. The outcomes:
+
+  - **success** — "Accepted. Reload the page and it'll be here."
+  - **no_link_found** — the source does not link to the target. The form stays up with the URL still in it so a typo can be corrected, and the message names the usual culprit: a Ghost blog tags outbound links with `?ref=`, so a page can link to a post and still not link to the URL being submitted.
+  - **still queued after twenty seconds** — said plainly, rather than claimed as either.
+
+  This is not hypothetical: the first real submission failed exactly this way and reported "Sent", because fire-and-forget could not tell anyone. Every response reaches the page through `textContent`, so webmention.io's own error strings are inert.
+
+  The request stays CORS-simple — `URLSearchParams` sets the form encoding and `Accept` is safelisted. That is load-bearing: the endpoint 404s on `OPTIONS`, so anything provoking a preflight fails before it is sent.
+
 ## [1.29.1] — 2026-08-23
 
 No schema change.
@@ -29,7 +47,7 @@ No schema change.
 
   The syndication footer gains a **Webmention** pill that opens a drawer asking for one thing: the URL of the page they wrote. The target is filled in already, because the page knows it — the same `$canonical` the `#webmentions` section fetches, which `BuilderOutputTest` now pins, since a form and a display looking at different URLs would accept a mention and then never show it.
 
-  It is a real `<form>` posting straight to the endpoint, with no server code behind it and nothing new exposed on this host: webmention.io fetches the source page and verifies the link before storing anything, so there is nothing here to abuse. `webmentions.js` upgrades submission to `fetch()` so the reader stays on the page; with JavaScript off, or running a cached copy of the script from before this release, the native POST still lands and the browser ends up on webmention.io's own confirmation. The endpoint sends no CORS headers, so the reply is opaque either way — the confirmation says "Sent", never "Accepted", because that is genuinely all we know.
+  It is a real `<form>` posting straight to the endpoint, with no server code behind it and nothing new exposed on this host: webmention.io fetches the source page and verifies the link before storing anything, so there is nothing here to abuse. `webmentions.js` upgrades submission to `fetch()` so the reader stays on the page; with JavaScript off, or running a cached copy of the script from before this release, the native POST still lands and the browser ends up on webmention.io's own confirmation. The confirmation says "Sent", never "Accepted", because the reply was believed unreadable. (It is not — see 1.30.0.)
 
 ### Fixed
 
