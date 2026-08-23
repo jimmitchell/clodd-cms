@@ -763,4 +763,79 @@ PHP);
         }
         rmdir($path);
     }
+
+    /**
+     * Every template gets $assetVersion, whoever renders it.
+     *
+     * base.php is reached from six templates, each handing it its own compact()
+     * list, so the stamp is injected by the render closure instead of travelling
+     * in those lists. This pins that: a stub template that was never told about
+     * $assetVersion still receives one.
+     */
+    public function testTemplatesReceiveAnAssetVersion(): void
+    {
+        $this->writeTemplate('post.php', '<i><?= $assetVersion ?></i>');
+
+        $post = $this->makePublishedPost('stamped');
+        $this->builder->buildPost($post);
+
+        $expected = trim((string) file_get_contents(dirname(__DIR__) . '/VERSION'));
+        $this->assertNotSame('', $expected, 'precondition: VERSION is readable');
+
+        $html = file_get_contents(
+            $this->builder->postOutputDir($post->published_at, $post->slug) . '/index.html'
+        );
+        $this->assertSame('<i>' . $expected . '</i>', $html);
+    }
+
+    /**
+     * The four assets nginx caches for a week are all stamped.
+     *
+     * They are served with `expires 7d, must-revalidate`, so inside that window a
+     * browser never asks whether they changed and an edit reaches a returning
+     * reader up to a week late — on a deploy that reported success. The 1.31.0
+     * webmention fix was live and correct while browsers ran the old script.
+     *
+     * An unstamped reference is silent, so the invariant is structural: in
+     * base.php no reference to one of these files may appear without the query
+     * stamp immediately after it.
+     */
+    public function testTheCachedThemeAssetsAreVersionStamped(): void
+    {
+        $base = file_get_contents(dirname(__DIR__) . '/templates/base.php');
+        $this->assertNotFalse($base);
+
+        // Comments stripped: the rule is explained in prose that names the files.
+        $code = '';
+        foreach (token_get_all($base) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $assets = ['theme.js', 'theme.min.css', 'theme.deferred.css', 'webmentions.js'];
+        $found  = 0;
+
+        foreach ($assets as $asset) {
+            $pattern = '/["\']\/' . preg_quote($asset, '/') . '(<\?=\s*\$_asset\s*\?>)?/';
+            preg_match_all($pattern, $code, $hits, PREG_SET_ORDER);
+
+            foreach ($hits as $hit) {
+                $found++;
+                $this->assertArrayHasKey(
+                    1,
+                    $hit,
+                    $asset . ' is referenced in base.php without the ?v= stamp, so an edit '
+                    . 'to it will not reach a returning reader for up to seven days'
+                );
+            }
+        }
+
+        $this->assertGreaterThanOrEqual(
+            count($assets),
+            $found,
+            'precondition: base.php references each cached theme asset at least once'
+        );
+    }
 }

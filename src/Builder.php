@@ -28,6 +28,7 @@ class Builder
     private array              $settings;
     private array              $navPages;
     private string             $criticalCss = '';
+    private ?string            $assetVersion = null;
 
     /** Display size of the header avatar in CSS pixels; see .site-header__avatar. */
     private const AVATAR_CSS_PX = 32;
@@ -1222,6 +1223,33 @@ class Builder
         return is_file($real) ? $real : null;
     }
 
+    /**
+     * Cache-busting stamp for the theme assets, appended as ?v= in base.php.
+     *
+     * Nginx serves theme.js, theme.min.css, theme.deferred.css and webmentions.js
+     * with `expires 7d, must-revalidate`, and inside that window a browser does not
+     * ask whether they changed — so an edit reached returning readers up to a week
+     * late, on a deploy that reported success.
+     *
+     * Read here rather than taken from the CMS_VERSION constant alone: the constant
+     * is defined by the entry points that expect to be a CLI or the admin, and
+     * micropub.php builds posts without it. A page built by one path and a page
+     * built by the other must not disagree about the stamp.
+     */
+    private function assetVersion(): string
+    {
+        if ($this->assetVersion !== null) {
+            return $this->assetVersion;
+        }
+
+        $version = defined('CMS_VERSION') ? trim((string) CMS_VERSION) : '';
+        if ($version === '') {
+            $version = trim((string) @file_get_contents(dirname(__DIR__) . '/VERSION'));
+        }
+
+        return $this->assetVersion = ($version !== '' ? $version : 'dev');
+    }
+
     private function render(string $template, array $vars): string
     {
         // Make shared context available inside the template scope.
@@ -1230,8 +1258,14 @@ class Builder
         $vars['siteUrl']  = rtrim($this->settings['site_url'] ?? '', '/');
 
         $templateDir = $this->templateDir;
+        $assetVersion = $this->assetVersion();
 
-        $render = static function (string $tpl, array $v) use ($templateDir): string {
+        /* Injected by the closure rather than added to each template's compact()
+           list: base.php is rendered from six templates, and one that forgot it
+           would emit an unstamped asset URL — a silent return of the very caching
+           problem the stamp exists to fix. */
+        $render = static function (string $tpl, array $v) use ($templateDir, $assetVersion): string {
+            $v['assetVersion'] = $assetVersion;
             extract($v, EXTR_SKIP);
             ob_start();
             include $templateDir . '/' . $tpl;

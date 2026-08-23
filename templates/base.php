@@ -153,6 +153,16 @@ if (!function_exists('_e')) {
          data-theme-pref carries the three-way preference so CSS can pick the
          toggle's icon on first paint, without waiting for deferred theme.js. -->
     <script>(function(){var d=document.documentElement;var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='light'){t='system';}d.setAttribute('data-theme-pref',t);var dark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);d.setAttribute('data-theme',dark?'dark':'light');})();</script>
+    <?php /* Nginx serves these four with `expires 7d, must-revalidate`, and inside
+             that window a browser does not even ask whether they changed — so an
+             edit took up to a week to reach a returning reader, on a deploy that
+             looked complete. That is not hypothetical: the 1.31.0 webmention change
+             was live and correct while browsers went on running the previous script.
+
+             The version is the stamp because every user-visible change here ships
+             with a VERSION bump. $uri excludes the query string, so nginx's asset
+             regex still matches and no config change is needed. */ ?>
+    <?php $_asset = '?v=' . rawurlencode($assetVersion ?? 'dev'); ?>
     <?php /* Critical CSS inline, the rest deferred. theme.deferred.css holds
              only what comes after the marker: linking theme.min.css here would
              re-send the block already inlined above, which was 4.6 KB of a
@@ -160,10 +170,10 @@ if (!function_exists('_e')) {
              there is no critical split to work with. */ ?>
     <?php if (!empty($criticalCss)): ?>
     <style><?= $criticalCss ?></style>
-    <link rel="preload" href="/theme.deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="/theme.deferred.css"></noscript>
+    <link rel="preload" href="/theme.deferred.css<?= $_asset ?>" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/theme.deferred.css<?= $_asset ?>"></noscript>
     <?php else: ?>
-    <link rel="stylesheet" href="/theme.min.css">
+    <link rel="stylesheet" href="/theme.min.css<?= $_asset ?>">
     <?php endif; ?>
     <?php if (!empty($jsonLd)): ?>
     <script type="application/ld+json"><?= $jsonLd ?></script>
@@ -287,9 +297,9 @@ if (!function_exists('_e')) {
     </form>
 </div>
 
-<script src="/theme.js" defer></script>
+<script src="/theme.js<?= $_asset ?>" defer></script>
 <?php if (($settings['webmention_domain'] ?? '') !== ''): ?>
-<script src="/webmentions.js" defer></script>
+<script src="/webmentions.js<?= $_asset ?>" defer></script>
 <?php endif; ?>
 <?php if (!empty($is404Page)): ?><script>window.analyticsIs404=true;</script><?php endif; ?>
 <script>

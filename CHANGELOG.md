@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.31.2] — 2026-08-23
+
+No schema change.
+
+### Fixed
+
+- **Theme asset edits no longer take up to a week to reach a returning reader.** Nginx serves `theme.js`, `theme.min.css`, `theme.deferred.css` and `webmentions.js` with `expires 7d, must-revalidate`, and inside that window a browser does not ask whether they changed. So an edit landed on a deploy that reported success while returning visitors went on running the previous file — which is exactly what happened with the 1.31.0 webmention change: live and correct on the server, invisible in a browser holding yesterday's script.
+
+  All four now carry `?v=<version>`. `$uri` excludes the query string, so nginx's asset regex still matches and no config change is needed.
+
+  The stamp comes from `Builder::assetVersion()` and is injected by the render closure, not added to each template's `compact()` list — `base.php` is reached from six templates, and one that forgot it would silently reintroduce the problem for every page it renders. Builder reads the `VERSION` file rather than trusting the `CMS_VERSION` constant alone, because that constant is defined by the CLI and admin entry points but not by `micropub.php`, and a page built by one path must not disagree with a page built by the other.
+
+  `BuilderOutputTest` pins both halves: that a template receives an `assetVersion` at all, and that no reference to one of the four files appears in `base.php` without the stamp.
+
 ## [1.31.1] — 2026-08-23
 
 No schema change.
