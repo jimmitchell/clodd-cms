@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.29.1] — 2026-08-23
+
+No schema change.
+
+### Changed
+
+- **The Webmention pill stays in the row when its form opens.** A `<details>` is one box, so its summary could sit among Email/Mastodon/Bluesky or its content could span the measure — never both, and the pill dropped to a line of its own the moment it was clicked. The disclosure is now a clipped checkbox before the row and a `<label>` pill inside it, with the form a sibling after: the pill holds its place and the form still lines up with the article.
+
+  `display: contents` on the `<details>` is the other way to do this and is a trap — where it is not honoured the content stops hiding when closed, leaving the URL field permanently on show, which is the one thing the disclosure exists to avoid. The checkbox costs the free `aria-expanded` that `<summary>` carried; it keeps Tab, Space, and a form that works with no JavaScript. The focus ring is forwarded from the clipped input to the pill, or tabbing to it would show nothing.
+
+  The form restates its `.75rem` muted type, which it used to inherit from `.post__syndication` before it moved out of that element.
+
 ## [1.29.0] — 2026-08-23
 
 No schema change.

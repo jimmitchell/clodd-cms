@@ -191,6 +191,24 @@ ob_start();
     $showWebmention   = $webmentionDomain !== '';
     ?>
     <?php if ($showKudos || $post->mastodon_url || $post->bluesky_url || $post->pixelfed_url || $showEmail || $showWebmention): ?>
+    <?php if ($showWebmention): ?>
+    <?php /* The disclosure is a checkbox and a <label> pill rather than
+             <details>/<summary>, and it is the layout that decides that. A
+             <details> is one box: its summary can sit in the pill row or its
+             content can span the measure, never both, so the pill dropped to a
+             line of its own the moment it opened. Split into a checkbox before
+             the row and a form after it, the pill stays put and the form still
+             lines up with the article.
+
+             `display: contents` on the <details> is the other way to do this and
+             is a trap: where it is honoured the summary and content become
+             siblings as wanted, and where it is not the content stops hiding
+             when closed — leaving the URL field permanently on show, the one
+             thing this was built to avoid. A checkbox renders the same
+             everywhere. It costs the free `aria-expanded` <summary> carried;
+             what it keeps is Tab, Space, and a form that works with no JS. */ ?>
+    <input type="checkbox" id="wm-submit-toggle" class="wm-submit__checkbox">
+    <?php endif; ?>
     <footer class="post__syndication">
         <?php if ($showEmail):
             $emailSubject = $isNote
@@ -216,32 +234,31 @@ ob_start();
         <button class="tinylytics_kudos" data-path="<?= htmlspecialchars($kudosPath, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"></button>
         <?php endif; ?>
         <?php if ($showWebmention): ?>
-        <?php /* A real form posting cross-origin, not a JS-only widget: the endpoint
-                 sends no CORS headers, so webmentions.js can post it but cannot read
-                 the reply. With JS off — or running last week's cached copy — the
-                 native POST still lands and the browser ends up on webmention.io's
-                 202 page. <details> rather than a button so that fallback is
-                 reachable at all, and so the disclosure is keyboard-correct for free.
-
-                 The hidden target is $canonical, the same URL #webmentions queries
-                 below. If the two ever drift, a mention is accepted against a URL
-                 this page never asks about and is invisible forever. */ ?>
-        <details class="wm-submit">
-            <summary class="wm-submit__toggle">Webmention</summary>
-            <form class="wm-submit__form" method="post"
-                  action="https://webmention.io/<?= Helpers::e($webmentionDomain) ?>/webmention">
-                <input type="hidden" name="target" value="<?= Helpers::e($canonical) ?>">
-                <label class="wm-submit__label" for="wm-source">Written a response on your own site? Paste its URL and it&rsquo;ll show up here.</label>
-                <div class="wm-submit__row">
-                    <input class="wm-submit__input" type="url" name="source" id="wm-source"
-                           required placeholder="https://" autocomplete="url" inputmode="url" spellcheck="false">
-                    <button class="wm-submit__send" type="submit">Send</button>
-                </div>
-                <p class="wm-submit__status" role="status" aria-live="polite" hidden></p>
-            </form>
-        </details>
+        <label class="wm-submit__toggle" for="wm-submit-toggle">Webmention</label>
         <?php endif; ?>
     </footer>
+    <?php if ($showWebmention): ?>
+    <?php /* A real form posting cross-origin, not a JS-only widget: the endpoint
+             sends no CORS headers, so webmentions.js can post it but cannot read
+             the reply. With JS off — or running last week's cached copy — the
+             native POST still lands and the browser ends up on webmention.io's
+             202 page.
+
+             The hidden target is $canonical, the same URL #webmentions queries
+             below. If the two ever drift, a mention is accepted against a URL
+             this page never asks about and is invisible forever. */ ?>
+    <form class="wm-submit__form" method="post"
+          action="https://webmention.io/<?= Helpers::e($webmentionDomain) ?>/webmention">
+        <input type="hidden" name="target" value="<?= Helpers::e($canonical) ?>">
+        <label class="wm-submit__label" for="wm-source">Written a response on your own site? Paste its URL and it&rsquo;ll show up here.</label>
+        <div class="wm-submit__row">
+            <input class="wm-submit__input" type="url" name="source" id="wm-source"
+                   required placeholder="https://" autocomplete="url" inputmode="url" spellcheck="false">
+            <button class="wm-submit__send" type="submit">Send</button>
+        </div>
+        <p class="wm-submit__status" role="status" aria-live="polite" hidden></p>
+    </form>
+    <?php endif; ?>
     <?php endif; ?>
 </article>
 

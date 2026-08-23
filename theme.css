@@ -1651,14 +1651,10 @@ audio { width: 100%; }
 }
 
 /* ── Post syndication footer ──────────────────────────────────────────────── */
-/* align-items is flex-start, not center, because of the webmention drawer at the
-   end of the row: an open <details> is several times the height of a pill, and
-   centring would float Email/Mastodon/Bluesky down to the middle of it. Every
-   item is the same height while it is closed, so this is invisible until then. */
 .post__syndication {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: center;
     gap: .275rem;
     margin-top: 2rem;
     font-size: .75rem;
@@ -1703,22 +1699,28 @@ audio { width: 100%; }
 }
 
 /* ── Manual webmention submission ─────────────────────────────────────────── */
-/* A drawer on the end of the syndication row. Closed, it is one more pill. Open,
-   it takes a row of its own: left to share the row it would open wherever the
-   pill happens to sit, leaving the form floating in the middle of the page with
-   nothing above it. Unfolding onto a full-width row costs the pill a small move
-   the reader just asked for, and buys a form aligned with the article. */
-.wm-submit[open] {
-    flex: 1 0 100%;
+/* The pill lives in the syndication row and the form is a sibling after it, so
+   the drawer opens across the measure without the pill leaving the row. The
+   checkbox that ties them together sits before both — see the note in
+   templates/post.php for why it is not a <details>.
+
+   Hidden by clipping rather than display:none, which would take it out of the
+   tab order and leave the disclosure keyboard-unreachable. */
+.wm-submit__checkbox {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
 }
 
-/* Identical to a .post__syndication pill, so the row reads as one set. The
-   disclosure triangle goes: it would be the only marker glyph on the page, and
-   the pill already looks pressable. list-style covers Firefox and Chrome, the
-   webkit pseudo-element covers Safari. */
+/* Identical to a .post__syndication pill, so the row reads as one set. */
 .wm-submit__toggle {
     display: inline-block;
-    list-style: none;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     padding: .1rem .5rem;
@@ -1728,20 +1730,35 @@ audio { width: 100%; }
     transition: color .15s, border-color .15s;
 }
 
-.wm-submit__toggle::-webkit-details-marker { display: none; }
-
 /* Open is the hover state held: the pill stays lit while its drawer is showing,
    so it is obvious which control opened the thing below it. */
 .wm-submit__toggle:hover,
-.wm-submit[open] > .wm-submit__toggle {
+.wm-submit__checkbox:checked ~ .post__syndication .wm-submit__toggle {
     color: var(--color-text);
     border-color: currentColor;
 }
 
+/* The clipped checkbox is what actually holds focus, so its ring has to be
+   forwarded to the pill or tabbing to the control shows nothing at all. Same
+   spec as the theme's global :focus-visible. */
+.wm-submit__checkbox:focus-visible ~ .post__syndication .wm-submit__toggle {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
+}
+
+/* The type is restated rather than inherited: the form used to sit inside
+   .post__syndication and took its .75rem muted scale from there. Out here it is
+   a sibling of the row, so without this the label comes back at body size and
+   shouts over the article it is attached to. */
 .wm-submit__form {
+    display: none;
     max-width: 100%;
     margin-top: .625rem;
+    font-size: .75rem;
+    color: var(--color-muted);
 }
+
+.wm-submit__checkbox:checked ~ .wm-submit__form { display: block; }
 
 .wm-submit__label {
     display: block;
