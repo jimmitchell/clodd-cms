@@ -2,6 +2,10 @@
 // POST handler + GET-side data prep for Settings → General.
 // Included from admin/settings.php after auth check. Exits on POST success.
 
+// `use` is per-file and is not inherited from the including script, so this is
+// needed here even though admin/settings.php imports the same class.
+use CMS\Helpers;
+
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -39,6 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'tinylytics_kudos_emoji' => trim($_POST['tinylytics_kudos_emoji'] ?? ''),
         'ga_measurement_id'    => trim($_POST['ga_measurement_id']    ?? ''),
         'webmention_domain'        => trim($_POST['webmention_domain']        ?? ''),
+        // Normalised on the way in so the stored value is already the list the
+        // template splits, and a junk line never reaches the page.
+        'webmention_link_tags'     => implode("\n", Helpers::linkTagVariants($_POST['webmention_link_tags'] ?? '')),
         'google_site_verification' => trim($_POST['google_site_verification'] ?? ''),
         'custom_css'               => $_POST['custom_css'] ?? '',
         'favicon_url'              => trim($_POST['favicon_url'] ?? ''),

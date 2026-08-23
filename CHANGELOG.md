@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.31.0] — 2026-08-23
+
+No schema change. New setting: `webmention_link_tags`.
+
+### Added
+
+- **Mentions from blogs that tag their outbound links now show up.** webmention.io matches and stores a target verbatim, so when Ghost appends `?ref=its-own-domain` to a link, the mention it produces is filed under an address no page of this site ever queried — accepted, and invisible. That is not theoretical: it is why the first real submission here never appeared.
+
+  Two halves, and both are needed, because verification and display want different URLs. Verification needs the target to equal the href on the source page; display needs it to equal what the post asks about.
+
+  **Settings → IndieWeb → Link-tag parameters** takes one `name=value` per line (`ref=blog.example.com`). Each post then asks about the canonical *and* every listed variant, in a single request — `target[]` accepts several. `Helpers::linkTagVariants()` cleans the setting on save and on render, tolerating a pasted leading `?` or `&` and dropping anything that is not a plain query pair. Results are deduplicated by source and property, since one page verified against two addresses comes back twice.
+
+  **The form retries once by itself.** On `no_link_found` it derives the tag from the URL the reader typed — it is their own hostname — and resubmits against the tagged address. This matters because the target is a hidden field: without it, a Ghost user is told their page does not link here and has no way to act on it. If the resulting tag is one the site already asks about, the confirmation offers a reload; if it is not, the mention is real but will not appear until the tag is listed, so it says only "Accepted — thanks for the link" rather than promising something untrue.
+
 ## [1.30.0] — 2026-08-23
 
 No schema change.

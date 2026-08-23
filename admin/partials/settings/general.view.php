@@ -284,6 +284,18 @@ $showRelatedPosts = $_SERVER['REQUEST_METHOD'] === 'POST'
             and incoming webmentions are fetched and displayed below each post.
             Leave blank to disable.
         </p>
+
+        <label for="webmention_link_tags">Link-tag parameters</label>
+        <textarea id="webmention_link_tags" name="webmention_link_tags" rows="3"
+                  placeholder="ref=blog.example.com"
+                  style="max-width:400px"><?= Helpers::e($_POST['webmention_link_tags'] ?? $settings['webmention_link_tags'] ?? '') ?></textarea>
+        <p class="form-hint">
+            One <code>name=value</code> per line. Some blogs tag their outbound links —
+            Ghost appends <code>?ref=their-domain.com</code> — and webmention.io files the
+            mention under that tagged address rather than your clean one, where nothing
+            looks for it. Listing a tag here makes each post ask about that variant too,
+            in the same request. Only needed for sites you have actually seen do this.
+        </p>
     </div>
 
     <div class="panel">

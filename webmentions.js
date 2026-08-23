@@ -6,6 +6,23 @@
     var target = section.dataset.url;
     if (!target) return;
 
+    /* The canonical plus every known link-tag variant, asked for in one request.
+       webmention.io matches and stores a target verbatim, so a mention from a blog
+       that tags its outbound links — Ghost appends ?ref=its-own-domain — is filed
+       under an address this page would otherwise never ask about, and is accepted
+       and invisible. The tags come from the webmention_link_tags setting.
+
+       The cache stays keyed on the canonical alone: the variants change what is
+       asked, not which post this is. */
+    function withTag(url, tag) {
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + tag;
+    }
+
+    var _wmQuery = 'target[]=' + encodeURIComponent(target);
+    (section.dataset.linkTags || '').split(/\s+/).forEach(function (tag) {
+        if (tag) { _wmQuery += '&target[]=' + encodeURIComponent(withTag(target, tag)); }
+    });
+
     var _wmCacheKey  = 'wm:' + target;
     var _wmCached    = null;
     var _wmRaw       = sessionStorage.getItem(_wmCacheKey);
@@ -51,6 +68,19 @@
 
     function renderMentions(data) {
         var all      = data.children || [];
+
+        /* Asking about several targets can return the same mention twice — one
+           page verified against both the clean address and a tagged one. Same
+           source, same property, one entry. Keys are prefixed so a source that
+           happens to read like "__proto__" cannot poison the lookup. */
+        var seen = {};
+        all = all.filter(function (m) {
+            var key = '#' + (m['wm-source'] || m.url || '') + '|' + (m['wm-property'] || '');
+            if (seen[key]) { return false; }
+            seen[key] = true;
+            return true;
+        });
+
         var likes    = all.filter(function (m) { return m['wm-property'] === 'like-of'; });
         var reposts  = all.filter(function (m) { return m['wm-property'] === 'repost-of'; });
         var replies  = all.filter(function (m) { return m['wm-property'] === 'in-reply-to'; });
@@ -126,7 +156,7 @@
     if (_wmCached) {
         try { renderMentions(_wmCached); } catch (e) { /* ignore stale cache */ }
     } else {
-        fetch('https://webmention.io/api/mentions.jf2?target=' + encodeURIComponent(target) + '&per-page=100')
+        fetch('https://webmention.io/api/mentions.jf2?' + _wmQuery + '&per-page=100')
             .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
             .then(function (data) {
                 try { sessionStorage.setItem(_wmCacheKey, JSON.stringify({ts: Date.now(), data: data})); } catch (e) {}
@@ -179,6 +209,14 @@
     var POLL_DELAY    = 2000;
     var POLL_ATTEMPTS = 10;
 
+    /* The link tags this site already knows to ask about, from the same data
+       attribute the block above reads. Used only to decide what to promise: a
+       mention filed under a tag that is not on this list is genuinely accepted
+       and genuinely will not appear, so it must not be followed by "reload". */
+    var wmSection = document.getElementById('webmentions');
+    var knownTags = ((wmSection && wmSection.dataset.linkTags) || '').split(/\s+/)
+        .filter(function (t) { return t !== ''; });
+
     function say(text, offerEndpoint) {
         status.textContent = text;
         if (offerEndpoint) {
@@ -202,45 +240,97 @@
         say(text);
     }
 
-    function done(target) {
+    function settled(text) {
+        form.classList.add('is-sent');
+        say(text);
+    }
+
+    function done(ctx) {
         // Drop the 5-minute cache the block above writes, so the reload that
         // shows the new mention actually refetches.
-        try { sessionStorage.removeItem('wm:' + target); } catch (err) {}
-        form.classList.add('is-sent');
-        say('Accepted. Reload the page and it’ll be here.');
+        try { sessionStorage.removeItem('wm:' + ctx.canonical); } catch (err) {}
+
+        if (!ctx.tag || knownTags.indexOf(ctx.tag) !== -1) {
+            return settled('Accepted. Reload the page and it\u2019ll be here.');
+        }
+        // Stored under a tag this page does not query, so it is real but will not
+        // show until the tag is added to the site's settings. Thank them and stop
+        // rather than promise a reload that would show nothing.
+        settled('Accepted \u2014 thanks for the link.');
     }
 
     function readJson(url, options) {
         return fetch(url, options).then(function (r) { return r.json(); });
     }
 
-    function poll(location, target, attemptsLeft) {
+    /* Ghost and friends tag outbound links with their own domain, so a page can
+       link to this post and still not link to the URL just submitted. The tag is
+       derivable from what the reader typed — it is their own host — so rather
+       than report a dead end the form tries once more with the tagged address.
+       Returns '' when there is nothing sensible to retry with. */
+    function tagFromSource(sourceUrl) {
+        var host = '';
+        try { host = new URL(sourceUrl).hostname; } catch (err) { return ''; }
+        return host ? 'ref=' + host : '';
+    }
+
+    function poll(location, ctx, attemptsLeft) {
         readJson(location, {headers: {'Accept': 'application/json'}}).then(function (body) {
             var state = body && body.status;
 
-            if (state === 'success') { return done(target); }
+            if (state === 'success') { return done(ctx); }
 
             if (state === 'queued') {
                 if (attemptsLeft > 1) {
-                    setTimeout(function () { poll(location, target, attemptsLeft - 1); }, POLL_DELAY);
+                    setTimeout(function () { poll(location, ctx, attemptsLeft - 1); }, POLL_DELAY);
                 } else {
                     // Not a failure — webmention.io is just slow today. Say only that.
-                    form.classList.add('is-sent');
-                    say('Sent. webmention.io is still checking it; it’ll appear here if your page links back.');
+                    settled('Sent. webmention.io is still checking it; it\u2019ll appear here if your page links back.');
                 }
                 return;
             }
 
             if (state === 'no_link_found') {
-                return fail('That page doesn’t link here. Some sites tag outbound links — Ghost adds ?ref= — and the address has to match this page’s exactly.');
+                var tag = ctx.tag ? '' : tagFromSource(ctx.source);
+                if (tag) {
+                    ctx.tag    = tag;
+                    ctx.target = ctx.canonical + (ctx.canonical.indexOf('?') === -1 ? '?' : '&') + tag;
+                    return send(ctx);
+                }
+                return fail('That page doesn\u2019t link here. Some sites tag outbound links — Ghost adds ?ref= — and the address has to match this page\u2019s exactly.');
             }
 
             fail(body && body.summary ? body.summary : 'webmention.io could not verify that page.');
         }).catch(function () {
             // The mention is queued and will be verified with or without us; only
             // the verdict is lost, so do not call it a failure.
-            form.classList.add('is-sent');
-            say('Sent. It’ll appear here once webmention.io has checked that your page links back.');
+            settled('Sent. It\u2019ll appear here once webmention.io has checked that your page links back.');
+        });
+    }
+
+    function send(ctx) {
+        // URLSearchParams sets application/x-www-form-urlencoded itself and Accept
+        // is a safelisted header, which together keep this a CORS-simple request.
+        // It has to stay that way: the endpoint 404s on OPTIONS, so anything that
+        // provokes a preflight fails before it is sent.
+        return readJson(form.action, {
+            method: 'POST',
+            headers: {'Accept': 'application/json'},
+            body: new URLSearchParams({source: ctx.source, target: ctx.target})
+        }).then(function (body) {
+            if (body && body.error) {
+                return fail(body.error_description || 'webmention.io refused that submission.');
+            }
+            if (body && body.location) {
+                button.textContent = 'Checking\u2026';
+                return poll(body.location, ctx, POLL_ATTEMPTS);
+            }
+            // Queued but no status URL to watch — accepted as far as we can tell.
+            settled('Sent. It\u2019ll appear here once webmention.io has checked that your page links back.');
+        }).catch(function () {
+            button.disabled = false;
+            button.textContent = 'Send';
+            say('Couldn\u2019t reach webmention.io — check your connection and try again, or:', true);
         });
     }
 
@@ -252,32 +342,9 @@
         if (!source || !target) return;
 
         button.disabled = true;
-        button.textContent = 'Sending…';
+        button.textContent = 'Sending\u2026';
         status.hidden = true;
 
-        // URLSearchParams sets application/x-www-form-urlencoded itself and Accept
-        // is a safelisted header, which together keep this a CORS-simple request.
-        // It has to stay that way: the endpoint 404s on OPTIONS, so anything that
-        // triggers a preflight fails before it is sent.
-        readJson(form.action, {
-            method: 'POST',
-            headers: {'Accept': 'application/json'},
-            body: new URLSearchParams({source: source, target: target})
-        }).then(function (body) {
-            if (body && body.error) {
-                return fail(body.error_description || 'webmention.io refused that submission.');
-            }
-            if (body && body.location) {
-                button.textContent = 'Checking…';
-                return poll(body.location, target, POLL_ATTEMPTS);
-            }
-            // Queued but no status URL to watch — accepted as far as we can tell.
-            form.classList.add('is-sent');
-            say('Sent. It’ll appear here once webmention.io has checked that your page links back.');
-        }).catch(function () {
-            button.disabled = false;
-            button.textContent = 'Send';
-            say('Couldn’t reach webmention.io — check your connection and try again, or:', true);
-        });
+        send({source: source, canonical: target, target: target, tag: ''});
     });
 }());

@@ -198,4 +198,53 @@ final class HelpersTest extends TestCase
         // A bare relative path has no leading slash, so it is not site-rooted.
         $this->assertSame('', Helpers::safeUrl('media/x.jpg'));
     }
+
+    /**
+     * Link-tag variants are the query suffixes other sites append to links
+     * pointing here, and they end up inside a URL this site then fetches.
+     */
+    public function testLinkTagVariantsCleansTheSettingIntoAList(): void
+    {
+        $this->assertSame(
+            ['ref=blog.example.com', 'utm_source=news'],
+            Helpers::linkTagVariants("ref=blog.example.com\nutm_source=news")
+        );
+
+        // Copied out of an address bar, a parameter arrives with its separator.
+        $this->assertSame(['ref=a.example'], Helpers::linkTagVariants('?ref=a.example'));
+        $this->assertSame(['ref=a.example'], Helpers::linkTagVariants('&ref=a.example'));
+
+        // Blank lines, padding, CRLF from a textarea, and repeats.
+        $this->assertSame(
+            ['ref=a.example'],
+            Helpers::linkTagVariants("\r\n  ref=a.example  \r\n\r\n?ref=a.example\n")
+        );
+
+        $this->assertSame([], Helpers::linkTagVariants(''));
+        $this->assertSame([], Helpers::linkTagVariants("   \n  \n"));
+    }
+
+    /**
+     * Anything that is not a plain name=value pair is dropped rather than passed
+     * along. The consumer encodes it, so this is not the only guard — but a
+     * suffix carrying a fragment, a space or another URL is a mistake, and
+     * silently querying a mangled target would just hide the mistake.
+     */
+    public function testLinkTagVariantsDropsAnythingUnlikeAQueryPair(): void
+    {
+        foreach ([
+            'ref',                              // no value at all
+            'ref=a b',                          // space
+            'ref=a#frag',                       // fragment
+            'ref=a&utm=b',                      // two pairs on one line
+            'https://evil.example/?ref=a',      // a whole URL
+            '=novalue',                         // no name
+            'ref=<script>',
+        ] as $bad) {
+            $this->assertSame([], Helpers::linkTagVariants($bad), $bad . ' should be dropped');
+        }
+
+        // An empty value is legitimate: "?ref=" is a real, if odd, parameter.
+        $this->assertSame(['ref='], Helpers::linkTagVariants('ref='));
+    }
 }

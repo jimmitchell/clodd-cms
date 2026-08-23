@@ -262,7 +262,13 @@ ob_start();
 </article>
 
 <?php if (($settings['webmention_domain'] ?? '') !== ''): ?>
-<section class="webmentions" id="webmentions" data-url="<?= htmlspecialchars($canonical, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+<?php /* data-link-tags carries the query suffixes other sites append to links
+         pointing here, so webmentions.js can ask about those variants alongside
+         the canonical. webmention.io matches and stores a target verbatim, so a
+         mention from a link-tagging blog is filed under an address this page
+         would otherwise never query. */ ?>
+<section class="webmentions" id="webmentions" data-url="<?= htmlspecialchars($canonical, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
+         data-link-tags="<?= Helpers::e(implode(' ', Helpers::linkTagVariants($settings['webmention_link_tags'] ?? ''))) ?>">
     <h2 class="webmentions__title">Webmentions</h2>
     <div class="webmentions__body"></div>
 </section>

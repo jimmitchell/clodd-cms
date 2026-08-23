@@ -205,6 +205,38 @@ class Helpers
     }
 
     /**
+     * The query suffixes other sites append to links pointing here, one per line,
+     * cleaned into a list: "ref=blog.example.com", "utm_source=news".
+     *
+     * webmention.io verifies a mention against the *exact* target it was given and
+     * stores it verbatim, so a blog that tags its outbound links files its mention
+     * under a URL no page of this site ever queries — it is accepted and invisible.
+     * (Ghost does this by default.) These are the variants webmentions.js asks about
+     * alongside the canonical, in the same request.
+     *
+     * A leading "?" or "&" is tolerated, since that is how the parameter looks when
+     * copied out of a browser's address bar. The character filter is deliberately
+     * narrow: this ends up inside a URL that the page then fetches, and while the
+     * caller encodes it, a suffix carrying a "#" or a space is a mistake rather than
+     * something to pass along.
+     *
+     * @return list<string>
+     */
+    public static function linkTagVariants(string $raw): array
+    {
+        $out = [];
+        foreach (preg_split('/\R/', $raw) ?: [] as $line) {
+            $line = ltrim(trim($line), '?&');
+            if ($line === '' || !preg_match('/^[A-Za-z0-9._~%+-]+=[A-Za-z0-9._~%+-]*$/', $line)) {
+                continue;
+            }
+            $out[$line] = true;
+        }
+
+        return array_keys($out);
+    }
+
+    /**
      * The last path segment of a URL, when it matches $pattern. Null otherwise.
      * Query strings and trailing slashes are ignored.
      */
