@@ -135,3 +135,68 @@
             .catch(function () { /* fail silently */ });
     }
 }());
+
+/* Manual webmention submission.
+ *
+ * A second, independent initialiser rather than more code inside the one above:
+ * that block returns early when #webmentions is missing, and .webmentions stays
+ * display:none until mentions load — so on a post with none, which is exactly
+ * where a submission is worth most, it would never run.
+ *
+ * This only upgrades a form that already works. The endpoint sends no CORS
+ * headers (and 404s on OPTIONS), so the POST lands but the reply is opaque: we
+ * cannot tell acceptance from rejection, and the copy below must not pretend
+ * otherwise. Everything here is built with textContent — no innerHTML, so none
+ * of it depends on the esc() contract above.
+ */
+(function () {
+    var form = document.querySelector('.wm-submit__form');
+    if (!form || !window.fetch || !window.URLSearchParams) return;
+
+    var status = form.querySelector('.wm-submit__status');
+    var button = form.querySelector('.wm-submit__send');
+    if (!status || !button) return;
+
+    function say(text, offerEndpoint) {
+        status.textContent = text;
+        if (offerEndpoint) {
+            status.appendChild(document.createTextNode(' '));
+            var a = document.createElement('a');
+            a.href = form.action;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = 'Send it at webmention.io';
+            status.appendChild(a);
+        }
+        status.hidden = false;
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        var source = form.elements.source ? form.elements.source.value.trim() : '';
+        var target = form.elements.target ? form.elements.target.value : '';
+        if (!source || !target) return;
+
+        button.disabled = true;
+        button.textContent = 'Sending…';
+
+        // URLSearchParams sets application/x-www-form-urlencoded itself, which is
+        // what keeps this a CORS-simple request with no preflight to fail.
+        fetch(form.action, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: new URLSearchParams({source: source, target: target})
+        }).then(function () {
+            // Drop the 5-minute cache the block above writes, so a reload once
+            // verification has run actually refetches.
+            try { sessionStorage.removeItem('wm:' + target); } catch (err) {}
+            form.classList.add('is-sent');
+            say('Sent. It’ll show up here once webmention.io has checked that your page links back.');
+        }).catch(function () {
+            button.disabled = false;
+            button.textContent = 'Send';
+            say('Couldn’t send that — check your connection and try again, or:', true);
+        });
+    });
+}());

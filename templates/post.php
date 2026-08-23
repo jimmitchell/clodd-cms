@@ -181,7 +181,16 @@ ob_start();
     $replyEmail = $settings['reply_email'] ?? '';
     $showEmail  = $replyEmail !== '';
     ?>
-    <?php if ($showKudos || $post->mastodon_url || $post->bluesky_url || $post->pixelfed_url || $showEmail): ?>
+    <?php /* webmention.io receives; it never goes looking. A response written on a
+             site that does not send webmentions itself reaches us only if someone
+             submits it by hand, and webmention.io's own form prefills nothing — so
+             the reader would have to copy this post's URL across. We already know
+             it, which is the whole reason this form is worth its markup. */ ?>
+    <?php
+    $webmentionDomain = $settings['webmention_domain'] ?? '';
+    $showWebmention   = $webmentionDomain !== '';
+    ?>
+    <?php if ($showKudos || $post->mastodon_url || $post->bluesky_url || $post->pixelfed_url || $showEmail || $showWebmention): ?>
     <footer class="post__syndication">
         <?php if ($showEmail):
             $emailSubject = $isNote
@@ -205,6 +214,32 @@ ob_start();
         <?php endif; ?>
         <?php if ($showKudos): ?>
         <button class="tinylytics_kudos" data-path="<?= htmlspecialchars($kudosPath, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"></button>
+        <?php endif; ?>
+        <?php if ($showWebmention): ?>
+        <?php /* A real form posting cross-origin, not a JS-only widget: the endpoint
+                 sends no CORS headers, so webmentions.js can post it but cannot read
+                 the reply. With JS off — or running last week's cached copy — the
+                 native POST still lands and the browser ends up on webmention.io's
+                 202 page. <details> rather than a button so that fallback is
+                 reachable at all, and so the disclosure is keyboard-correct for free.
+
+                 The hidden target is $canonical, the same URL #webmentions queries
+                 below. If the two ever drift, a mention is accepted against a URL
+                 this page never asks about and is invisible forever. */ ?>
+        <details class="wm-submit">
+            <summary class="wm-submit__toggle">Webmention</summary>
+            <form class="wm-submit__form" method="post"
+                  action="https://webmention.io/<?= Helpers::e($webmentionDomain) ?>/webmention">
+                <input type="hidden" name="target" value="<?= Helpers::e($canonical) ?>">
+                <label class="wm-submit__label" for="wm-source">Written a response on your own site? Paste its URL and it&rsquo;ll show up here.</label>
+                <div class="wm-submit__row">
+                    <input class="wm-submit__input" type="url" name="source" id="wm-source"
+                           required placeholder="https://" autocomplete="url" inputmode="url" spellcheck="false">
+                    <button class="wm-submit__send" type="submit">Send</button>
+                </div>
+                <p class="wm-submit__status" role="status" aria-live="polite" hidden></p>
+            </form>
+        </details>
         <?php endif; ?>
     </footer>
     <?php endif; ?>

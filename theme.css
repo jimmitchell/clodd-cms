@@ -1406,9 +1406,13 @@ audio { width: 100%; }
     transition: border-color .15s;
 }
 .search-page__form input[type="search"]:focus { border-color: var(--color-link); }
+/* color is --color-bg, not #fff, and the magnifier strokes with currentColor:
+   --color-link is a deep navy on paper but a pale sky in dark mode, where white
+   on it lands around 1.9:1. The page's own ground colour inverts with the theme
+   and clears 7:1 both ways. */
 .search-page__form button {
     background: var(--color-link);
-    color: #fff;
+    color: var(--color-bg);
     border: none;
     border-radius: 4px;
     padding: .5rem 1rem;
@@ -1580,7 +1584,10 @@ audio { width: 100%; }
 .button-link {
     display: inline-block;
     background: var(--color-link);
-    color: #fff;
+    /* --color-bg, not #fff: this was built to match the search form's fill, and
+       that button now takes the page's ground colour so its label inverts with
+       the theme instead of sitting at ~1.9:1 white-on-sky in dark mode. */
+    color: var(--color-bg);
     text-decoration: none;
     border: none;
     border-radius: var(--radius);
@@ -1596,7 +1603,7 @@ audio { width: 100%; }
 .button-link:hover {
     background: color-mix(in srgb, var(--color-link) 90%, #000);
     text-decoration: none;
-    color: #fff;
+    color: var(--color-bg);
 }
 
 /* ── Pagination ───────────────────────────────────────────────────────────── */
@@ -1644,9 +1651,14 @@ audio { width: 100%; }
 }
 
 /* ── Post syndication footer ──────────────────────────────────────────────── */
+/* align-items is flex-start, not center, because of the webmention drawer at the
+   end of the row: an open <details> is several times the height of a pill, and
+   centring would float Email/Mastodon/Bluesky down to the middle of it. Every
+   item is the same height while it is closed, so this is invisible until then. */
 .post__syndication {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: flex-start;
     gap: .275rem;
     margin-top: 2rem;
     font-size: .75rem;
@@ -1688,6 +1700,111 @@ audio { width: 100%; }
 .tinylytics_kudos.did_select {
     color: var(--color-text);
     border-color: currentColor;
+}
+
+/* ── Manual webmention submission ─────────────────────────────────────────── */
+/* A drawer on the end of the syndication row. Closed, it is one more pill. Open,
+   it takes a row of its own: left to share the row it would open wherever the
+   pill happens to sit, leaving the form floating in the middle of the page with
+   nothing above it. Unfolding onto a full-width row costs the pill a small move
+   the reader just asked for, and buys a form aligned with the article. */
+.wm-submit[open] {
+    flex: 1 0 100%;
+}
+
+/* Identical to a .post__syndication pill, so the row reads as one set. The
+   disclosure triangle goes: it would be the only marker glyph on the page, and
+   the pill already looks pressable. list-style covers Firefox and Chrome, the
+   webkit pseudo-element covers Safari. */
+.wm-submit__toggle {
+    display: inline-block;
+    list-style: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: .1rem .5rem;
+    line-height: 1.4;
+    color: var(--color-muted);
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+}
+
+.wm-submit__toggle::-webkit-details-marker { display: none; }
+
+/* Open is the hover state held: the pill stays lit while its drawer is showing,
+   so it is obvious which control opened the thing below it. */
+.wm-submit__toggle:hover,
+.wm-submit[open] > .wm-submit__toggle {
+    color: var(--color-text);
+    border-color: currentColor;
+}
+
+.wm-submit__form {
+    max-width: 100%;
+    margin-top: .625rem;
+}
+
+.wm-submit__label {
+    display: block;
+    margin-bottom: .375rem;
+    line-height: 1.5;
+}
+
+.wm-submit__row {
+    display: flex;
+    gap: .375rem;
+}
+
+/* The field matches .search-page__form — the theme's one existing text input —
+   down to the 4px radius small chrome keeps instead of --radius. 1rem is not a
+   whim either: iOS zooms the viewport on focus for anything smaller, which would
+   throw the reader out of the page they are trying to respond to. */
+.wm-submit__input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font: inherit;
+    font-size: 1rem;
+    padding: .5rem .75rem;
+    outline: none;
+    transition: border-color .15s;
+}
+
+.wm-submit__input:focus { border-color: var(--color-link); }
+
+/* The label is --color-bg, not #fff: --color-link is a deep navy on paper but a
+   pale sky in dark mode, where white text on it lands around 1.9:1 and is barely
+   readable. Taking the page's own ground colour inverts with the theme and clears
+   7:1 both ways. .search-page__form button takes the same token for the same
+   reason. */
+.wm-submit__send {
+    flex: none;
+    background: var(--color-link);
+    color: var(--color-bg);
+    border: none;
+    border-radius: 4px;
+    padding: .5rem 1rem;
+    font: inherit;
+    font-size: .875rem;
+    cursor: pointer;
+    transition: background .15s;
+}
+
+.wm-submit__send:hover { background: color-mix(in srgb, var(--color-link) 90%, #000); }
+
+.wm-submit__status {
+    margin-top: .5rem;
+    line-height: 1.5;
+}
+
+/* A state class rather than the hidden attribute on these two: both set display
+   from a class selector, which outranks the UA's [hidden] { display: none } and
+   would leave the form sitting under its own "Sent" message. */
+.wm-submit__form.is-sent .wm-submit__label,
+.wm-submit__form.is-sent .wm-submit__row {
+    display: none;
 }
 
 /* ── Related posts ───────────────────────────────────────────────────────── */

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.29.0] — 2026-08-23
+
+No schema change.
+
+### Added
+
+- **Anyone can hand a webmention to a post now.** webmention.io receives; it never goes looking. A response written on a site that does not send webmentions itself — a hand-rolled blog, a Substack, most of the web — produced silence here no matter how squarely it linked back. webmention.io does host a manual form, but it prefills nothing, so a reader sent there has to copy the post's URL across by hand.
+
+  The syndication footer gains a **Webmention** pill that opens a drawer asking for one thing: the URL of the page they wrote. The target is filled in already, because the page knows it — the same `$canonical` the `#webmentions` section fetches, which `BuilderOutputTest` now pins, since a form and a display looking at different URLs would accept a mention and then never show it.
+
+  It is a real `<form>` posting straight to the endpoint, with no server code behind it and nothing new exposed on this host: webmention.io fetches the source page and verifies the link before storing anything, so there is nothing here to abuse. `webmentions.js` upgrades submission to `fetch()` so the reader stays on the page; with JavaScript off, or running a cached copy of the script from before this release, the native POST still lands and the browser ends up on webmention.io's own confirmation. The endpoint sends no CORS headers, so the reply is opaque either way — the confirmation says "Sent", never "Accepted", because that is genuinely all we know.
+
+### Fixed
+
+- **The two filled buttons on the public site were unreadable in dark mode.** `--color-link` is a deep navy on paper but a pale sky against the dark palette, and both `.search-page__form button` and `.button-link` painted their label `#fff` on it — around 1.9:1, well under the 4.5:1 floor. The search magnifier strokes with `currentColor`, so it went too.
+
+  Both now take `var(--color-bg)`, which inverts with the theme and clears 7:1 either way. Found while giving the new Send button the same treatment; nothing else on the site hardcodes white on a themed fill.
+
 ## [1.28.1] — 2026-08-22
 
 No schema change.

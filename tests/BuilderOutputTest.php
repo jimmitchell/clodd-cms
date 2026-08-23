@@ -494,6 +494,63 @@ PHP);
     }
 
     /**
+     * The webmention form files a mention against the URL this page later asks about.
+     *
+     * webmention.io never discovers a link on its own, so the manual form in the
+     * syndication footer is the only way a mention from a site that does not send
+     * them reaches us at all. Its hidden target and the #webmentions section's
+     * data-url have to name the same URL: the form decides what gets stored, the
+     * section decides what gets displayed, and if they ever drift, a submission is
+     * accepted and then invisible forever — on a page that reports no error.
+     *
+     * Also pinned: the endpoint is built from the webmention_domain setting. A
+     * hardcoded host here would post every other installation's mentions to
+     * whichever domain was in the template when it shipped.
+     */
+    public function testTheWebmentionFormTargetsTheUrlThePageQueries(): void
+    {
+        $template = file_get_contents(dirname(__DIR__) . '/templates/post.php');
+        $this->assertNotFalse($template);
+
+        // Comments stripped first: the markup is explained in prose directly
+        // above it, and that prose names $canonical too.
+        $code = '';
+        foreach (token_get_all($template) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $this->assertSame(
+            1,
+            preg_match('/name="target"\s+value="<\?=\s*(.+?)\s*\?>"/s', $code, $submitted),
+            'precondition: the syndication footer carries a hidden webmention target'
+        );
+        $this->assertSame(
+            1,
+            preg_match('/id="webmentions"\s+data-url="<\?=\s*(.+?)\s*\?>"/s', $code, $queried),
+            'precondition: the webmentions section names the URL it fetches'
+        );
+
+        foreach (['submitted' => $submitted[1], 'queried' => $queried[1]] as $role => $expr) {
+            preg_match_all('/\$[a-zA-Z_]\w*/', $expr, $vars);
+            $this->assertSame(
+                ['$canonical'],
+                array_values(array_unique($vars[0])),
+                "the $role webmention URL must be \$canonical and nothing else, or the form "
+                . 'and the display go looking at different URLs'
+            );
+        }
+
+        $this->assertMatchesRegularExpression(
+            '/action="https:\/\/webmention\.io\/<\?=[^?]*\$webmentionDomain[^?]*\?>\/webmention"/',
+            $code,
+            'the webmention endpoint must come from the webmention_domain setting, not a literal host'
+        );
+    }
+
+    /**
      * A featured image is styled by sharing the body image's rules, never by
      * restating them.
      *
