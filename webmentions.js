@@ -50,14 +50,32 @@
         return /^https?:\/\//i.test(u) ? u : '';
     }
 
+    function hostOf(url) {
+        try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return ''; }
+    }
+
+    /* A page with no h-card comes back from webmention.io with an empty author,
+       and "Anonymous" says nothing about a mention that plainly came from
+       somewhere. The site it came from is both true and more use to a reader, so
+       that is the fallback; "Anonymous" is kept for when even the source will not
+       parse. The author's own URL is preferred over the mention permalink, which
+       for a Bridgy mention would otherwise read "brid.gy". */
+    function displayName(m) {
+        var a = m.author || {};
+        return a.name
+            || hostOf(safeUrl(a.url) || safeUrl(m.url) || m['wm-source'] || '')
+            || 'Anonymous';
+    }
+
     // Note the sizes read backwards and are not: .wm-avatar is 32px and
     // .wm-avatar--sm is 40px in theme.css. The modifier names the *reply*
     // avatar, which is larger than the reaction avatars it sits among. The
     // width/height below match the stylesheet — keep them in step, they are
     // what stops the list reflowing as the images arrive.
-    function buildAvatar(a, size) {
+    function buildAvatar(m, size) {
+        var a = m.author || {};
         var cls = 'wm-avatar' + (size === 'sm' ? ' wm-avatar--sm' : '');
-        var name = a.name || '?';
+        var name = displayName(m);
         var initial = name.charAt(0).toUpperCase();
         var photo = safeUrl(a.photo);
         if (photo) {
@@ -101,7 +119,7 @@
             reactions.forEach(function (m) {
                 var a    = m.author || {};
                 var link = safeUrl(a.url) || safeUrl(m.url) || '#';
-                html += '<a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer" title="' + esc(a.name || 'Anonymous') + '" class="wm-avatar-link">' + buildAvatar(a, 'lg') + '</a>';
+                html += '<a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer" title="' + esc(displayName(m)) + '" class="wm-avatar-link">' + buildAvatar(m, 'lg') + '</a>';
             });
             html += '</div></div>';
         }
@@ -113,7 +131,7 @@
             html += '<p class="wm-group-label">' + allReplies.length + (allReplies.length === 1 ? ' Reply' : ' Replies') + '</p>';
             allReplies.forEach(function (m) {
                 var a       = m.author || {};
-                var name    = a.name || 'Anonymous';
+                var name    = displayName(m);
                 var srcLink = safeUrl(a.url) || safeUrl(m.url) || '#';
                 var pub     = m.published || m['wm-received'] || '';
                 var dateStr = '';
@@ -131,7 +149,7 @@
 
                 html += '<article class="wm-reply">';
                 html += '<header class="wm-reply__header">';
-                html += '<a href="' + esc(srcLink) + '" target="_blank" rel="noopener noreferrer" class="wm-avatar-link">' + buildAvatar(a, 'sm') + '</a>';
+                html += '<a href="' + esc(srcLink) + '" target="_blank" rel="noopener noreferrer" class="wm-avatar-link">' + buildAvatar(m, 'sm') + '</a>';
                 html += '<div class="wm-reply__meta">';
                 html += '<a href="' + esc(srcLink) + '" target="_blank" rel="noopener noreferrer" class="wm-reply__author">' + esc(name) + '</a>';
                 if (dateStr) {

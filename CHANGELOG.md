@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.31.1] — 2026-08-23
+
+No schema change.
+
+### Changed
+
+- **A mention from a page with no h-card is named by its site, not "Anonymous".** webmention.io returns an empty author for a page that carries no author markup — which is most of the web — and "Anonymous" told a reader nothing about a mention that plainly came from somewhere. The fallback is now the source's hostname, `www.` trimmed: `blog.agilebuckle.com` rather than a blank. The avatar's letter follows it.
+
+  The author's own URL is preferred over the mention permalink when deriving it, or a Bridgy-relayed reply with no name would introduce itself as "brid.gy". A real author name still wins over both, and "Anonymous" survives for the case where nothing parses as a URL at all.
+
 ## [1.31.0] — 2026-08-23
 
 No schema change. New setting: `webmention_link_tags`.
