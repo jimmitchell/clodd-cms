@@ -230,11 +230,11 @@ ob_start();
         <a href="<?= htmlspecialchars($post->pixelfed_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
            class="u-syndication" target="_blank" rel="noopener noreferrer">Pixelfed</a>
         <?php endif; ?>
-        <?php if ($showKudos): ?>
-        <button class="tinylytics_kudos" data-path="<?= htmlspecialchars($kudosPath, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"></button>
-        <?php endif; ?>
         <?php if ($showWebmention): ?>
         <label class="wm-submit__toggle" for="wm-submit-toggle">Webmention</label>
+        <?php endif; ?>
+        <?php if ($showKudos): ?>
+        <button class="tinylytics_kudos" data-path="<?= htmlspecialchars($kudosPath, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"></button>
         <?php endif; ?>
     </footer>
     <?php if ($showWebmention): ?>
