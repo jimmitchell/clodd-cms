@@ -50,7 +50,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 8;
+    public const DESIGN_VERSION = 9;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -184,7 +184,17 @@ class OgImage
     private const OVERRIDE_STEM       = ['og-regular', 'og-bold'];
     private const OVERRIDE_EXTENSIONS = ['otf', 'ttf'];
 
+    /**
+     * Resolved, and — since 1.34.0 put the site name in bold to match
+     * `.site-header__title` — currently drawn nowhere. It is kept, and the pin
+     * is still required to be a complete pair, because `fonts/og/` holds a
+     * *family*: accepting a lone bold would let a half-installed pin pass as a
+     * whole one, and the next text element the card grows (a date, a byline)
+     * is the one that wants this cut.
+     */
     private string $fontRegular;
+
+    /** Everything the card draws today. */
     private string $fontBold;
 
     /**
@@ -282,12 +292,23 @@ class OgImage
         $pad  = self::PADDING;
         $maxW = self::WIDTH - ($pad * 2);
 
-        // ── Site title (top left, muted, regular) ────────────────────────────
+        // ── Site title (top left, muted, bold) ───────────────────────────────
+        // Bold because `.site-header__title` is: the name is the same lockup in
+        // both places, and setting it lighter here made the card's header read
+        // as a caption rather than as the site signing its own work.
+        //
+        // It stays META_COLOR rather than following the page to --color-text.
+        // The page can afford two elements at full strength because a reader is
+        // at reading distance; a card is scanned at about a third of its width
+        // in a timeline, where the post title is the only line that survives and
+        // a full-strength name beside it would compete for the one glance the
+        // card gets. Weight matches the page, value keeps the card's hierarchy.
+        //
         // Cap-aligned to the padding rather than baseline-aligned, so the gap
         // above it reads as the same 80px the title keeps below.
         $metaFoot = $pad;
         if ($siteTitle !== '') {
-            $metaBox   = imagettfbbox(self::META_SIZE, 0, $this->fontRegular, $siteTitle);
+            $metaBox   = imagettfbbox(self::META_SIZE, 0, $this->fontBold, $siteTitle);
             $ascent    = abs($metaBox[7]);
             $descent   = max(0, $metaBox[1]);
             $metaY     = $pad + $ascent;
@@ -310,7 +331,7 @@ class OgImage
                 $metaFoot = $pad + $edge;
             }
 
-            imagettftext($img, self::META_SIZE, 0, $metaX, $metaY, $metaColor, $this->fontRegular, $siteTitle);
+            imagettftext($img, self::META_SIZE, 0, $metaX, $metaY, $metaColor, $this->fontBold, $siteTitle);
         }
 
         // ── Post title (hung off the foot, bold, word-wrapped) ────────────────

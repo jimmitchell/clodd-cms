@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.34.0] — 2026-08-25
+
+No schema change.
+
+### Changed
+
+- **The site name on the OG card is bold, matching `.site-header__title`.** The page sets the name at 700; the card set it at 400, so the header of a card read as a caption on the post rather than as the site signing its own work — the one place that lockup appears to someone who has never been to the site.
+
+  It stays `META_COLOR` rather than following the page all the way to `--color-text`. The page can afford two elements at full strength because it is read at reading distance; a card is scanned at about a third of its width in a timeline, where the post title is the only line that survives, and a full-strength name beside it would compete for the single glance the card gets. Weight matches the page, value keeps the card's hierarchy. The page's `letter-spacing: -0.02em` has no equivalent here — GD draws a run of glyphs with no tracking control.
+
+  This leaves `OgImage::$fontRegular` resolved and drawn nowhere. It is kept, and a pin is still required to be a complete pair, because `fonts/og/` holds a *family*: accepting a lone bold would let a half-installed pin pass as a whole one, and the next text element the card grows is the one that will want that cut.
+
+  **`OgImage::DESIGN_VERSION` goes to 9, so the next full build redraws every card.**
+
+---
+
 ## [1.33.0] — 2026-08-25
 
 No schema change.
