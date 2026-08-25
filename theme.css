@@ -1,56 +1,25 @@
 /* ── Clodd CMS — Public Theme ─────────────────────────────────────────────── */
 
-/* ── GT Walsheim — self-hosted, four static cuts ─────────────────────────────
-   Sets everything on the site: UI, prose, and headings. It replaces the DM Sans
-   variable font, and the swap costs the weight axis: GT Walsheim ships here as
-   four discrete files, so the family has exactly **two weights, 400 and 700**,
-   and nothing in between. Ask for 500 or 600 anywhere below and the browser
-   rounds it — down to 400, up to 700 — which is why every rule in this file
-   states 400 or 700 outright. Keep it that way: a `font-weight: 600` that
-   silently renders as 700 is a lie the next reader has to run to catch.
+/* ── Typeface — the reader's own system font ──────────────────────────────
+   Nothing here is downloaded. `--font-sans` resolves to San Francisco on
+   Apple, Segoe UI on Windows, and whatever the desktop has set as its UI face
+   on Linux — which means the site paints in a face the reader already has
+   installed, with no @font-face request in front of first paint and no licence
+   attached to it.
 
-   Walsheim also sets a shorter x-height than the outgoing face did (.461em
-   against .504) on an identical cap height, so lowercase reads a touch smaller
-   at the same font-size while headings and the lettered UI land where they
-   always did. The type scale is left as it was rather than scaled to
-   compensate — the face is meant to look like itself. The leading is not:
-   see `body` below. */
+   The trade is that the face is no longer known when this file is written.
+   Two rules follow from that, and both are load-bearing:
 
-@font-face {
-    font-family: 'GT Walsheim';
-    src: url('/fonts/GTWalsheim-Regular.woff2') format('woff2');
-    font-weight: 400;
-    font-style:  normal;
-    font-display: swap;
-}
+   • **Assume a full weight range, but keep asking for round numbers.** Every
+     system UI face carries at least 400 and 700, and most carry the steps
+     between. The rules below still name 400 or 700 outright because that is
+     what they were designed at — not, as before, because the family had
+     nothing else.
 
-@font-face {
-    font-family: 'GT Walsheim';
-    src: url('/fonts/GTWalsheim-Bold.woff2') format('woff2');
-    font-weight: 700;
-    font-style:  normal;
-    font-display: swap;
-}
-
-/* Walsheim's slanted cuts are true obliques, not a separate italic design.
-   They are still what `font-style: italic` has to resolve to — declaring them
-   here is what stops the browser synthesising a skew from the roman. */
-
-@font-face {
-    font-family: 'GT Walsheim';
-    src: url('/fonts/GTWalsheim-Oblique.woff2') format('woff2');
-    font-weight: 400;
-    font-style:  italic;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'GT Walsheim';
-    src: url('/fonts/GTWalsheim-BoldOblique.woff2') format('woff2');
-    font-weight: 700;
-    font-style:  italic;
-    font-display: swap;
-}
+   • **Set leading against the tallest x-height in the stack, not the
+     shortest.** SF, Segoe UI and Roboto all set a large lowercase (~.51–.53em
+     against the em), so a paragraph needs more air between lines than a
+     small-x-height face does. See `body` below. */
 
 /* Reset */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -88,6 +57,12 @@
        chrome (icon buttons, the nav dropdown, search inputs) keeps its own
        tighter radius; this is the one knob for everything that holds content. */
     --radius:           6px;
+
+    /* The type stacks, named once. Every rule below reaches for these rather
+       than repeating the list — eight copies of the sans stack is eight places
+       for it to drift. */
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
 /* ── Dark mode tokens ──────────────────────────────────────────────────────── */
@@ -157,14 +132,14 @@ html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
 }
 
 
-/* 28px on the 18px root, where it was 30. Leading is set against the x-height
-   rather than the em, and Walsheim's is the shorter of the two faces — the
-   value tuned for DM Sans left the lines of a paragraph reading as separate
-   objects instead of a block. Keep it a whole pixel at the root size: 1.5556
-   is 28/18, the way 1.6667 was 30/18. */
+/* 30px on the 18px root, back up from 28. Leading is set against the x-height
+   rather than the em, and the system faces set a tall one — SF and Roboto both
+   land near .52em where the outgoing face was .461. At 1.5556 that lowercase
+   fills the line and a paragraph closes up into a grey slab. Keep it a whole
+   pixel at the root size: 1.6667 is 30/18. */
 body {
-    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    line-height: 1.5556;
+    font-family: var(--font-sans);
+    line-height: 1.6667;
     color: var(--color-text);
     background: var(--color-bg);
     -webkit-font-smoothing: antialiased;
@@ -176,8 +151,8 @@ body {
 
 /* .site-main { flex: 1; width: 100%; } */
 
-/* Headings run tighter than body copy — Walsheim's round, geometric caps set
-   a little loose at display sizes. Uppercase micro-labels (.webmentions__title and friends) set their own
+/* Headings run tighter than body copy — a UI face is spaced for menu items and
+   labels, so its default tracking reads loose at display sizes. Uppercase micro-labels (.webmentions__title and friends) set their own
    positive tracking and keep it, since class beats element. */
 h1, h2, h3, h4, h5, h6 { letter-spacing: -0.02em; }
 
@@ -607,7 +582,7 @@ audio { width: 100%; }
 
 /* ── Prose styles ─────────────────────────────────────────────────────────── */
 .prose {
-    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     font-size: 1rem;
     /* line-height: 1.6; */
 }
@@ -620,7 +595,7 @@ audio { width: 100%; }
 .prose h4,
 .prose h5,
 .prose h6 {
-    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     line-height: 1.25;
     margin-top: 2em;
     margin-bottom: .5em;
@@ -697,7 +672,7 @@ audio { width: 100%; }
 
 /* Code */
 .prose code {
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: .825em;
     background: var(--color-code-bg);
     border-radius: var(--radius);
@@ -794,7 +769,7 @@ audio { width: 100%; }
 }
 
 .home-intro__text {
-    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     font-size: 1rem;
     /* line-height: 1.55; */
     text-wrap: pretty;
@@ -915,7 +890,7 @@ audio { width: 100%; }
 }
 
 .post-card__title {
-    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     font-size: 1.3rem;
     font-weight: 700;
     line-height: 1.2;
@@ -957,7 +932,7 @@ audio { width: 100%; }
 }
 
 .post-card__excerpt {
-    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     color: var(--color-muted);
     font-size: .95rem;
     flex: 1;
@@ -1357,7 +1332,7 @@ audio { width: 100%; }
     outline: none;
     color: var(--color-text);
     /* The reading face, so the query looks like the prose it searches. */
-    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     font-size: 1.5rem;
     line-height: 1.3;
     padding: 0;
@@ -1630,7 +1605,7 @@ audio { width: 100%; }
 .footnotes {
     font-size: .85rem;
     color: var(--color-muted);
-    font-family: 'GT Walsheim', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
 }
 
 .footnotes ol { padding-left: 1.5em; }
@@ -2270,7 +2245,7 @@ audio { width: 100%; }
 }
 
 .gist {
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: .8rem;
 }
 

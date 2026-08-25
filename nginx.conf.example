@@ -61,7 +61,7 @@ server {
     error_page 404 /404.html;
 
     # ── Block sensitive directories ───────────────────────────────────────────
-    location ~* ^/(src|data|content|templates|vendor|bin|docker|tests)(/|$) {
+    location ~* ^/(src|data|content|templates|vendor|bin|docker|tests|fonts)(/|$) {
         deny all;
         return 403;
     }
@@ -136,17 +136,6 @@ server {
         # external connections — a strict CSP prevents any SVG or other
         # file from executing code if navigated to directly.
         add_header Content-Security-Policy "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'" always;
-    }
-
-    # ── Web fonts ─────────────────────────────────────────────────────────────
-    # Fonts are content-hashed filenames and never change; cache for 1 year.
-    location /fonts/ {
-        expires 1y;
-        add_header Cache-Control          "public, immutable"  always;
-        add_header X-Content-Type-Options "nosniff"            always;
-        add_header X-Frame-Options        "SAMEORIGIN"         always;
-        add_header Referrer-Policy        "strict-origin-when-cross-origin" always;
-        add_header Content-Security-Policy "default-src 'none'; font-src 'self'" always;
     }
 
     # ── Theme assets at site root ─────────────────────────────────────────────

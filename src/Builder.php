@@ -68,6 +68,8 @@ class Builder
         $this->outputDir   = rtrim($config['paths']['output'],   '/\\');
         $this->templateDir = rtrim($config['paths']['templates'], '/\\');
         $this->mediaDir    = rtrim($config['paths']['content'],   '/\\') . '/media';
+        // Not where the card's font lives — where one *may* be pinned. See
+        // OgImage::__construct(); with nothing there the host's sans is used.
         $this->fontDir     = $this->outputDir . '/fonts/og';
         $this->shortcodes  = new ShortcodeRenderer($db, $this->mediaDir);
 
@@ -1023,8 +1025,7 @@ class Builder
                 ?? (file_exists($ogPath) ? $siteUrl . '/' . $datePath . '/og.png' : '');
         }
 
-        $siteTitle  = $this->settings['site_title'] ?? '';
-        $fontStamp  = (string) (@filemtime($this->fontDir . '/GTWalsheim-Bold.ttf') ?: 0);
+        $siteTitle = $this->settings['site_title'] ?? '';
 
         // Only a local upload is drawn, for the reason headerAvatar() gives: a
         // remote one would mean fetching an arbitrary URL on the build path.
@@ -1033,25 +1034,34 @@ class Builder
             ? ''
             : $avatarPath . '@' . (@filemtime($avatarPath) ?: 0);
 
-        // The design version is in the hash because nothing else in it moves when
-        // only the card's palette or type changes — a retheme would otherwise
-        // leave every post already on disk showing the old card forever. The
-        // avatar is stamped by path *and* mtime for the same reason: replacing
-        // the picture behind an unchanged setting has to redraw the set too.
-        $ogHash     = hash(
-            'sha256',
-            OgImage::DESIGN_VERSION . '|' . $fontStamp . '|' . $avatarStamp . '|' . $siteTitle . '|' . $post->title
-        );
+        try {
+            // Built before the hash rather than inside the redraw below: the
+            // card is set in whichever sans the host provides, so the font
+            // stamp that decides whether a redraw is needed can only be asked
+            // of the instance that resolved it.
+            $og        = new OgImage($this->fontDir);
+            $fontStamp = $og->fontStamp();
 
-        if ($ogHash !== $post->og_image_hash || !file_exists($ogPath)) {
-            try {
-                $og = new OgImage($this->fontDir);
+            // The design version is in the hash because nothing else in it moves
+            // when only the card's palette or type changes — a retheme would
+            // otherwise leave every post already on disk showing the old card
+            // forever. The avatar is stamped by path *and* mtime for the same
+            // reason: replacing the picture behind an unchanged setting has to
+            // redraw the set too, and so does moving to a host whose default
+            // sans is a different file.
+            $ogHash = hash(
+                'sha256',
+                OgImage::DESIGN_VERSION . '|' . $fontStamp . '|' . $avatarStamp . '|' . $siteTitle . '|' . $post->title
+            );
+
+            if ($ogHash !== $post->og_image_hash || !file_exists($ogPath)) {
                 $og->generate($siteTitle, $post->title, $ogPath, $avatarPath ?? '');
                 $post->markOgBuilt($ogHash);
-            } catch (\RuntimeException $e) {
-                // Non-fatal: log to stderr and continue.
-                error_log('[OgImage] ' . $e->getMessage());
             }
+        } catch (\RuntimeException $e) {
+            // Non-fatal: log to stderr and continue. A host with no usable font
+            // lands here on every post, and the build still succeeds.
+            error_log('[OgImage] ' . $e->getMessage());
         }
 
         return $featuredUrl

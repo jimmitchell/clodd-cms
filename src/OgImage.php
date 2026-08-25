@@ -14,11 +14,23 @@ use RuntimeException;
  * libfreetype6-dev apt package installed).
  *
  * The card is the site's dark scheme, not a palette of its own. Its three
- * colours are lifted verbatim from the dark-mode tokens in `theme.css`, and
- * the type is the same GT Walsheim the site loads — `fonts/og/` holds the TTF
- * cut of it because GD cannot read the `.woff2` the pages use. A social
- * preview is usually the first thing anyone sees of a post, so it should look
- * like the page it opens.
+ * colours are lifted verbatim from the dark-mode tokens in `theme.css`, so a
+ * social preview — usually the first thing anyone sees of a post — looks like
+ * the page it opens.
+ *
+ * The type cannot be lifted the same way. `theme.css` asks for `system-ui`,
+ * which resolves in the *reader's* browser, while this draws on the server —
+ * there is no single face that is "the site's" any more. So the card is set in
+ * whatever sans the host provides (see SYSTEM_FONTS), which is the same
+ * intent one step removed: nobody's licensed font, nothing shipped in the
+ * repo. Nothing here is tuned to a named face; TITLE_LINE_HEIGHT in particular
+ * is measured from the resolved font rather than written down.
+ *
+ * A host with no usable font throws, and `Builder::buildOgImage()` catches it:
+ * the post keeps whatever card it already had and the build still reports
+ * success. That is the intended degradation — see the note on the avatar
+ * below — but it is silent, so `bin/build.php` stderr is the only place a
+ * fontless server announces itself.
  *
  * Change any of that and bump DESIGN_VERSION, or every post already on disk
  * keeps its old card: `Builder::buildOgImage()` only redraws when the hash it
@@ -31,7 +43,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 6;
+    public const DESIGN_VERSION = 7;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -71,39 +83,140 @@ class OgImage
     private const AVATAR_GAP  = 26;
 
     /**
-     * Looser than the 1.1 `.post__title` uses on the page, and not by taste:
-     * a line of GT Walsheim Bold carrying both an ascender and a descender
-     * measures about 1.21em of ink, so anything at or under that value sets
-     * lines that physically overlap — a "p" into the "t" on the line below.
-     * Walsheim's extenders are long against its x-height, which is why the 1.2
-     * that worked for the previous face does not work for this one. The value
-     * here is the ink plus a little under a tenth of an em of air.
+     * Air between title lines, as a fraction of the em, added to the ink the
+     * resolved face actually measures — see lineHeight().
+     *
+     * A line carrying both an ascender and a descender is most of an em of ink
+     * on its own (a shade over 1.2em in the faces this has been run against),
+     * so a line height at or under that sets lines that physically overlap: a
+     * "p" comes down into the "t" on the line below. Writing the total down as
+     * a constant only works while the face is known, and it no longer is — a
+     * value tuned for one face is a collision on the next. So the ink is
+     * measured and this is the air on top of it.
      *
      * Raising it costs lines: with an avatar drawn there is room for exactly
      * TITLE_LINES_MAX at TITLE_MAX, and no more.
      */
-    private const TITLE_LINE_HEIGHT = 1.3;
+    private const LINE_AIR = 0.09;
+
+    /**
+     * The probe lineHeight() measures. Ascenders, cap height, and the deepest
+     * descenders a Latin face draws — whatever the real title turns out to be,
+     * its ink fits inside this.
+     */
+    private const EXTENT_PROBE = 'HXhkbdfl gjpqy';
+
+    /**
+     * Where to look for a sans to draw with, most-preferred first, as
+     * [regular, bold] pairs.
+     *
+     * GD needs a file — `system-ui` means nothing to FreeType — so the stack
+     * `theme.css` names is approximated by the host's own default sans.
+     *
+     * The order is a preference, not a guess at what exists: several of these
+     * are usually installed together, and the list is sorted by how close the
+     * face sits to what `system-ui` actually resolves to for a reader. SF,
+     * Segoe UI and Roboto are all neo-grotesques, which is Liberation Sans and
+     * not DejaVu — DejaVu is a Vera derivative, noticeably wider and rounder,
+     * and a card set in it reads as a different brand from the page it opens.
+     * So Liberation first, DejaVu as the near-universal floor behind it.
+     *
+     * Arial rather than SF on macOS for a dull reason: SFNS.ttf is a variable
+     * font and FreeType hands GD its default instance, so a "bold" drawn from
+     * it would come back regular. Arial is metrically Liberation Sans, which
+     * makes a development render a fair proxy for the server's.
+     *
+     * Consequence worth knowing: a card built on macOS and a card built on the
+     * server are not set in the same file. Only the server's cards ever ship,
+     * and the font is stamped into the Builder's hash by path *and* mtime, so
+     * moving hosts redraws the set rather than leaving a mix of two faces.
+     */
+    private const SYSTEM_FONTS = [
+        // Debian / Ubuntu — the Docker image and the server.
+        ['/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+         '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'],
+        ['/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+         '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf'],
+        ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'],
+        ['/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+         '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'],
+        // Alpine, Fedora, RHEL.
+        ['/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf',
+         '/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf'],
+        ['/usr/share/fonts/dejavu/DejaVuSans.ttf',
+         '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf'],
+        // macOS, for local development.
+        ['/System/Library/Fonts/Supplemental/Arial.ttf',
+         '/System/Library/Fonts/Supplemental/Arial Bold.ttf'],
+        ['/Library/Fonts/Arial.ttf',
+         '/Library/Fonts/Arial Bold.ttf'],
+    ];
+
+    /** Filenames an operator may drop in the override directory to pin a face. */
+    private const OVERRIDE_REGULAR = 'og-regular.ttf';
+    private const OVERRIDE_BOLD    = 'og-bold.ttf';
 
     private string $fontRegular;
     private string $fontBold;
 
-    public function __construct(string $fontDir)
+    /**
+     * @param string $overrideDir A directory that may hold `og-regular.ttf` and
+     *                            `og-bold.ttf`. Both present wins over
+     *                            SYSTEM_FONTS; anything else falls through. It
+     *                            is the seam for pinning the card to one face
+     *                            across hosts, and the reason `fonts/og/` still
+     *                            has a name after the web fonts went.
+     */
+    public function __construct(string $overrideDir = '')
     {
-        $fontDir = rtrim($fontDir, '/\\');
-
         if (!extension_loaded('gd')) {
             throw new RuntimeException('GD extension is not loaded.');
         }
 
-        if (
-            file_exists($fontDir . '/GTWalsheim-Regular.ttf') &&
-            file_exists($fontDir . '/GTWalsheim-Bold.ttf')
-        ) {
-            $this->fontRegular = $fontDir . '/GTWalsheim-Regular.ttf';
-            $this->fontBold    = $fontDir . '/GTWalsheim-Bold.ttf';
-        } else {
-            throw new RuntimeException('GTWalsheim-Regular.ttf and GTWalsheim-Bold.ttf not found in ' . $fontDir);
+        [$this->fontRegular, $this->fontBold] = $this->resolveFonts($overrideDir);
+    }
+
+    /**
+     * The bold face this instance draws with, as `path@mtime`.
+     *
+     * `Builder::buildOgImage()` stamps it into the OG hash. Both halves matter:
+     * the path because moving to a host with a different sans has to redraw
+     * every card, and the mtime because a font package updated in place keeps
+     * its path while the outlines change underneath it.
+     */
+    public function fontStamp(): string
+    {
+        return $this->fontBold . '@' . (@filemtime($this->fontBold) ?: 0);
+    }
+
+    /**
+     * @return array{0: string, 1: string} The regular and bold faces to draw with.
+     */
+    private function resolveFonts(string $overrideDir): array
+    {
+        $overrideDir = rtrim($overrideDir, '/\\');
+
+        if ($overrideDir !== '') {
+            $regular = $overrideDir . '/' . self::OVERRIDE_REGULAR;
+            $bold    = $overrideDir . '/' . self::OVERRIDE_BOLD;
+            if (is_readable($regular) && is_readable($bold)) {
+                return [$regular, $bold];
+            }
         }
+
+        foreach (self::SYSTEM_FONTS as [$regular, $bold]) {
+            if (is_readable($regular) && is_readable($bold)) {
+                return [$regular, $bold];
+            }
+        }
+
+        throw new RuntimeException(
+            'No system sans font found to draw the OG card with. Install one '
+            . '(Debian: apt-get install fonts-liberation), or drop '
+            . self::OVERRIDE_REGULAR . ' and ' . self::OVERRIDE_BOLD
+            . ($overrideDir === '' ? ' in the OG font directory.' : ' in ' . $overrideDir . '.')
+        );
     }
 
     /**
@@ -175,7 +288,7 @@ class OgImage
         $titleSize = $this->fitFontSize($postTitle, $this->fontBold, $maxW);
         $lines     = $this->wrapText($postTitle, $this->fontBold, $titleSize, $maxW);
 
-        $lineH = (int) round($titleSize * self::TITLE_LINE_HEIGHT);
+        $lineH = $this->lineHeight($titleSize);
 
         // A title long enough to still overrun at TITLE_MIN would grow upwards
         // through the site name and off the top. Nothing writes one today, but
@@ -339,6 +452,21 @@ class OgImage
             }
         }
         return self::TITLE_MIN;
+    }
+
+    /**
+     * Distance between title baselines at $fontSize: the bold face's real ink
+     * for a line with both an ascender and a descender, plus LINE_AIR of the em.
+     *
+     * Measured rather than written down because the face is resolved at run
+     * time — see LINE_AIR. FreeType hints at the requested size, so this is
+     * measured at the size it will be drawn at rather than scaled from one em.
+     */
+    private function lineHeight(int $fontSize): int
+    {
+        $box     = imagettfbbox($fontSize, 0, $this->fontBold, self::EXTENT_PROBE);
+        $ink     = $box === false ? $fontSize * 1.2 : abs($box[7]) + max(0, $box[1]);
+        return (int) round($ink + ($fontSize * self::LINE_AIR));
     }
 
     /** Width of $text in pixels at $fontSize. */

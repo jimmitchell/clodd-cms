@@ -27,8 +27,13 @@ final class OgImageTest extends TestCase
             $this->markTestSkipped('GD with FreeType is required to draw a card.');
         }
 
-        if (!is_file($this->fontDir() . '/GTWalsheim-Bold.ttf')) {
-            $this->markTestSkipped('The TTF cut of GT Walsheim is not present.');
+        // The card is set in whichever sans the host provides, so there is no
+        // file to check for — ask OgImage whether it found one. A machine with
+        // no usable font cannot draw a card, and there is nothing to assert.
+        try {
+            new OgImage($this->fontDir());
+        } catch (\RuntimeException $e) {
+            $this->markTestSkipped($e->getMessage());
         }
 
         $this->dir = sys_get_temp_dir() . '/clodd_og_' . bin2hex(random_bytes(6));

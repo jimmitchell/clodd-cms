@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.32.0] — 2026-08-25
+
+No schema change.
+
+### Changed
+
+- **The site drops GT Walsheim and is set in the reader's own system font.** Walsheim is a licensed retail typeface, and self-hosting it put four WOFF2 cuts and two TTFs on a public path — `/fonts/` was cached `public, immutable` for a year, so anyone could download the family off the site. All six files are gone, and `theme.css` now asks for `system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`: San Francisco on Apple, Segoe UI on Windows, the desktop's UI face on Linux. The two font preloads come out of `<head>`, and with them 96 KB and a render-blocking hop before first paint.
+
+  The stack is named once, as `--font-sans` in `:root`, because eight copies of it is eight places for it to drift; the monospace stack gets `--font-mono` alongside it for the same reason. `/fonts/` joins the denied directories in all three nginx configs, so nothing dropped there later is reachable over the web.
+
+  **Body leading goes back up to 1.6667, and not by taste.** Leading is set against the x-height rather than the em. 1.5556 was tuned for Walsheim's short lowercase (.461em); SF and Roboto both set nearer .52, and at the tighter value that taller lowercase fills the line and a paragraph closes up into a grey slab. 1.6667 is 30px on the 18px root, the value that stood before Walsheim arrived.
+
+  Font weights are left exactly as they are. The ten rules that state 400 or 700 were rounded to those values in 1.26.0 because Walsheim had nothing in between; the system faces mostly do, so 500 and 600 are available again — but nothing on the page is asking for them today, and changing them would be a redesign rather than a removal.
+
+- **The OG card follows, but it cannot follow literally.** `system-ui` resolves in the *reader's* browser; `OgImage` draws on the server, where GD needs an actual file and knows nothing about CSS keywords. So the card is set in whatever sans the host provides, resolved at run time from `OgImage::SYSTEM_FONTS` — Liberation Sans first because it is the neo-grotesque `system-ui` actually resolves to for most readers, DejaVu behind it as the near-universal floor, Noto after that, and Arial on macOS so a card can still be drawn in development. The Docker image installs `fonts-liberation`; a server without one logs `[OgImage] No system sans font found` and skips the card, and the build still reports success as it did before.
+
+  `fonts/og/` survives as the seam rather than the store: `og-regular.ttf` and `og-bold.ttf` dropped there pin the card to one face across hosts. Both must be present.
+
+  **`TITLE_LINE_HEIGHT` is measured now, not written down.** The 1.3 that 1.26.0 set was Walsheim's ink plus air, and a value tuned for one face is a collision on the next — a line carrying both an ascender and a descender is a shade over 1.2em of ink in most faces, so anything at or under that overlaps. `lineHeight()` measures the resolved bold's real extent at the size it will be drawn and adds `LINE_AIR` (.09em) on top. On Arial that reproduces 1.311, which is where the hand-tuned constant already was.
+
+  **`OgImage::DESIGN_VERSION` goes to 7, so the next full build redraws every card.** The font stamp in `Builder`'s OG hash changes with it: it was the mtime of a fixed filename, and is now the resolved font's path *and* mtime, so moving to a host with a different default sans redraws the set instead of leaving a mix of two faces.
+
+---
+
 ## [1.31.2] — 2026-08-23
 
 No schema change.

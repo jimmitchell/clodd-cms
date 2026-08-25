@@ -376,9 +376,11 @@ Both the Atom and RSS feeds embed [Byline 1.0](https://bylinespec.org/1.0) eleme
 
 ## Open Graph Images
 
-When PHP's GD extension is compiled with FreeType support, the CMS generates a 1200×630 PNG for each published post. The image includes the post title and site name rendered in GT Walsheim. Images are cached by a hash of the title + site name; they regenerate only when either changes.
+When PHP's GD extension is compiled with FreeType support, the CMS generates a 1200×630 PNG for each published post. The image includes the post title and site name. Images are cached by a hash of the title, site name, avatar, card design version and font; they regenerate only when one of those changes.
 
-The font files at `fonts/og/` must be present. The Docker image includes FreeType.
+GD needs an actual font file — the `system-ui` the pages ask for resolves in the reader's browser, not on the server — so the card is drawn with whatever sans the host provides. `OgImage::SYSTEM_FONTS` lists where it looks, preferring Liberation Sans (the closest match to what `system-ui` resolves to for most readers) and falling back to DejaVu, Noto, or Arial on macOS. The Docker image installs `fonts-liberation`; on a bare server, `apt-get install fonts-liberation`.
+
+To pin the card to one face instead, drop `og-regular.ttf` and `og-bold.ttf` into `fonts/og/`. A host with no usable font logs `[OgImage] No system sans font found` and skips the card — the build still succeeds.
 
 A post with a [featured image](#featured-images) advertises that picture as its `og:image` instead. The title card is still generated and stays the fallback, so removing the featured image leaves something behind.
 
@@ -641,7 +643,6 @@ Log entries older than 90 days are pruned automatically on a ~1% probabilistic c
 /feed.json                  → JSON Feed 1.1
 /media/{filename}           → content/media/ alias
 /theme.css                  → public stylesheet
-/fonts/                     → GT Walsheim web font files
 ```
 
 Stale pagination pages and unpublished post/page files are removed automatically on rebuild.
@@ -663,7 +664,7 @@ The public theme is a single file, `theme.css`, edited directly — there is no 
 
 Dark mode activates automatically when the system preference is `dark`. The toggle button in the header overrides this and persists the choice in `localStorage`. An inline script in `<head>` applies the stored preference before the stylesheet loads, preventing any flash of the wrong color scheme.
 
-The site is set entirely in [GT Walsheim](https://www.grillitype.com/typeface/gt-walsheim) — UI, prose, and headings alike (self-hosted WOFF2, four static cuts: roman and oblique in 400 and 700). The family has no weights between those two, so `theme.css` asks only for 400 or 700. To add custom styles without editing `theme.css`, use **Settings → Custom CSS**.
+The site is set in the reader's own system font — `system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`, named once as `--font-sans` in `theme.css`. Nothing is downloaded, so there is no web font request in front of first paint and no font licence attached to the site. In practice that means San Francisco on Apple, Segoe UI on Windows, and the desktop's UI face on Linux. To add custom styles without editing `theme.css`, use **Settings → Custom CSS**.
 
 ### Critical CSS
 
@@ -704,7 +705,7 @@ clodd-cms/
 │   └── media/              # Uploaded files (not committed)
 ├── data/                   # SQLite database (not committed)
 ├── docker/                 # Docker-specific Nginx config, PHP ini, entrypoint
-├── fonts/                  # GT Walsheim WOFF2 files + OG image fonts (fonts/og/)
+├── fonts/og/               # Optional OG card font override (normally empty)
 ├── src/                    # PHP source classes (namespace CMS\)
 │   ├── ActivityLog.php     # Admin activity logger
 │   ├── Auth.php            # Login, session, CSRF, rate limiting, TOTP 2FA

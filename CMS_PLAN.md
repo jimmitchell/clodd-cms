@@ -71,8 +71,8 @@ A lightweight, static-output CMS written in PHP, inspired by Kirby. Content is a
 ├── data/                   ← BLOCKED: Nginx denies all access
 │   └── cms.db              ← SQLite database
 │
-├── fonts/                  ← Public: GT Walsheim WOFF2 files
-│   └── og/                 ← OG image fonts (GTWalsheim-Regular/Bold.ttf)
+├── fonts/og/               ← Optional OG card font override (normally empty;
+│                              denied by nginx, read only by OgImage)
 │
 ├── src/                    ← BLOCKED: Nginx denies all access
 │   ├── ActivityLog.php     ← Admin activity logger (writes to activity_log table)
@@ -488,7 +488,7 @@ The Nginx config uses two rewrites for the date-URL block:
 - [x] Single post template with Open Graph meta
 - [x] Static page template
 - [x] Index/listing template with pagination
-- [x] Responsive CSS (single column; GT Walsheim throughout)
+- [x] Responsive CSS (single column; the reader's system font throughout)
 
 ### Phase 7 — Admin Polish & Settings ✓
 - [x] Settings screen + DB-backed site config
@@ -546,7 +546,7 @@ Features added after the initial build phases:
 | 404 Not Found page template | `templates/404.php` |
 | Probabilistic DB cleanup | `admin/bootstrap.php` |
 | Self-hosted Font Awesome (admin) | `admin/assets/font-awesome.min.css`, `admin/assets/fonts/` |
-| GT Walsheim public typeface | `fonts/`, `templates/base.php`, `theme.css` |
+| System-font public typeface (`--font-sans`) | `theme.css` |
 | CSP + security headers | `nginx.conf.example`, `docker/nginx.conf` |
 | Pages at `/pages/{slug}/` via Nginx | `src/Builder.php`, `nginx.conf.example` |
 | `theme.min.css` auto-generation | `src/Builder.php`, `admin/bootstrap.php` |

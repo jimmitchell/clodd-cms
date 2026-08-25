@@ -104,20 +104,6 @@ if (!function_exists('_e')) {
     <?php if ($googleSiteVerification !== '' && ($isHomepage ?? false)): ?>
     <meta name="google-site-verification" content="<?= _e($googleSiteVerification) ?>">
     <?php endif; ?>
-    <!-- Font preload — must come before the stylesheet.
-         Upright cuts only. GT Walsheim is four static files where the outgoing
-         variable font was one, so the bold is now its own request — and the
-         first screen is mostly bold: the site name, every card title, the post
-         title. Leaving it to be discovered from the stylesheet costs a second
-         hop and a visible reflow on the largest text on the page, so both
-         romans are pulled forward together (96 KB).
-         The obliques stay behind: they set the occasional <em>, and preloading
-         them competed for bandwidth with the faces actually needed to paint.
-         They still load from @font-face the moment something italic appears. -->
-    <link rel="preload" href="/fonts/GTWalsheim-Regular.woff2"
-          as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/GTWalsheim-Bold.woff2"
-          as="font" type="font/woff2" crossorigin>
     <!-- Feeds -->
     <link rel="alternate" type="application/atom+xml"
           title="<?= _e($siteTitle) ?>"
