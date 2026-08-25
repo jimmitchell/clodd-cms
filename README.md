@@ -378,9 +378,9 @@ Both the Atom and RSS feeds embed [Byline 1.0](https://bylinespec.org/1.0) eleme
 
 When PHP's GD extension is compiled with FreeType support, the CMS generates a 1200×630 PNG for each published post. The image includes the post title and site name. Images are cached by a hash of the title, site name, avatar, card design version and font; they regenerate only when one of those changes.
 
-GD needs an actual font file — the `system-ui` the pages ask for resolves in the reader's browser, not on the server — so the card is drawn with whatever sans the host provides. `OgImage::SYSTEM_FONTS` lists where it looks, preferring Liberation Sans (the closest match to what `system-ui` resolves to for most readers) and falling back to DejaVu, Noto, or Arial on macOS. The Docker image installs `fonts-liberation`; on a bare server, `apt-get install fonts-liberation`.
+GD needs an actual font file — the `system-ui` the pages ask for resolves in the reader's browser, not on the server — so the card is set in **Nimbus Sans**, a freely redistributable Helvetica clone pinned at `fonts/og/` and travelling with the repo. A card is read in a timeline beside everyone else's, where a neutral grotesque is the closest a single fixed face gets to "whatever that reader's system font is". See [`fonts/og/README.md`](fonts/og/README.md) to change it.
 
-To pin the card to one face instead, drop `og-regular.ttf` and `og-bold.ttf` into `fonts/og/`. A host with no usable font logs `[OgImage] No system sans font found` and skips the card — the build still succeeds.
+`OgImage::SYSTEM_FONTS` is the fallback if that pin ever goes missing, walking Nimbus, Liberation, DejaVu and Noto on Linux and Arial on macOS. With none of them either, the build logs `[OgImage] No font found` and skips the card — it still succeeds.
 
 A post with a [featured image](#featured-images) advertises that picture as its `og:image` instead. The title card is still generated and stays the fallback, so removing the featured image leaves something behind.
 
@@ -705,7 +705,7 @@ clodd-cms/
 │   └── media/              # Uploaded files (not committed)
 ├── data/                   # SQLite database (not committed)
 ├── docker/                 # Docker-specific Nginx config, PHP ini, entrypoint
-├── fonts/og/               # Optional OG card font override (normally empty)
+├── fonts/og/               # Nimbus Sans — the OG card's typeface
 ├── src/                    # PHP source classes (namespace CMS\)
 │   ├── ActivityLog.php     # Admin activity logger
 │   ├── Auth.php            # Login, session, CSRF, rate limiting, TOTP 2FA

@@ -1,18 +1,18 @@
 FROM php:8.3-fpm
 
 # ── System dependencies + PHP extensions (single layer) ──────────────────────
-# fonts-liberation is what OgImage draws the social card with: GD needs a font
-# file and the pages' `system-ui` is not one. Liberation Sans rather than DejaVu
-# because it is the neo-grotesque `system-ui` resolves to for most readers — see
-# OgImage::SYSTEM_FONTS. Without a font installed, every build logs
-# "[OgImage] No system sans font found" and quietly ships no cards.
+# fonts-urw-base35 is a safety net, not the card's font: OgImage draws with the
+# Nimbus Sans pinned in fonts/og/, and this package is the same face for the case
+# where that pin has gone missing. Cheap insurance — GD needs a real font file
+# and the pages' `system-ui` is not one, so a fontless image draws no cards at
+# all and only says so on stderr.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libsqlite3-dev \
         libonig-dev \
         libicu-dev \
         libfreetype6-dev \
         libpng-dev \
-        fonts-liberation \
+        fonts-urw-base35 \
     && rm -rf /var/lib/apt/lists/* \
     && docker-php-ext-configure gd --with-freetype \
     && docker-php-ext-install pdo_sqlite mbstring intl gd \

@@ -21,10 +21,17 @@ use RuntimeException;
  * The type cannot be lifted the same way. `theme.css` asks for `system-ui`,
  * which resolves in the *reader's* browser, while this draws on the server —
  * there is no single face that is "the site's" any more. So the card is set in
- * whatever sans the host provides (see SYSTEM_FONTS), which is the same
- * intent one step removed: nobody's licensed font, nothing shipped in the
- * repo. Nothing here is tuned to a named face; TITLE_LINE_HEIGHT in particular
- * is measured from the resolved font rather than written down.
+ * Nimbus Sans, pinned in `fonts/og/`: a free Helvetica clone, chosen because a
+ * card is read in a timeline next to everyone else's and a neutral grotesque
+ * is the closest a fixed face gets to "whatever that reader's system font is".
+ * SYSTEM_FONTS is only the fallback if the pin goes missing.
+ *
+ * Pinned rather than resolved because the alternative made the face a property
+ * of the host: a rebuilt server, a different base image, or a missing apt
+ * package would each quietly restyle every card. Nothing here is tuned to a
+ * named face even so — TITLE_LINE_HEIGHT in particular is measured from the
+ * resolved font rather than written down, so changing the pin stays a
+ * one-directory operation.
  *
  * A host with no usable font throws, and `Builder::buildOgImage()` catches it:
  * the post keeps whatever card it already had and the build still reports
@@ -43,7 +50,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 7;
+    public const DESIGN_VERSION = 8;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -113,25 +120,35 @@ class OgImage
      * GD needs a file — `system-ui` means nothing to FreeType — so the stack
      * `theme.css` names is approximated by the host's own default sans.
      *
-     * The order is a preference, not a guess at what exists: several of these
-     * are usually installed together, and the list is sorted by how close the
-     * face sits to what `system-ui` actually resolves to for a reader. SF,
-     * Segoe UI and Roboto are all neo-grotesques, which is Liberation Sans and
-     * not DejaVu — DejaVu is a Vera derivative, noticeably wider and rounder,
-     * and a card set in it reads as a different brand from the page it opens.
-     * So Liberation first, DejaVu as the near-universal floor behind it.
+     * This is the *fallback*, not the design: `fonts/og/` carries the face the
+     * card is meant to be set in, and the list below only runs when that pin is
+     * missing. Nothing here should ever be reached on a healthy checkout.
+     *
+     * The order is a preference, not a guess at what exists — several of these
+     * are usually installed together. Nimbus Sans leads because it is the same
+     * face as the pin, so a host that has lost the pin degrades to the nearest
+     * thing rather than to something else entirely. Liberation Sans next: it is
+     * Arial's metrics and Arial's letterforms, which is a *different* grotesque
+     * — angled terminals on C and t, a spurred G, a curled R leg where
+     * Helvetica cuts all three flat. DejaVu behind that is the near-universal
+     * floor, and wider and rounder still.
      *
      * Arial rather than SF on macOS for a dull reason: SFNS.ttf is a variable
      * font and FreeType hands GD its default instance, so a "bold" drawn from
-     * it would come back regular. Arial is metrically Liberation Sans, which
-     * makes a development render a fair proxy for the server's.
+     * it would come back regular.
      *
-     * Consequence worth knowing: a card built on macOS and a card built on the
-     * server are not set in the same file. Only the server's cards ever ship,
-     * and the font is stamped into the Builder's hash by path *and* mtime, so
-     * moving hosts redraws the set rather than leaving a mix of two faces.
+     * Consequence worth knowing: cards drawn from two different entries here
+     * are not the same file. The font is stamped into the Builder's hash by
+     * path *and* mtime, so falling back — or recovering — redraws the whole set
+     * rather than leaving a mix of two faces.
      */
     private const SYSTEM_FONTS = [
+        // Nimbus Sans — the pinned face, if the host happens to carry it too.
+        // Debian: fonts-urw-base35. GD reads CFF outlines, so .otf is fine.
+        ['/usr/share/fonts/opentype/urw-base35/NimbusSans-Regular.otf',
+         '/usr/share/fonts/opentype/urw-base35/NimbusSans-Bold.otf'],
+        ['/usr/share/fonts/opentype/urw-base35/NimbusSanL-Reg.otf',
+         '/usr/share/fonts/opentype/urw-base35/NimbusSanL-Bol.otf'],
         // Debian / Ubuntu — the Docker image and the server.
         ['/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
          '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'],
@@ -153,20 +170,29 @@ class OgImage
          '/Library/Fonts/Arial Bold.ttf'],
     ];
 
-    /** Filenames an operator may drop in the override directory to pin a face. */
-    private const OVERRIDE_REGULAR = 'og-regular.ttf';
-    private const OVERRIDE_BOLD    = 'og-bold.ttf';
+    /**
+     * The pinned face: `og-regular` and `og-bold` in the override directory,
+     * in either outline format. GD reads CFF (`.otf`) as happily as TrueType,
+     * and several of the free grotesques worth pinning — Nimbus Sans among
+     * them — ship only as OTF, so refusing that extension would have meant
+     * converting a font to satisfy a string literal.
+     *
+     * Both halves must be present in the same format-agnostic pair; a lone
+     * regular falls through to SYSTEM_FONTS rather than drawing the title in
+     * a face that is not bold.
+     */
+    private const OVERRIDE_STEM       = ['og-regular', 'og-bold'];
+    private const OVERRIDE_EXTENSIONS = ['otf', 'ttf'];
 
     private string $fontRegular;
     private string $fontBold;
 
     /**
-     * @param string $overrideDir A directory that may hold `og-regular.ttf` and
-     *                            `og-bold.ttf`. Both present wins over
-     *                            SYSTEM_FONTS; anything else falls through. It
-     *                            is the seam for pinning the card to one face
-     *                            across hosts, and the reason `fonts/og/` still
-     *                            has a name after the web fonts went.
+     * @param string $overrideDir The directory holding the pinned face — see
+     *                            OVERRIDE_STEM. A complete pair there wins over
+     *                            SYSTEM_FONTS; anything else falls through.
+     *                            This is the normal path, not an escape hatch:
+     *                            `fonts/og/` is where the card's face lives.
      */
     public function __construct(string $overrideDir = '')
     {
@@ -198,10 +224,13 @@ class OgImage
         $overrideDir = rtrim($overrideDir, '/\\');
 
         if ($overrideDir !== '') {
-            $regular = $overrideDir . '/' . self::OVERRIDE_REGULAR;
-            $bold    = $overrideDir . '/' . self::OVERRIDE_BOLD;
-            if (is_readable($regular) && is_readable($bold)) {
-                return [$regular, $bold];
+            [$regularStem, $boldStem] = self::OVERRIDE_STEM;
+            foreach (self::OVERRIDE_EXTENSIONS as $ext) {
+                $regular = $overrideDir . '/' . $regularStem . '.' . $ext;
+                $bold    = $overrideDir . '/' . $boldStem . '.' . $ext;
+                if (is_readable($regular) && is_readable($bold)) {
+                    return [$regular, $bold];
+                }
             }
         }
 
@@ -212,10 +241,12 @@ class OgImage
         }
 
         throw new RuntimeException(
-            'No system sans font found to draw the OG card with. Install one '
-            . '(Debian: apt-get install fonts-liberation), or drop '
-            . self::OVERRIDE_REGULAR . ' and ' . self::OVERRIDE_BOLD
-            . ($overrideDir === '' ? ' in the OG font directory.' : ' in ' . $overrideDir . '.')
+            'No font found to draw the OG card with. Expected '
+            . implode(' and ', self::OVERRIDE_STEM) . '.{'
+            . implode(',', self::OVERRIDE_EXTENSIONS) . '}'
+            . ($overrideDir === '' ? ' in the OG font directory' : ' in ' . $overrideDir)
+            . ', and no system sans is installed either '
+            . '(Debian: apt-get install fonts-urw-base35).'
         );
     }
 

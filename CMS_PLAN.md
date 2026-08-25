@@ -71,8 +71,8 @@ A lightweight, static-output CMS written in PHP, inspired by Kirby. Content is a
 ├── data/                   ← BLOCKED: Nginx denies all access
 │   └── cms.db              ← SQLite database
 │
-├── fonts/og/               ← Optional OG card font override (normally empty;
-│                              denied by nginx, read only by OgImage)
+├── fonts/og/               ← Nimbus Sans, the OG card's typeface (denied by
+│                              nginx, read only by OgImage)
 │
 ├── src/                    ← BLOCKED: Nginx denies all access
 │   ├── ActivityLog.php     ← Admin activity logger (writes to activity_log table)

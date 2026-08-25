@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.33.0] — 2026-08-25
+
+No schema change.
+
+### Changed
+
+- **The OG card is set in Nimbus Sans, pinned in `fonts/og/`.** 1.32.0 resolved the card's face from whatever sans the host had installed, and that was wrong in a specific way: it made the typeface a property of the machine. A rebuilt server, a different base image, or a missing apt package would each silently restyle every card — on the one artefact this CMS produces that appears on no page of the site and would never be noticed from here. `og-regular.otf` and `og-bold.otf` now travel with the repo, so a card drawn on a laptop and a card drawn in production are the same picture.
+
+  Nimbus Sans is URW's Helvetica clone, drawn as the PostScript substitute for it and freely redistributable (AFPL/GPL with font exception) — upstream is [ArtifexSoftware/urw-base35-fonts](https://github.com/ArtifexSoftware/urw-base35-fonts), which is what Debian packages as `fonts-urw-base35`. A card is read in a timeline beside everyone else's, where a neutral grotesque is the closest a single fixed face gets to "whatever that reader's system font is".
+
+  **Liberation Sans, which 1.32.0 preferred, is the wrong grotesque.** It is metrically Arial and it is Arial's *letterforms* too: angled terminals on `C` and `t`, a spurred `G`, a curled `R` leg where Helvetica cuts all three flat. Metric compatibility is not resemblance, and the difference is plainly visible at the 61pt the card's title is set at.
+
+  The override accepts `.otf` as well as `.ttf` — GD reads CFF outlines as happily as TrueType, and several of the free grotesques worth pinning ship only as OTF. `OgImage::SYSTEM_FONTS` survives as the fallback for a checkout that has lost the pin, now led by Nimbus so a degraded host lands on the nearest thing rather than something else entirely.
+
+  **`OgImage::DESIGN_VERSION` goes to 8, so the next full build redraws every card.** The Docker image installs `fonts-urw-base35` rather than `fonts-liberation` for the same reason the fallback list was reordered: if the safety net is ever reached, it should catch the card in the face it was designed in.
+
+---
+
 ## [1.32.0] — 2026-08-25
 
 No schema change.
