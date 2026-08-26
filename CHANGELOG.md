@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.38.1] — 2026-08-26
+
+No schema change.
+
+### Changed
+
+- **Three transitive dependencies brought up to the versions production was already running**: `nette/schema` v1.3.5 → v1.3.6, `nette/utils` v4.1.3 → v4.1.5, `symfony/deprecation-contracts` v3.6.0 → v3.7.1. All runtime, not dev — they arrive through `league/commonmark` and `spomky-labs/otphp`.
+
+  This surfaced as a failed `git pull` on the 1.38.0 deploy: prod's `composer.lock` had local changes, because a `composer update` had been run there at some point rather than here. The lock file only does its job when the repo is the one place it is written, so the fix is this direction — the repo catches up — rather than discarding prod's copy, which would have rolled those three back.
+
+---
+
 ## [1.38.0] — 2026-08-26
 
 No schema change.
