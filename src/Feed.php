@@ -84,15 +84,8 @@ class Feed
                      . Post::storedFeaturedHtml($post['featured_image_url'] ?? null, (string) ($post['featured_image_alt'] ?? ''), $siteUrl)
                      . Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
                      . $this->converter->convert(Post::contentForRender((string) $post['content'], $post['featured_image_url'] ?? null))->getContent()
-                     . Post::photoCaptionHtml($post['post_kind'] ?? null, $post['excerpt'] ?? null);
-
-            $tinylyticsCode = $this->settings['tinylytics_code'] ?? '';
-            if ($tinylyticsCode !== '') {
-                $pixelUrl = 'https://tinylytics.app/pixel/' . rawurlencode($tinylyticsCode)
-                    . '.gif?path=' . rawurlencode('/' . Post::datePath($post['published_at'], $post['slug'], $tz) . '/');
-                $html .= '<img src="' . htmlspecialchars($pixelUrl, ENT_QUOTES | ENT_XML1, 'UTF-8') . '"'
-                    . ' alt="" style="width:1px;height:1px;border:0;" />';
-            }
+                     . Post::photoCaptionHtml($post['post_kind'] ?? null, $post['excerpt'] ?? null)
+                     . FeedMarkdown::trackingPixel($this->settings, '/' . Post::datePath($post['published_at'], $post['slug'], $tz) . '/');
 
             $isNote = Post::isNoteKind($post['post_kind'] ?? null);
 
@@ -159,7 +152,8 @@ class Feed
                      . Post::storedFeaturedHtml($post->featured_image_url, $post->featured_image_alt, $siteUrl)
                      . Post::photosHtml($post->photos, $siteUrl)
                      . $this->converter->convert($post->renderableContent())->getContent()
-                     . Post::photoCaptionHtml($post->post_kind, $post->excerpt);
+                     . Post::photoCaptionHtml($post->post_kind, $post->excerpt)
+                     . FeedMarkdown::trackingPixel($this->settings, '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/');
 
             $xml .= '  <entry>' . "\n";
             $xml .= $post->isNote()

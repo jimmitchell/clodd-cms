@@ -708,6 +708,15 @@ if ($action === 'update') {
     $oldPrev = $wasPublished ? \CMS\Post::findPrev($db, $post) : null;
     $oldNext = $wasPublished ? \CMS\Post::findNext($db, $post) : null;
 
+    // Terms as they stand now, for the same reason. saveTerms() refreshes
+    // $post->categories/->tags in memory, so once the update has run there is no
+    // way back to the set the post is being moved *out* of — and buildPost()
+    // only ever rebuilds the archives of the terms it holds at the time. Without
+    // this, recategorising over Micropub left the vacated archive showing the
+    // post's card until the next full rebuild.
+    $oldCategoryIds = array_map('intval', array_column($post->categories, 'id'));
+    $oldTagIds      = array_map('intval', array_column($post->tags, 'id'));
+
     // ── Apply replace ops ────────────────────────────────────────────────────
     //
     // Supported properties: name, content, mp-slug, category, post-status,
@@ -975,6 +984,18 @@ if ($action === 'update') {
                 }
             }
         }
+
+        // buildPost() above covered the terms the post holds now; these are the
+        // ones it was just taken out of, which still carry its card.
+        $nowCategoryIds = array_map('intval', array_column($post->categories, 'id'));
+        $nowTagIds      = array_map('intval', array_column($post->tags, 'id'));
+        foreach (array_diff($oldCategoryIds, $nowCategoryIds) as $catId) {
+            $builder->buildCategoryArchive((int) $catId);
+        }
+        foreach (array_diff($oldTagIds, $nowTagIds) as $tagId) {
+            $builder->buildTagArchive((int) $tagId);
+        }
+
         $builder->rebuildSharedResources();
     }
 

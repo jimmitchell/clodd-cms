@@ -695,16 +695,27 @@ class Builder
     {
         $this->refreshContext();
         $this->db->exec("UPDATE posts SET content_hash = NULL");
-        // Every post is being re-rendered here, so each one already picks up
-        // its own related block — the neighbour pass would only re-render the
-        // same posts again, once per term they share.
-        $this->deferRelated = true;
+        // Both guards, for the same reasons buildAll() sets them.
+        //
+        // deferTaxonomy: buildPost() rebuilds the archives of every term its
+        // post belongs to, which is right for one edit and quadratic here — the
+        // 105-post Photos archive, 18 pagination pages and three feeds, was
+        // rebuilt 105 times. Every caller of this method follows it with
+        // buildAllTaxonomyArchives(), which covers each term exactly once, so
+        // the whole quadratic pass was thrown away as soon as it finished.
+        //
+        // deferRelated: every post is being re-rendered here, so each one
+        // already picks up its own related block — the neighbour pass would
+        // only re-render the same posts again, once per term they share.
+        $this->deferTaxonomy = true;
+        $this->deferRelated  = true;
         try {
             foreach (Post::findAll($this->db, 'published') as $post) {
                 $this->buildPost($post);
             }
         } finally {
-            $this->deferRelated = false;
+            $this->deferTaxonomy = false;
+            $this->deferRelated  = false;
         }
     }
 

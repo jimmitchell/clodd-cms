@@ -121,9 +121,7 @@ class XmlRpcServer
                 $struct       = (array) ($params[3] ?? []);
                 $publish      = (bool) ($params[4] ?? false);
                 $wasPublished = $post->status === 'published';
-                $oldDir       = $wasPublished
-                    ? $this->builder->postOutputDir($post->published_at, $post->slug)
-                    : null;
+                $before       = $this->xmlrpc_snapshot($post, $wasPublished);
 
                 $this->applyStruct($post, $struct, $publish, $this->timezone);
 
@@ -135,7 +133,7 @@ class XmlRpcServer
                 $this->xmlrpc_finalize_aside_slug($post);
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
-                $this->rebuildPost($post, $wasPublished, $oldDir);
+                $this->rebuildPost($post, $wasPublished, $before);
                 $this->syndicatePost($post);
                 $this->resyndicatePost($post, $wasPublished);
 
@@ -444,7 +442,6 @@ class XmlRpcServer
                 ], $rows));
                 break;
 
-            // ── wp.getPosts(blogid, username, password[, filter]) ─────────────────────
             // ── wp.newCategory(blogid, username, password, category) ──────────────────
             case 'wp.newCategory':
                 $this->xmlrpc_auth($params, 1, 2);
@@ -593,9 +590,7 @@ class XmlRpcServer
                     $this->fault(404, 'Post not found.');
                 }
                 $wasPublished = $post->status === 'published';
-                $oldDir       = $wasPublished
-                    ? $this->builder->postOutputDir($post->published_at, $post->slug)
-                    : null;
+                $before       = $this->xmlrpc_snapshot($post, $wasPublished);
                 $this->applyWpPostStruct($post, $struct, $this->timezone);
                 if ($post->title === '' && !$post->isNote()) {
                     $this->fault(400, 'Title is required.');
@@ -604,7 +599,7 @@ class XmlRpcServer
                 $this->xmlrpc_finalize_aside_slug($post);
                 $this->xmlrpc_apply_link_context($post, $struct);
                 $this->xmlrpc_save_terms($post, $struct);
-                $this->rebuildPost($post, $wasPublished, $oldDir);
+                $this->rebuildPost($post, $wasPublished, $before);
                 $this->syndicatePost($post);
                 $this->resyndicatePost($post, $wasPublished);
                 echo XmlRpc::encodeResponse(true);
@@ -1404,32 +1399,73 @@ class XmlRpcServer
      * Builder::postOutputDir(); pass it on an edit so a renamed or re-dated post
      * does not leave its previous URL serving the old HTML.
      */
-    private function rebuildPost(Post $post, bool $wasPublished = false, ?string $oldDir = null): void
+    /**
+     * Everything about a post's *current* published position that the edit is
+     * about to destroy, for rebuildPost() to clean up afterwards.
+     *
+     * **Call this before the struct is applied and before terms are saved**, or
+     * it records the new state and there is nothing left to compare against.
+     * That is exactly how the term half went wrong: Post::saveTerms() refreshes
+     * $post->categories/->tags in memory, so reading them inside rebuildPost()
+     * — as this class did — yields the *new* set under a comment calling it the
+     * old one, making the added-terms diff a no-op and leaving the archive a
+     * post was removed from stale.
+     *
+     * @return array{dir:?string, neighbours:Post[], catIds:int[], tagIds:int[]}
+     */
+    private function xmlrpc_snapshot(Post $post, bool $wasPublished): array
     {
-        $this->builder->removeVacatedPostOutput($oldDir, $post);
+        if (!$wasPublished) {
+            return ['dir' => null, 'neighbours' => [], 'catIds' => [], 'tagIds' => []];
+        }
+
+        return [
+            'dir'        => $this->builder->postOutputDir($post->published_at, $post->slug),
+            'neighbours' => array_values(array_filter([
+                Post::findPrev($this->db, $post),
+                Post::findNext($this->db, $post),
+            ])),
+            'catIds'     => array_map('intval', array_column($post->categories, 'id')),
+            'tagIds'     => array_map('intval', array_column($post->tags, 'id')),
+        ];
+    }
+
+    /**
+     * @param array{dir?:?string, neighbours?:Post[], catIds?:int[], tagIds?:int[]} $before
+     *        from xmlrpc_snapshot(). Empty for a create, which vacates nothing.
+     */
+    private function rebuildPost(Post $post, bool $wasPublished = false, array $before = []): void
+    {
+        $this->builder->removeVacatedPostOutput($before['dir'] ?? null, $post);
 
         if ($post->status === 'published' || $wasPublished) {
-            // buildPost() rebuilds archives for $post->categories (old in-memory terms).
-            // Re-fetch to find any newly added terms that also need their archives rebuilt.
-            $oldCatIds = array_column($post->categories, 'id');
-            $oldTagIds = array_column($post->tags, 'id');
-            $fresh     = Post::findById($this->db, $post->id);
-            $newCatIds = $fresh ? array_column($fresh->categories, 'id') : [];
-            $newTagIds = $fresh ? array_column($fresh->tags, 'id') : [];
-
             $this->builder->buildPost($post);
-            $prev = Post::findPrev($this->db, $post);
-            if ($prev) $this->builder->buildPost($prev);
-            $next = Post::findNext($this->db, $post);
-            if ($next) $this->builder->buildPost($next);
+
+            // Both positions, each post once. A post that moves in the timeline
+            // leaves the pair it used to sit between still linking to where it
+            // was; on an edit that does not move it these collapse to the same
+            // two posts, which is what the de-duplication is for.
+            $built = [];
+            $newNeighbours = [Post::findPrev($this->db, $post), Post::findNext($this->db, $post)];
+            foreach ([...($before['neighbours'] ?? []), ...$newNeighbours] as $neighbour) {
+                if ($neighbour && $neighbour->id !== $post->id && !isset($built[$neighbour->id])) {
+                    $this->builder->buildPost($neighbour);
+                    $built[$neighbour->id] = true;
+                }
+            }
+
             $this->builder->rebuildSharedResources();
 
-            // Rebuild archives for terms that were added (old terms handled by buildPost above).
-            foreach (array_diff($newCatIds, $oldCatIds) as $catId) {
-                $this->builder->buildCategoryArchive($catId);
+            // buildPost() covers the terms the post holds *now*. The ones it was
+            // just removed from still show its card until they are rebuilt too,
+            // so the archive pass is over the union of before and after.
+            $newCatIds = array_map('intval', array_column($post->categories, 'id'));
+            $newTagIds = array_map('intval', array_column($post->tags, 'id'));
+            foreach (array_diff($before['catIds'] ?? [], $newCatIds) as $catId) {
+                $this->builder->buildCategoryArchive((int) $catId);
             }
-            foreach (array_diff($newTagIds, $oldTagIds) as $tagId) {
-                $this->builder->buildTagArchive($tagId);
+            foreach (array_diff($before['tagIds'] ?? [], $newTagIds) as $tagId) {
+                $this->builder->buildTagArchive((int) $tagId);
             }
         } else {
             // Draft/scheduled save — no public file needed.

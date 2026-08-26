@@ -78,7 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($postsUpdated > 0) {
+        // buildAllTaxonomyArchives() is not optional here: rebuildPosts() defers
+        // the per-post archive rebuild, and this handler rewrites post *bodies*
+        // (the image URLs in them), so the cards on every category and tag
+        // archive are stale until something covers the terms.
         $builder->rebuildPosts();
+        $builder->buildAllTaxonomyArchives();
         $builder->rebuildSharedResources();
     }
 

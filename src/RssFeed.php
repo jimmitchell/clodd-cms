@@ -69,7 +69,8 @@ class RssFeed
                      . Post::storedFeaturedHtml($post['featured_image_url'] ?? null, (string) ($post['featured_image_alt'] ?? ''), $siteUrl)
                      . Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
                      . $this->converter->convert(Post::contentForRender((string) $post['content'], $post['featured_image_url'] ?? null))->getContent()
-                     . Post::photoCaptionHtml($post['post_kind'] ?? null, $post['excerpt'] ?? null);
+                     . Post::photoCaptionHtml($post['post_kind'] ?? null, $post['excerpt'] ?? null)
+                     . FeedMarkdown::trackingPixel($this->settings, '/' . Post::datePath($post['published_at'], $post['slug'], $this->settings['timezone'] ?? '') . '/');
             $isNote  = Post::isNoteKind($post['post_kind'] ?? null);
             $xml    .= $this->itemXml(
                 title:       $isNote ? null : $post['title'],
@@ -114,7 +115,8 @@ class RssFeed
                      . Post::storedFeaturedHtml($post->featured_image_url, $post->featured_image_alt, $siteUrl)
                      . Post::photosHtml($post->photos, $siteUrl)
                      . $this->converter->convert($post->renderableContent())->getContent()
-                     . Post::photoCaptionHtml($post->post_kind, $post->excerpt);
+                     . Post::photoCaptionHtml($post->post_kind, $post->excerpt)
+                     . FeedMarkdown::trackingPixel($this->settings, '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/');
             $xml    .= $this->itemXml(
                 title:       $post->isNote() ? null : $post->title,
                 url:         $postUrl,

@@ -87,6 +87,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // so a slug or date change can clean up the directory it moves away from.
     $oldDir = $wasPublished ? $builder->postOutputDir($snapPublishedAt, (string) $snapSlug) : null;
 
+    // Old-position neighbours, snapshotted before mutation. A post that moves in
+    // the timeline — a changed published date, or a slug the prev/next links
+    // point at — leaves the pair it used to sit between still linking to where
+    // it was. Rebuilding only the *new* neighbours fixes the destination and
+    // leaves the origin stale, which is what this path did until now.
+    // micropub.php has always captured these; the admin editor never did.
+    $oldPrev = $wasPublished && $post !== null ? Post::findPrev($db, $post) : null;
+    $oldNext = $wasPublished && $post !== null ? Post::findNext($db, $post) : null;
+
     // Populate from form.
     if ($post === null) {
         $post = new Post($db);
@@ -397,10 +406,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 || $post->slug         !== $snapSlug
                 || $post->published_at !== $snapPublishedAt;
             if ($neighborsAffected) {
-                $prev = Post::findPrev($db, $post);
-                if ($prev) $builder->buildPost($prev);
-                $next = Post::findNext($db, $post);
-                if ($next) $builder->buildPost($next);
+                // Both positions, each post once: the pair the post used to sit
+                // between and the pair it sits between now. On an edit that does
+                // not move it these are the same two posts, which is what the
+                // de-duplication is for.
+                $built = [];
+                foreach ([$oldPrev, $oldNext, Post::findPrev($db, $post), Post::findNext($db, $post)] as $neighbor) {
+                    if ($neighbor && $neighbor->id !== $post->id && !isset($built[$neighbor->id])) {
+                        $builder->buildPost($neighbor);
+                        $built[$neighbor->id] = true;
+                    }
+                }
             }
 
             // Index and sitemap only change when fields they display change.
@@ -424,8 +440,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sharedMetaChanged) {
                 $builder->rebuildSharedResources();
             } else {
+                // All three feeds, not two. They each carry the whole body, so
+                // a body-only edit changes every one of them — feed.rss was
+                // missing here and went on serving the old text until the next
+                // full rebuild, which is the sort of staleness nobody reports
+                // because the other two feeds look right.
                 $builder->buildFeed();
                 $builder->buildJsonFeed();
+                $builder->buildRssFeed();
             }
 
             // Rebuild archives for terms that were added or removed.

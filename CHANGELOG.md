@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.36.0] — 2026-08-25
+
+No schema change.
+
+### Fixed
+
+- **`feed.rss` went stale on ordinary edits.** The post editor skips the full shared rebuild when nothing the index displays has changed and builds the feeds directly instead — because every feed carries the whole body, so a body-only edit still changes all of them. It built two of the three. A typo fix refreshed `feed.xml` and `feed.json` and left `feed.rss` serving the pre-edit text until something else triggered a full rebuild, which is the kind of staleness nobody reports because the other two feeds look right. That branch is the only place in the codebase that calls the feed builders individually, and `BuildFanoutTest` now reads it back from source and requires all three.
+
+- **Moving a post in time left the posts it moved away from pointing at it.** Change a published date or a slug and *two* pairs of prev/next links are wrong, not one: the pair the post now sits between, and the pair it used to sit between. `micropub.php` has snapshotted the old-position neighbours since it was written; the admin editor and both XML-RPC edit paths rebuilt only the new pair, so the origin kept a "Next →" link to a post that had moved months away. All three now rebuild both positions, de-duplicated by id so an edit that moves nothing still builds each neighbour once.
+
+- **Recategorising a post left the archive it came out of showing its card.** `Builder::buildPost()` rebuilds the archives of the terms a post holds *now*, so the term it was just removed from is precisely the one nothing covers. Micropub never handled it. XML-RPC did try — but it read `$post->categories` for the "old" ids *after* `Post::saveTerms()` had already refreshed them in memory, so it was diffing the new set against itself and the loop could never fire. Both paths now snapshot the term ids before the write and rebuild the difference.
+
+  The XML-RPC half of this is why `rebuildPost()` now takes one `$before` array from a new `xmlrpc_snapshot()` rather than a growing tail of optional parameters — the old directory, the old neighbours and the old term ids are all the same fact, captured at the same moment, and passing them separately is what let one of them drift out of date without anything noticing.
+
+- **`Builder::rebuildPosts()` was missing the `deferTaxonomy` guard.** `buildAll()` has set both guards since the quadratic archive rebuild was found; the fix never reached `rebuildPosts()`, which is the path the settings screen and both importers actually call. Without it `buildPost()`'s per-post archive loop runs for every post, so the 105-post Photos archive — 18 pagination pages plus three feeds — was rebuilt 105 times and then thrown away by the `buildAllTaxonomyArchives()` call that follows. **Measured over the real 693-post corpus: 7.68 s → 4.37 s**, a 43% cut on every settings save and every import.
+
+  The guard is only safe because each caller covers the terms itself afterwards, and `admin/partials/tools/import-media.handler.php` did not — it rewrites post *bodies*, so deferring without adding the pass there would have traded a slow correct rebuild for a fast stale one. A test now walks `admin/` and fails on any caller of `rebuildPosts()` that does not follow it with `buildAllTaxonomyArchives()`.
+
+- **Only the main Atom feed counted its readers.** The Tinylytics pixel was written inline in `Feed::render()` and nowhere else, so a reader on `feed.rss`, on `feed.json`, or on any per-category or per-tag Atom feed was invisible, while a reader on `feed.xml` was counted. Partial numbers are worse than no numbers, because they look like numbers. It moves to `FeedMarkdown::trackingPixel()` — the same home as the shared converter, and for the same reason: that class exists so the three feeds cannot drift apart.
+
+### Removed
+
+- A duplicated `wp.getPosts` case header in `XmlRpcServer::dispatch()`, sitting above `wp.newCategory`. The real one repeats a few cases later.
+
+---
+
 ## [1.34.0] — 2026-08-25
 
 No schema change.
