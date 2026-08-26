@@ -50,7 +50,7 @@ $showRelatedPosts = $_SERVER['REQUEST_METHOD'] === 'POST'
                style="max-width:400px">
         <?php if ($_avatarCurrent !== ''): ?>
         <img src="<?= Helpers::e($_avatarCurrent) ?>" alt="Avatar preview"
-             style="display:block;width:64px;height:64px;margin-top:.5rem;object-fit:cover;border:1px solid var(--color-border);border-radius:50%">
+             style="display:block;width:64px;height:64px;margin-top:.5rem;object-fit:cover;border:1px solid var(--color-border);border-radius:var(--radius)">
         <?php endif; ?>
         <p class="form-hint">Exposed as <code>&lt;byline:avatar&gt;</code> in feeds. Upload an image to the <a href="/admin/media.php" target="_blank">Media Library</a> and paste its URL.</p>
 

@@ -78,19 +78,31 @@ final class OgImageTest extends TestCase
         }
     }
 
-    /** The avatar is drawn, and it is drawn as a circle rather than a square. */
-    public function testTheAvatarIsDrawnAsACircle(): void
+    /**
+     * The avatar is drawn, and it is drawn as a rounded square — neither a bare
+     * square nor the circle it was until 1.35.0.
+     *
+     * Three samples, because the two failures pull in opposite directions and
+     * one sample cannot see both. The lockup starts at PADDING (80) and is
+     * AVATAR_EDGE (76) across, so it spans 80–155 with its centre at (118, 118)
+     * and a corner radius of AVATAR_RADIUS_RATIO × 76 ≈ 14px.
+     */
+    public function testTheAvatarIsDrawnAsARoundedSquare(): void
     {
         $avatar = $this->solidAvatar('#C81E4A');
         $path   = $this->dir . '/avatar.png';
         $this->og()->generate('Jim Mitchell', 'A perfectly ordinary title', $path, $avatar);
 
-        // The lockup starts at PADDING (80) and is AVATAR_EDGE (76) across, so
-        // its centre is (118, 118) and its corners are the square's, not the
-        // circle's — a square crop would paint them too.
         $this->assertSame('#C81E4A', $this->pixelAt($path, 118, 118), 'The avatar was not drawn at the lockup position.');
-        $this->assertSame('#1A1715', $this->pixelAt($path, 82, 82), 'The avatar corner is filled, so it was drawn square rather than circular.');
-        $this->assertSame('#1A1715', $this->pixelAt($path, 153, 153), 'The avatar corner is filled, so it was drawn square rather than circular.');
+
+        // The extreme corners fall outside the 14px arc, so a square crop — no
+        // rounding at all — is what would paint them.
+        $this->assertSame('#1A1715', $this->pixelAt($path, 82, 82), 'The avatar corner is filled, so it was drawn as a bare square.');
+        $this->assertSame('#1A1715', $this->pixelAt($path, 153, 153), 'The avatar corner is filled, so it was drawn as a bare square.');
+
+        // (88, 88) is well inside the arc but ~42px from the centre, which is
+        // outside a 38px-radius circle: only a rounded square covers it.
+        $this->assertSame('#C81E4A', $this->pixelAt($path, 88, 88), 'The avatar corner is cut back to the inscribed circle rather than rounded.');
     }
 
     /**
@@ -106,7 +118,7 @@ final class OgImageTest extends TestCase
         $this->og()->generate('Jim Mitchell', 'A perfectly ordinary title', $with, $avatar);
         $this->og()->generate('Jim Mitchell', 'A perfectly ordinary title', $without);
 
-        // Column 100 is inside the avatar's circle. With no avatar the site name
+        // Column 100 is inside the avatar. With no avatar the site name
         // is set there instead, so the two cards must differ down that column.
         $this->assertNotSame(
             $this->columnSignature($with, 100),

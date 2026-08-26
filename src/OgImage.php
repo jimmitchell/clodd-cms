@@ -50,7 +50,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 9;
+    public const DESIGN_VERSION = 10;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -88,6 +88,21 @@ class OgImage
      */
     private const AVATAR_EDGE = 76;
     private const AVATAR_GAP  = 26;
+
+    /**
+     * The avatar's corner radius, as a fraction of its edge.
+     *
+     * A fraction rather than a measurement, because the two avatars are drawn
+     * at sizes that have nothing to do with each other. `.site-header__avatar`
+     * is --radius (6px) on a 32px square; writing that same 6px onto a 76px
+     * square would not be the same treatment scaled up, it would be a hard
+     * corner with a nick taken out of it. Keeping the *ratio* is what makes the
+     * card's avatar and the header's read as the same object.
+     *
+     * So this tracks --radius in theme.css the way the colours above track the
+     * dark-mode tokens: change the site's radius and this should follow.
+     */
+    private const AVATAR_RADIUS_RATIO = 6 / 32;
 
     /**
      * Air between title lines, as a fraction of the em, added to the ink the
@@ -321,7 +336,7 @@ class OgImage
 
             if ($avatar !== null) {
                 $edge = self::AVATAR_EDGE;
-                $this->drawCircle($img, $avatar, $pad, $pad, $edge);
+                $this->drawRoundedSquare($img, $avatar, $pad, $pad, $edge);
                 imagedestroy($avatar);
 
                 // The name sits on the avatar's centre line rather than sharing
@@ -454,22 +469,39 @@ class OgImage
     }
 
     /**
-     * Copy $avatar onto $dst as a circle with its top-left at ($x, $y).
+     * Copy $avatar onto $dst as a rounded square with its top-left at ($x, $y).
      *
-     * GD has no circular crop, so this is a per-pixel copy that skips anything
-     * outside the radius. The outermost pixel is blended toward the card ground
-     * by how far it falls inside the edge — without it the circle renders with a
+     * GD has no rounded crop, so this is a per-pixel copy that skips anything
+     * outside the shape. The outermost pixel is blended toward the card ground
+     * by how far it falls inside the edge — without it the corners render with a
      * hard stair-stepped rim, which is very visible against a flat background.
+     *
+     * How far inside the shape a pixel falls is the signed distance to a rounded
+     * box: push the sample point in from each side by the corner radius, and
+     * what is left is a plain box whose distance is easy to take. That reduces
+     * to the straight-edge distance along the flats and to the arc's distance in
+     * the corners, which is the whole point — one expression covers both, so the
+     * blend along a flat edge and the blend around a corner cannot drift apart.
      */
-    private function drawCircle(\GdImage $dst, \GdImage $avatar, int $x, int $y, int $edge): void
+    private function drawRoundedSquare(\GdImage $dst, \GdImage $avatar, int $x, int $y, int $edge): void
     {
-        $radius = $edge / 2;
+        $radius = $edge * self::AVATAR_RADIUS_RATIO;
+        $half   = $edge / 2;
+        // How far the corner arcs' centres sit in from the square's own centre.
+        $inset  = $half - $radius;
         [$bgR, $bgG, $bgB] = self::BG_COLOR;
 
         for ($py = 0; $py < $edge; $py++) {
             for ($px = 0; $px < $edge; $px++) {
-                $distance = sqrt((($px + 0.5) - $radius) ** 2 + (($py + 0.5) - $radius) ** 2);
-                if ($distance > $radius) {
+                $qx = abs(($px + 0.5) - $half) - $inset;
+                $qy = abs(($py + 0.5) - $half) - $inset;
+
+                $outside = sqrt(max($qx, 0.0) ** 2 + max($qy, 0.0) ** 2);
+                $inside  = min(max($qx, $qy), 0.0);
+                // Negative inside the shape, so flip it to a depth.
+                $depth   = $radius - ($outside + $inside);
+
+                if ($depth <= 0.0) {
                     continue;
                 }
 
@@ -478,7 +510,7 @@ class OgImage
                 $g   = ($rgb >> 8) & 0xFF;
                 $b   = $rgb & 0xFF;
 
-                $coverage = min(1.0, $radius - $distance);
+                $coverage = min(1.0, $depth);
                 if ($coverage < 1.0) {
                     $r = (int) round($r * $coverage + $bgR * (1 - $coverage));
                     $g = (int) round($g * $coverage + $bgG * (1 - $coverage));
