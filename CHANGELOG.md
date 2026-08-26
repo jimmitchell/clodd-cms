@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.38.2] — 2026-08-26
+
+No schema change.
+
+### Fixed
+
+- **`symfony/polyfill-php80` v1.33.0 → v1.37.0**, the last of the dependencies production had moved ahead on. 1.38.1 caught three of them because the diff was read forty lines at a time and this one was below the cut; `composer install` on prod then reported it as a *downgrade*, which is how it surfaced. `composer outdated` now shows nothing but major-version bumps, which are a separate decision.
+
+- **`composer.lock`'s content hash matches `composer.json` again.** The hash covers the `version` field, and 1.38.1 bumped that with `sed` *after* composer had written the lock — so every `composer install` warned that the lock was out of date and offered to update dependencies that were in fact correct. Bump the version first, then run `composer update --lock`; doing it the other way round invalidates the hash every time.
+
+---
+
 ## [1.38.1] — 2026-08-26
 
 No schema change.
