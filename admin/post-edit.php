@@ -51,50 +51,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Handle delete before any save logic.
     if ($action === 'delete') {
         if ($post && $post->id) {
-            $wasPublished = $post->status === 'published';
-            $prevNeighbor = $wasPublished ? Post::findPrev($db, $post) : null;
-            $nextNeighbor = $wasPublished ? Post::findNext($db, $post) : null;
-            // Before the row goes: the ids of the copies live on it.
-            $syndication->remove($post);
-            $post->delete();
-            // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
-            $post->status = 'draft';
-            $builder->buildPost($post);
-            if ($wasPublished) {
-                if ($prevNeighbor) $builder->buildPost($prevNeighbor);
-                if ($nextNeighbor) $builder->buildPost($nextNeighbor);
-                $builder->rebuildSharedResources();
-            }
-            $activityLog->log('delete', 'post', $post->id, $post->title);
+            $publisher->deletePost($post);
             $auth->flash('Post deleted.', 'info');
             header('Location: /admin/posts.php');
             exit;
         }
     }
 
-    // Snapshot pre-edit state used later to decide which outputs need rebuilding.
-    $snapTitle       = $post?->title;
-    $snapSlug        = $post?->slug;
-    $snapPublishedAt = $post?->published_at;
-    $snapExcerpt     = $post?->excerpt;
-    $snapContent     = $post?->content;
-    $snapPostKind    = $post?->post_kind ?? 'standard';
-    $snapFeatured    = $post?->featured_image_url;
-    $snapFeaturedAlt = $post?->featured_image_alt ?? '';
-    $wasPublished    = $post?->status === 'published';
-
-    // Where the post currently lives on disk. Captured before the form is applied
-    // so a slug or date change can clean up the directory it moves away from.
-    $oldDir = $wasPublished ? $builder->postOutputDir($snapPublishedAt, (string) $snapSlug) : null;
-
-    // Old-position neighbours, snapshotted before mutation. A post that moves in
-    // the timeline — a changed published date, or a slug the prev/next links
-    // point at — leaves the pair it used to sit between still linking to where
-    // it was. Rebuilding only the *new* neighbours fixes the destination and
-    // leaves the origin stale, which is what this path did until now.
-    // micropub.php has always captured these; the admin editor never did.
-    $oldPrev = $wasPublished && $post !== null ? Post::findPrev($db, $post) : null;
-    $oldNext = $wasPublished && $post !== null ? Post::findNext($db, $post) : null;
+    // Everything the pending write is about to destroy — the old date-path, the
+    // old-position neighbours, the old terms, and the fields the index, feeds
+    // and syndicated copies are derived from. Taken before the form is applied
+    // and before saveTerms(), which are both load-bearing; PostPublisher's
+    // docblock says why.
+    $before       = $publisher->snapshot($post ?? new Post($db));
+    $wasPublished = $before['wasPublished'];
 
     // Populate from form.
     if ($post === null) {
@@ -127,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // A legacy aside re-saved here is submitting its *own* slug back, so guard
         // only when the slug isn't already this post's — otherwise opening one in
         // the editor and pressing Save would rewrite "234" to "234-post".
-        if (ctype_digit($post->slug) && $post->slug !== $snapSlug) {
+        if (ctype_digit($post->slug) && $post->slug !== $before['slug']) {
             $post->slug .= '-post';
         }
     } elseif ($post->isNote()) {
@@ -259,14 +229,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        $oldCategoryIds = array_map('intval', array_column($post->categories, 'id'));
-        $oldTagIds      = array_map('intval', array_column($post->tags,       'id'));
+        // The terms this replaces are already in $before, captured before the
+        // form was applied — PostPublisher rebuilds the archives the post is
+        // leaving from that, so there is nothing to diff here.
         $post->saveTerms($categoryIds, $tagIds);
-
-        $addedCategoryIds   = array_values(array_diff($categoryIds,    $oldCategoryIds));
-        $removedCategoryIds = array_values(array_diff($oldCategoryIds, $categoryIds));
-        $addedTagIds        = array_values(array_diff($tagIds,    $oldTagIds));
-        $removedTagIds      = array_values(array_diff($oldTagIds, $tagIds));
 
         // Update syndication URLs if the user edited them. Pointing the field at
         // a different status re-points the edits and deletes that follow it, so
@@ -350,145 +316,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             fastcgi_finish_request();
         }
 
-        // A save that takes the post off the public site: unpublishing, but also
-        // re-scheduling a post that is already live. bootstrap.php promotes due
-        // scheduled posts and builds them on every admin request, so a post can
-        // become published between opening the editor and submitting it — press
-        // Publish with a future date and this is the transition you get.
-        $leftPublicSite = $wasPublished && $post->status !== 'published';
+        // Everything the save invalidated: the post, both neighbour positions,
+        // the archives it joined and left, the index and all three feeds.
+        $publisher->rebuildAfterSave($post, $before);
 
-        // The copies follow the post. Off the public site means off the other
-        // networks too: nothing should be left pointing readers at a page that
-        // has stopped existing. Otherwise a save of a post that is still live
-        // brings its copies into line with the words as they now read.
-        // Nothing the networks display has changed, so there is nothing to
-        // rewrite. Worth checking here rather than leaving it to the clients:
-        // they each no-op only *after* fetching the remote copy to compare it,
-        // which on an ordinary typo-fix save is four HTTP round-trips whose
-        // answers are all thrown away.
-        //
-        // The payload is built from these seven fields plus photos and contexts,
-        // and this handler cannot change those two — the photo and context
-        // editors are Micropub-side. Anything here that alters what a status
-        // says alters one of these.
-        //
-        // featured_image_url is in the list even though no status prints it: it
-        // is the picture Bluesky uploads as its link card thumbnail, and what
-        // the permalink advertises as og:image and so what Mastodon puts on its
-        // own card (Syndication::payload()). Changing it changes the copy.
-        //
-        // post_kind belongs in the list even though no status prints it: it is
-        // what decides whether the copy links home at all, because a note
-        // syndicates as its own words with no trailer (Syndication::payload()).
-        // Flipping a post to or from an aside or a photo therefore rewrites
-        // every network's copy while touching none of the other five.
-        $syndicatedTextChanged = $post->title        !== $snapTitle
-            || $post->slug         !== $snapSlug
-            || $post->published_at !== $snapPublishedAt
-            || $post->excerpt      !== $snapExcerpt
-            || $post->content      !== $snapContent
-            || $post->post_kind    !== $snapPostKind
-            || $post->featured_image_url !== $snapFeatured;
-
-        // Rebuild this post + selectively rebuild neighbors and shared resources.
-        // Anything public now, or public before this save, needs the pass; a
-        // draft or scheduled post that was never live has nothing on disk.
-        if ($post->status === 'published' || $wasPublished) {
-
-            $builder->removeVacatedPostOutput($oldDir, $post);
-            $builder->buildPost($post);
-
-            // Neighbors only need rebuilding when fields they display change:
-            // they show this post's title and URL in their prev/next navigation.
-            $neighborsAffected = !$wasPublished
-                || $leftPublicSite
-                || $post->title        !== $snapTitle
-                || $post->slug         !== $snapSlug
-                || $post->published_at !== $snapPublishedAt;
-            if ($neighborsAffected) {
-                // Both positions, each post once: the pair the post used to sit
-                // between and the pair it sits between now. On an edit that does
-                // not move it these are the same two posts, which is what the
-                // de-duplication is for.
-                $built = [];
-                foreach ([$oldPrev, $oldNext, Post::findPrev($db, $post), Post::findNext($db, $post)] as $neighbor) {
-                    if ($neighbor && $neighbor->id !== $post->id && !isset($built[$neighbor->id])) {
-                        $builder->buildPost($neighbor);
-                        $built[$neighbor->id] = true;
-                    }
-                }
-            }
-
-            // Index and sitemap only change when fields they display change.
-            // Feeds always need rebuilding — they include full post content.
-            // Asides always trigger a shared rebuild because the home/list pages
-            // render their full body, so any content edit must propagate.
-            $sharedMetaChanged = !$wasPublished
-                || $leftPublicSite
-                || $post->title        !== $snapTitle
-                || $post->slug         !== $snapSlug
-                || $post->published_at !== $snapPublishedAt
-                || $post->excerpt      !== $snapExcerpt
-                || $post->post_kind    !== $snapPostKind
-                // The card thumbnail on the home page and every archive, and
-                // the image the feeds carry.
-                || $post->featured_image_url !== $snapFeatured
-                || $post->featured_image_alt !== $snapFeaturedAlt
-                || $post->isNote()
-                || !empty($addedCategoryIds)
-                || !empty($removedCategoryIds);
-            if ($sharedMetaChanged) {
-                $builder->rebuildSharedResources();
-            } else {
-                // All three feeds, not two. They each carry the whole body, so
-                // a body-only edit changes every one of them — feed.rss was
-                // missing here and went on serving the old text until the next
-                // full rebuild, which is the sort of staleness nobody reports
-                // because the other two feeds look right.
-                $builder->buildFeed();
-                $builder->buildJsonFeed();
-                $builder->buildRssFeed();
-            }
-
-            // Rebuild archives for terms that were added or removed.
-            foreach (array_merge($addedCategoryIds, $removedCategoryIds) as $catId) {
-                $builder->buildCategoryArchive($catId);
-            }
-            foreach (array_merge($addedTagIds, $removedTagIds) as $tagId) {
-                $builder->buildTagArchive($tagId);
-            }
-        }
-        // A post that has never been public needs no build either way.
-
-        // ── Syndicate, after the build ───────────────────────────────────────
-
-        // Order matters, and it is not the obvious one. Mastodon fetches the
-        // permalink to build its preview card exactly once, seconds after the
-        // status is created, and never retries a fetch that failed. A first
-        // publish from a draft has nothing on disk until buildPost() runs above,
-        // so syndicating first handed Mastodon a 404 and lost the card for good.
-        //
-        // micropub.php and Scheduler have run in this order since 1.13.3 for
-        // this reason; this handler was missed, so posts published from the
-        // editor went out cardless while the same post over Micropub did not.
+        // Then, and only then, the copies. PostPublisher::syndicateAfterBuild()
+        // carries the reason the order is this way round.
         if ($isFirstPublish || $isFirstBluesky || $isFirstPixelfed) {
-            $syndicationBefore = [$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url];
-            $syndication->publish($post);
-
-            // The post page lists the copies it made, so a syndication that
-            // recorded a URL leaves the page just written a version behind.
-            // Only post.php renders these URLs — the feeds and index do not,
-            // so nothing else needs the second pass.
-            if ([$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url] !== $syndicationBefore) {
-                $builder->buildPost($post);
-            }
+            $publisher->syndicateAfterBuild($post);
         }
 
-        if ($leftPublicSite) {
-            $syndication->remove($post);
-        } elseif ($post->status === 'published' && $syndicatedTextChanged) {
-            $syndication->update($post);
-        }
+        $publisher->resyndicateAfterBuild($post, $before);
 
         exit;
     }

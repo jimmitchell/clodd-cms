@@ -31,6 +31,11 @@ $builder     = new \CMS\Builder($config, $db);
 $activityLog = new \CMS\ActivityLog($db);
 $syndication = new \CMS\Syndication($db, $config);
 
+// What a save entails, in one place. Every admin path that writes a post goes
+// through this rather than assembling its own build-and-syndicate sequence —
+// see the class docblock for the four bugs that came of doing it by hand.
+$publisher = new \CMS\PostPublisher($db, $builder, $syndication, $activityLog);
+
 // Retention pruning lives in bin/prune.php, run from cron. It used to happen
 // here on ~1% of admin requests, which meant the public endpoints that fill
 // these tables (the analytics beacon, the passkey and Micropub auth surfaces)

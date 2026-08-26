@@ -203,31 +203,40 @@ final class BuildFanoutTest extends TestCase
     // ── 1a: the cheap feed path ───────────────────────────────────────────────
 
     /**
-     * The editor skips the full shared rebuild when nothing the index shows has
-     * changed, and builds the feeds directly instead — because every feed
-     * carries the whole body, so a body-only edit still changes all of them.
-     * It built two of the three. feed.rss went on serving the old text until
-     * something else triggered a full rebuild, which is the kind of staleness
-     * nobody reports because the other two feeds look right.
+     * The editor's fast path — skip the index when nothing it displays changed,
+     * but never skip a feed, because all three carry the whole body. It built
+     * two of the three, and feed.rss served pre-edit text until the next full
+     * rebuild while looking fine because the other two were right.
      *
-     * Asserted from source: this branch lives in a request script, and it is
-     * the only place in the codebase that calls the feed builders individually.
+     * 1.37.0 moved that decision into PostPublisher, where
+     * PostPublisherTest::testABodyOnlyEditSkipsTheIndexButRebuildsAllThreeFeeds
+     * pins it by behaviour instead of by source. What is left to assert here is
+     * the reason it can be pinned in one place at all: that no write path
+     * assembles the sequence by hand any more.
      */
-    public function testThePostEditorsCheapFeedPathBuildsAllThreeFeeds(): void
+    public function testNoWritePathBuildsAndSyndicatesByHand(): void
     {
-        $src = (string) file_get_contents(dirname(__DIR__) . '/admin/post-edit.php');
-
-        $this->assertMatchesRegularExpression(
-            '/if\s*\(\$sharedMetaChanged\)\s*\{.*?\}\s*else\s*\{(.*?)\}/s',
-            $src,
-            'Expected the sharedMetaChanged fast path to still exist in the post editor.'
+        $root  = dirname(__DIR__);
+        $paths = array_merge(
+            glob($root . '/*.php') ?: [],
+            glob($root . '/admin/*.php') ?: [],
+            glob($root . '/src/*.php') ?: [],
         );
-        preg_match('/if\s*\(\$sharedMetaChanged\)\s*\{.*?\}\s*else\s*\{(.*?)\}/s', $src, $m);
-        $cheap = $m[1];
 
-        foreach (['buildFeed()', 'buildJsonFeed()', 'buildRssFeed()'] as $call) {
-            $this->assertStringContainsString($call, $cheap,
-                "The fast path must build every feed; {$call} is missing, so that feed keeps the pre-edit body.");
+        foreach ($paths as $file) {
+            if (basename($file) === 'PostPublisher.php') {
+                continue;   // the one place that is allowed to know.
+            }
+
+            $src = (string) file_get_contents($file);
+            $this->assertStringNotContainsString(
+                'syndication->publish(',
+                $src,
+                basename($file) . ' calls Syndication::publish() directly. That belongs to '
+                    . 'PostPublisher::syndicateAfterBuild(), which knows it has to run *after* the '
+                    . 'build — Mastodon fetches the permalink once and never retries, so a copy '
+                    . 'made before the page is on disk loses its card permanently.'
+            );
         }
     }
 

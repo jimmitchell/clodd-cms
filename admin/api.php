@@ -247,6 +247,7 @@ api_reject_cross_origin($db->getSetting('site_url', ''));
 
 $builder     = new \CMS\Builder($config, $db);
 $syndication = new \CMS\Syndication($db, $config);
+$publisher   = new \CMS\PostPublisher($db, $builder, $syndication);
 
 // Safety net for a stopped cron, same as bootstrap.php — a no-op while
 // bin/publish-scheduled.php keeps the heartbeat fresh.
@@ -355,21 +356,9 @@ if ($resource === 'posts' && $method === 'POST' && $id === null) {
     $tagIds = array_map('intval', $body['tag_ids']      ?? []);
     $post->saveTerms($catIds, $tagIds);
 
-    if ($post->status === 'published') {
-        // New post: $post->categories is empty so buildPost() won't rebuild any term archives.
-        $builder->buildPost($post);
-        $prev = \CMS\Post::findPrev($db, $post);
-        if ($prev) $builder->buildPost($prev);
-        $next = \CMS\Post::findNext($db, $post);
-        if ($next) $builder->buildPost($next);
-        $builder->rebuildSharedResources();
-        foreach ($catIds as $catId) {
-            $builder->buildCategoryArchive($catId);
-        }
-        foreach ($tagIds as $tagId) {
-            $builder->buildTagArchive($tagId);
-        }
-    }
+    // A new post has no old position to vacate. buildPost() covers the archives
+    // of the terms it now holds, so there is nothing extra to rebuild here.
+    $publisher->rebuildAfterSave($post, $publisher->snapshotOfNothing());
 
     api_json(post_to_array($post, $siteUrl, $timezone), 201);
 }
@@ -381,12 +370,12 @@ if ($resource === 'posts' && $method === 'PUT' && $id !== null) {
         api_error('Post not found', 404);
     }
 
-    $wasPublished = $post->status === 'published';
-    $oldCatIds    = array_column($post->categories, 'id');
-    $oldTagIds    = array_column($post->tags, 'id');
-    // Captured before the body is applied, so a slug or date change can clean up
-    // the output directory the post moves away from.
-    $oldDir       = $wasPublished ? $builder->postOutputDir($post->published_at, $post->slug) : null;
+    // Everything the update is about to destroy — old date-path, old-position
+    // neighbours, old terms, and the fields the index and feeds derive from.
+    // Taken before the body is applied and before saveTerms().
+    $before    = $publisher->snapshot($post);
+    $oldCatIds = $before['catIds'];
+    $oldTagIds = $before['tagIds'];
 
     if (isset($body['title']))   $post->title   = trim($body['title']);
     if (isset($body['slug']))    $post->slug    = \CMS\Helpers::slugify($body['slug']);
@@ -430,33 +419,13 @@ if ($resource === 'posts' && $method === 'PUT' && $id !== null) {
         $post->saveTerms($newCatIds, $newTagIds);
     }
 
-    // buildPost() rebuilds archives for old terms ($post->categories); only explicitly
-    // rebuild archives for terms that were newly added.
-    $builder->removeVacatedPostOutput($oldDir, $post);
-    $builder->buildPost($post);
-    if ($post->status === 'published' || $wasPublished) {
-        $prev = \CMS\Post::findPrev($db, $post);
-        if ($prev) $builder->buildPost($prev);
-        $next = \CMS\Post::findNext($db, $post);
-        if ($next) $builder->buildPost($next);
-        $builder->rebuildSharedResources();
-        foreach (array_diff($newCatIds, $oldCatIds) as $catId) {
-            $builder->buildCategoryArchive($catId);
-        }
-        foreach (array_diff($newTagIds, $oldTagIds) as $tagId) {
-            $builder->buildTagArchive($tagId);
-        }
-    }
+    $publisher->rebuildAfterSave($post, $before);
 
-    // The syndicated copies follow the post: taken down when it leaves the
-    // public site, brought into line with it when it stays. This endpoint never
-    // creates copies, so an API-authored post that was never syndicated has
-    // nothing here to keep in step.
-    if ($wasPublished && $post->status !== 'published') {
-        $syndication->remove($post);
-    } elseif ($post->status === 'published') {
-        $syndication->update($post);
-    }
+    // The copies follow the post: taken down when it leaves the public site,
+    // brought into line with it when it stays. This endpoint never *creates*
+    // copies, so an API-authored post that was never syndicated has nothing
+    // here to keep in step.
+    $publisher->resyndicateAfterBuild($post, $before);
 
     api_json(post_to_array($post, $siteUrl, $timezone));
 }
@@ -468,20 +437,7 @@ if ($resource === 'posts' && $method === 'DELETE' && $id !== null) {
         api_error('Post not found', 404);
     }
 
-    $wasPublished = $post->status === 'published';
-    $prevNeighbor = $wasPublished ? \CMS\Post::findPrev($db, $post) : null;
-    $nextNeighbor = $wasPublished ? \CMS\Post::findNext($db, $post) : null;
-    // Before the row goes: the ids of the syndicated copies live on it.
-    $syndication->remove($post);
-    // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
-    $post->status = 'draft';
-    $builder->buildPost($post);
-    $post->delete();
-    if ($wasPublished) {
-        if ($prevNeighbor) $builder->buildPost($prevNeighbor);
-        if ($nextNeighbor) $builder->buildPost($nextNeighbor);
-        $builder->rebuildSharedResources();
-    }
+    $publisher->deletePost($post);
 
     api_json(['deleted' => true]);
 }

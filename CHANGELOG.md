@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.37.0] — 2026-08-25
+
+No schema change.
+
+### Changed
+
+- **One publish pipeline, six callers.** `CMS\PostPublisher` now owns what a save entails: build the post, rebuild both neighbour positions, rebuild the archives it joined and left, refresh the index and all three feeds, and only then syndicate. `micropub.php`, `admin/post-edit.php`, `admin/posts.php`, `admin/api.php`, `XmlRpcServer` and `Scheduler` call it instead of assembling that sequence by hand.
+
+  This is the fix behind the fixes. Every bug in 1.36.0 was one entry point holding a piece of correctness the other five lacked, and `CLAUDE.md` already recorded the build-then-syndicate ordering being got wrong twice by exactly that route — fix one endpoint, miss the others. The four-times-restated paragraph explaining why Mastodon's preview card depends on the ordering is now one docblock on `syndicateAfterBuild()`, next to the code it describes.
+
+  **502 lines out of the callers, 118 back in.** `admin/post-edit.php` loses 200 lines; its save handler goes from about 110 lines of build-and-syndicate to three calls.
+
+  A test now walks every PHP file in the repo and fails on any call to `Syndication::publish()` outside `PostPublisher`, so a seventh write path cannot quietly reintroduce the divergence.
+
+- **Three paths gained the syndication check the editor already had.** `Syndication::update()` was called unconditionally by Micropub, the REST API and XML-RPC, and the three clients each no-op only *after* fetching the remote copy to compare against it — four HTTP round-trips on an ordinary typo-fix save whose answers are all thrown away. It mattered most for Pixelfed, which allows a status ten edits in its entire lifetime. The seven-field comparison the editor used since 1.21.1 now applies to all of them.
+
+- **Every MarsEdit save no longer rebuilds the whole index.** `XmlRpcServer::rebuildPost()` called `rebuildSharedResources()` unconditionally. It now takes the same "did anything the index displays actually change" path as the editor, and falls back to the three feeds when it did not.
+
+- **Deleting a post is one method.** The block was copied into six places with two divergences worth naming. `admin/api.php` had the ordering inverted — it built the post *before* deleting the row rather than after. And the copies are now always taken down while the row still carries their ids, which is the whole reason the order matters. Micropub keeps its soft delete so `action=undelete` still works; that is a `bool $soft` parameter rather than something unified away, because the admin's Delete and Micropub's delete genuinely mean different things.
+
+- **`admin/posts.php`, `admin/api.php` and XML-RPC now write to the activity log** on delete, which they never did. `Scheduler`'s comment claiming scheduled publishes were the only untraced route was three routes out of date.
+
+### Fixed
+
+- **A Micropub or REST-API recategorise left the vacated archive stale**, and **a date change over XML-RPC or the REST API left the old-position neighbours stale** — both the 1.36.0 fixes, now reaching the two paths that release did not touch, because there is only one path left.
+
+---
+
 ## [1.36.0] — 2026-08-25
 
 No schema change.

@@ -44,6 +44,7 @@ $db          = new \CMS\Database($config['paths']['data'] . '/cms.db');
 $builder     = new \CMS\Builder($config, $db);
 $activityLog = new \CMS\ActivityLog($db);
 $syndication = new \CMS\Syndication($db, $config);
+$publisher   = new \CMS\PostPublisher($db, $builder, $syndication, $activityLog);
 
 // The scheduler deliberately does NOT run here. It used to, on this line,
 // before a token had been looked at — so an anonymous request could drive a
@@ -627,24 +628,10 @@ if ($action === 'delete') {
         mp_error('invalid_request', 'post not found for url', 404);
     }
 
-    $wasPublished = $post->status === 'published';
-    $prev = $wasPublished ? \CMS\Post::findPrev($db, $post) : null;
-    $next = $wasPublished ? \CMS\Post::findNext($db, $post) : null;
-
-    // The copies go with it. A later undelete restores the post here but
-    // cannot bring them back — the statuses are gone from the networks, and
-    // the post returns unsyndicated.
-    $syndication->remove($post);
-
-    // Soft delete so action=undelete can restore. buildPost() removes the
-    // output file and rebuilds taxonomy archives for deleted posts.
-    $post->softDelete();
-    $builder->buildPost($post);
-    if ($wasPublished) {
-        if ($prev) $builder->buildPost($prev);
-        if ($next) $builder->buildPost($next);
-        $builder->rebuildSharedResources();
-    }
+    // Soft, so action=undelete can restore the post. The copies still go for
+    // good: a later undelete brings the row back but cannot bring the statuses
+    // back from the networks, so the post returns unsyndicated.
+    $publisher->deletePost($post, soft: true);
 
     $activityLog->log('delete', 'post', $post->id, $post->title . ' (via micropub)');
 
@@ -667,13 +654,7 @@ if ($action === 'undelete') {
         mp_error('invalid_request', 'post is not deleted');
     }
 
-    $post->restore();
-    if ($post->status === 'published') {
-        $builder->buildPost($post);
-        if ($p = \CMS\Post::findPrev($db, $post)) $builder->buildPost($p);
-        if ($n = \CMS\Post::findNext($db, $post)) $builder->buildPost($n);
-        $builder->rebuildSharedResources();
-    }
+    $publisher->restorePost($post);
 
     $activityLog->log('undelete', 'post', $post->id, $post->title . ' (via micropub)');
 
@@ -693,29 +674,13 @@ if ($action === 'update') {
         mp_error('invalid_request', 'post not found for url', 404);
     }
 
-    // Snapshot fields used to decide neighbor/shared-resource rebuilds.
-    $snapTitle       = $post->title;
-    $snapSlug        = $post->slug;
-    $snapPublishedAt = $post->published_at;
-    $snapExcerpt     = $post->excerpt;
-    $wasPublished    = $post->status === 'published';
-
-    $oldDir = $wasPublished ? $builder->postOutputDir($post->published_at, $post->slug) : null;
-
-    // Old-position neighbors, snapshotted before mutation: if the post moves in
-    // the timeline (published date or slug change) their prev/next links must be
-    // rebuilt too, alongside the new-position neighbors.
-    $oldPrev = $wasPublished ? \CMS\Post::findPrev($db, $post) : null;
-    $oldNext = $wasPublished ? \CMS\Post::findNext($db, $post) : null;
-
-    // Terms as they stand now, for the same reason. saveTerms() refreshes
-    // $post->categories/->tags in memory, so once the update has run there is no
-    // way back to the set the post is being moved *out* of — and buildPost()
-    // only ever rebuilds the archives of the terms it holds at the time. Without
-    // this, recategorising over Micropub left the vacated archive showing the
-    // post's card until the next full rebuild.
-    $oldCategoryIds = array_map('intval', array_column($post->categories, 'id'));
-    $oldTagIds      = array_map('intval', array_column($post->tags, 'id'));
+    // Everything this update is about to destroy — the old date-path, the
+    // old-position neighbours, the old terms, and the fields the index, the
+    // feeds and the syndicated copies are derived from. Taken here because
+    // saveTerms() refreshes the in-memory terms and the replace ops below
+    // overwrite the rest.
+    $before       = $publisher->snapshot($post);
+    $wasPublished = $before['wasPublished'];
 
     // ── Apply replace ops ────────────────────────────────────────────────────
     //
@@ -964,48 +929,13 @@ if ($action === 'update') {
         $post->saveContexts($newContexts);
     }
 
-    // Remove stale output when the date-path changed (slug or published date).
-    $builder->removeVacatedPostOutput($oldDir, $post);
+    // Everything the update invalidated: the post, both neighbour positions,
+    // the archives it joined and left, the index and all three feeds.
+    $publisher->rebuildAfterSave($post, $before);
 
-    if ($post->status === 'published' || $wasPublished) {
-        $builder->buildPost($post);
-        $neighborsAffected = !$wasPublished
-            || $post->status !== 'published'
-            || $post->title  !== $snapTitle
-            || $post->slug   !== $snapSlug
-            || $post->published_at !== $snapPublishedAt;
-        if ($neighborsAffected) {
-            // Rebuild both the old-position and new-position neighbors, once each.
-            $built = [];
-            foreach ([$oldPrev, $oldNext, \CMS\Post::findPrev($db, $post), \CMS\Post::findNext($db, $post)] as $neighbor) {
-                if ($neighbor && $neighbor->id !== $post->id && !isset($built[$neighbor->id])) {
-                    $builder->buildPost($neighbor);
-                    $built[$neighbor->id] = true;
-                }
-            }
-        }
-
-        // buildPost() above covered the terms the post holds now; these are the
-        // ones it was just taken out of, which still carry its card.
-        $nowCategoryIds = array_map('intval', array_column($post->categories, 'id'));
-        $nowTagIds      = array_map('intval', array_column($post->tags, 'id'));
-        foreach (array_diff($oldCategoryIds, $nowCategoryIds) as $catId) {
-            $builder->buildCategoryArchive((int) $catId);
-        }
-        foreach (array_diff($oldTagIds, $nowTagIds) as $tagId) {
-            $builder->buildTagArchive((int) $tagId);
-        }
-
-        $builder->rebuildSharedResources();
-    }
-
-    // The syndicated copies follow the post: taken down when the update pulls
-    // it off the public site, brought into line with it when it stays.
-    if ($wasPublished && $post->status !== 'published') {
-        $syndication->remove($post);
-    } elseif ($post->status === 'published') {
-        $syndication->update($post);
-    }
+    // Then the copies — taken down when the update pulls the post off the
+    // public site, brought into line with it when it stays.
+    $publisher->resyndicateAfterBuild($post, $before);
 
     $activityLog->log('update', 'post', $post->id, $post->title . ' (via micropub)');
 
@@ -1015,8 +945,8 @@ if ($action === 'update') {
     $newUrl = ($post->status === 'published' && $post->published_at !== null && $siteUrl !== '')
         ? $siteUrl . '/' . \CMS\Post::datePath($post->published_at, $post->slug, $cfgTz) . '/'
         : '';
-    $oldUrl = ($wasPublished && $snapPublishedAt !== null && $siteUrl !== '')
-        ? $siteUrl . '/' . \CMS\Post::datePath($snapPublishedAt, $snapSlug, $cfgTz) . '/'
+    $oldUrl = ($wasPublished && $before['publishedAt'] !== null && $siteUrl !== '')
+        ? $siteUrl . '/' . \CMS\Post::datePath($before['publishedAt'], (string) $before['slug'], $cfgTz) . '/'
         : '';
 
     if ($newUrl !== '' && $newUrl !== $oldUrl) {
@@ -1205,30 +1135,15 @@ if ($contextRows !== []) {
     $post->saveContexts($contextRows);
 }
 
-// ── Build static output + neighbors + shared resources ──────────────────────
+// ── Build static output, then syndicate ─────────────────────────────────────
+
+// A new post has no old position to vacate, so there is nothing to snapshot.
+// The build comes first and the copies second — see
+// PostPublisher::syndicateAfterBuild() for why that order is not negotiable.
+$publisher->rebuildAfterSave($post, $publisher->snapshotOfNothing());
 
 if ($status === 'published') {
-    $builder->buildPost($post);
-    if ($prev = \CMS\Post::findPrev($db, $post)) $builder->buildPost($prev);
-    if ($next = \CMS\Post::findNext($db, $post)) $builder->buildPost($next);
-    $builder->rebuildSharedResources();
-}
-
-// ── Syndicate to Mastodon / Bluesky / Pixelfed on first publish ─────────────
-
-// Deliberately after the build: the networks fetch the permalink to make a
-// preview card, so a copy created before the page is on disk links to a 404.
-// The post page shows the copies it made, though, so a syndication that
-// recorded a URL leaves the page just written a version behind — rebuild it.
-// Only post.php renders these URLs; the feeds and index don't, so nothing else
-// needs the second pass.
-if ($status === 'published') {
-    $syndicationBefore = [$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url];
-    $syndication->publish($post);
-
-    if ([$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url] !== $syndicationBefore) {
-        $builder->buildPost($post);
-    }
+    $publisher->syndicateAfterBuild($post);
 }
 
 // ── Activity log ────────────────────────────────────────────────────────────

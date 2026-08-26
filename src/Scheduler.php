@@ -122,31 +122,20 @@ final class Scheduler
     {
         $promotedIds = Post::promoteScheduled($this->db);
 
+        $publisher = new PostPublisher($this->db, $this->builder, $this->syndication, $this->activityLog);
+
         foreach ($promotedIds as $id) {
             $post = Post::findById($this->db, $id);
             if ($post === null) {
                 continue;
             }
 
-            // buildPost() rebuilds taxonomy archives for the post's own terms.
-            $this->builder->buildPost($post);
-            $prev = Post::findPrev($this->db, $post);
-            if ($prev) $this->builder->buildPost($prev);
-            $next = Post::findNext($this->db, $post);
-            if ($next) $this->builder->buildPost($next);
-
-            // Syndicate after the build, not before: both networks fetch the
-            // permalink to make a preview card, and the page has only just
-            // reached the disk. The post page shows the copies it made, so a
-            // syndication that recorded a URL leaves the page a version behind
-            // — rebuild it. Only post.php renders these URLs, so the shared
-            // pages below need no second pass.
-            $syndicationBefore = [$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url];
-            $this->syndication->publish($post);
-
-            if ([$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url] !== $syndicationBefore) {
-                $this->builder->buildPost($post);
-            }
+            // A scheduled post has never been on disk, so there is no old
+            // position to vacate — nothing to snapshot, only somewhere to
+            // arrive. deferShared because the shared pages are the same pages
+            // for every post in this loop; they are rebuilt once below.
+            $publisher->rebuildAfterSave($post, $publisher->snapshotOfNothing(), deferShared: true);
+            $publisher->syndicateAfterBuild($post);
 
             // Scheduled publishes were the one way a post could go live without
             // leaving a trace in Settings → Logs.

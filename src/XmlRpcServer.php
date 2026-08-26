@@ -30,6 +30,7 @@ class XmlRpcServer
     private string $timezone;
 
     private Syndication $syndication;
+    private ?PostPublisher $publisher = null;
 
     public function __construct(
         private Database $db,
@@ -43,6 +44,15 @@ class XmlRpcServer
         $this->timezone        = $db->getSetting('timezone', '');
 
         $this->syndication = new Syndication($db, $config);
+    }
+
+    /**
+     * What a save entails, shared with every other write path. Lazy because
+     * most of the ~40 verbs this class dispatches never write a post.
+     */
+    private function publisher(): PostPublisher
+    {
+        return $this->publisher ??= new PostPublisher($this->db, $this->builder, $this->syndication);
     }
 
     /**
@@ -135,7 +145,7 @@ class XmlRpcServer
                 $this->xmlrpc_save_terms($post, $struct);
                 $this->rebuildPost($post, $wasPublished, $before);
                 $this->syndicatePost($post);
-                $this->resyndicatePost($post, $wasPublished);
+                $this->resyndicatePost($post, $before);
 
                 echo XmlRpc::encodeResponse(true);
                 break;
@@ -148,20 +158,7 @@ class XmlRpcServer
                 if ($post === null) {
                     $this->fault(404, 'Post not found.');
                 }
-                $wasPublished = $post->status === 'published';
-                $prevNeighbor = $wasPublished ? Post::findPrev($this->db, $post) : null;
-                $nextNeighbor = $wasPublished ? Post::findNext($this->db, $post) : null;
-                // Before the row goes: the ids of the syndicated copies live on it.
-                $this->syndication->remove($post);
-                $post->delete();
-                // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
-                $post->status = 'draft';
-                $this->builder->buildPost($post);
-                if ($wasPublished) {
-                    if ($prevNeighbor) $this->builder->buildPost($prevNeighbor);
-                    if ($nextNeighbor) $this->builder->buildPost($nextNeighbor);
-                    $this->builder->rebuildSharedResources();
-                }
+                $this->publisher()->deletePost($post);
                 echo XmlRpc::encodeResponse(true);
                 break;
 
@@ -601,7 +598,7 @@ class XmlRpcServer
                 $this->xmlrpc_save_terms($post, $struct);
                 $this->rebuildPost($post, $wasPublished, $before);
                 $this->syndicatePost($post);
-                $this->resyndicatePost($post, $wasPublished);
+                $this->resyndicatePost($post, $before);
                 echo XmlRpc::encodeResponse(true);
                 break;
 
@@ -631,20 +628,7 @@ class XmlRpcServer
                 if ($post === null) {
                     $this->fault(404, 'Post not found.');
                 }
-                $wasPublished = $post->status === 'published';
-                $prevNeighbor = $wasPublished ? Post::findPrev($this->db, $post) : null;
-                $nextNeighbor = $wasPublished ? Post::findNext($this->db, $post) : null;
-                // Before the row goes: the ids of the syndicated copies live on it.
-                $this->syndication->remove($post);
-                $post->delete();
-                // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
-                $post->status = 'draft';
-                $this->builder->buildPost($post);
-                if ($wasPublished) {
-                    if ($prevNeighbor) $this->builder->buildPost($prevNeighbor);
-                    if ($nextNeighbor) $this->builder->buildPost($nextNeighbor);
-                    $this->builder->rebuildSharedResources();
-                }
+                $this->publisher()->deletePost($post);
                 echo XmlRpc::encodeResponse(true);
                 break;
 
@@ -1182,8 +1166,7 @@ class XmlRpcServer
     }
 
     /**
-     * Syndicate a newly-published post to Mastodon and/or Bluesky.
-     * Only fires when status = 'published' and the post has not already been shared.
+     * Syndicate a newly-published post.
      *
      * **Call this after rebuildPost(), never before.** Mastodon fetches the
      * permalink to build its preview card exactly once, seconds after the
@@ -1191,7 +1174,8 @@ class XmlRpcServer
      * the OG image on disk to upload as the card thumbnail. A post MarsEdit has
      * just created has neither until the build runs, so syndicating first cost
      * the Mastodon card outright and left the Bluesky card pictureless. All
-     * four call sites here had it backwards until 1.21.2.
+     * four call sites here had it backwards until 1.21.2 — which is exactly why
+     * the sequence itself now lives in PostPublisher rather than here.
      */
     private function syndicatePost(Post $post): void
     {
@@ -1199,28 +1183,18 @@ class XmlRpcServer
             return;
         }
 
-        $before = [$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url];
-        $this->syndication->publish($post);
-
-        // The post page lists the copies it made, so a syndication that
-        // recorded a URL leaves the page just built a version behind. Only
-        // post.php renders these URLs; feeds and index need no second pass.
-        if ([$post->mastodon_url, $post->bluesky_url, $post->pixelfed_url] !== $before) {
-            $this->builder->buildPost($post);
-        }
+        $this->publisher()->syndicateAfterBuild($post);
     }
 
     /**
      * Bring the syndicated copies into line with a post MarsEdit has just
      * changed, or take them down when the change pulled it off the public site.
+     *
+     * @param array<string,mixed> $before from xmlrpc_snapshot()
      */
-    private function resyndicatePost(Post $post, bool $wasPublished): void
+    private function resyndicatePost(Post $post, array $before): void
     {
-        if ($wasPublished && $post->status !== 'published') {
-            $this->syndication->remove($post);
-        } elseif ($post->status === 'published') {
-            $this->syndication->update($post);
-        }
+        $this->publisher()->resyndicateAfterBuild($post, $before);
     }
 
     /**
@@ -1400,77 +1374,35 @@ class XmlRpcServer
      * does not leave its previous URL serving the old HTML.
      */
     /**
-     * Everything about a post's *current* published position that the edit is
-     * about to destroy, for rebuildPost() to clean up afterwards.
+     * Everything about a post's current published position that the pending
+     * edit is about to destroy.
      *
-     * **Call this before the struct is applied and before terms are saved**, or
-     * it records the new state and there is nothing left to compare against.
-     * That is exactly how the term half went wrong: Post::saveTerms() refreshes
-     * $post->categories/->tags in memory, so reading them inside rebuildPost()
-     * — as this class did — yields the *new* set under a comment calling it the
-     * old one, making the added-terms diff a no-op and leaving the archive a
-     * post was removed from stale.
+     * **Call this before applyStruct() and before xmlrpc_save_terms().** Both
+     * halves are load-bearing, and the term half is how this class got it
+     * wrong: Post::saveTerms() refreshes $post->categories/->tags in memory, so
+     * the "old" ids read here afterwards were the new ones, and the diff that
+     * was meant to rebuild the vacated archive compared the new set against
+     * itself.
      *
-     * @return array{dir:?string, neighbours:Post[], catIds:int[], tagIds:int[]}
+     * @return array<string,mixed>
      */
     private function xmlrpc_snapshot(Post $post, bool $wasPublished): array
     {
-        if (!$wasPublished) {
-            return ['dir' => null, 'neighbours' => [], 'catIds' => [], 'tagIds' => []];
-        }
-
-        return [
-            'dir'        => $this->builder->postOutputDir($post->published_at, $post->slug),
-            'neighbours' => array_values(array_filter([
-                Post::findPrev($this->db, $post),
-                Post::findNext($this->db, $post),
-            ])),
-            'catIds'     => array_map('intval', array_column($post->categories, 'id')),
-            'tagIds'     => array_map('intval', array_column($post->tags, 'id')),
-        ];
+        return $wasPublished
+            ? $this->publisher()->snapshot($post)
+            : $this->publisher()->snapshotOfNothing();
     }
 
     /**
-     * @param array{dir?:?string, neighbours?:Post[], catIds?:int[], tagIds?:int[]} $before
-     *        from xmlrpc_snapshot(). Empty for a create, which vacates nothing.
+     * @param array<string,mixed> $before from xmlrpc_snapshot(). Empty for a
+     *        create, which vacates nothing.
      */
     private function rebuildPost(Post $post, bool $wasPublished = false, array $before = []): void
     {
-        $this->builder->removeVacatedPostOutput($before['dir'] ?? null, $post);
-
-        if ($post->status === 'published' || $wasPublished) {
-            $this->builder->buildPost($post);
-
-            // Both positions, each post once. A post that moves in the timeline
-            // leaves the pair it used to sit between still linking to where it
-            // was; on an edit that does not move it these collapse to the same
-            // two posts, which is what the de-duplication is for.
-            $built = [];
-            $newNeighbours = [Post::findPrev($this->db, $post), Post::findNext($this->db, $post)];
-            foreach ([...($before['neighbours'] ?? []), ...$newNeighbours] as $neighbour) {
-                if ($neighbour && $neighbour->id !== $post->id && !isset($built[$neighbour->id])) {
-                    $this->builder->buildPost($neighbour);
-                    $built[$neighbour->id] = true;
-                }
-            }
-
-            $this->builder->rebuildSharedResources();
-
-            // buildPost() covers the terms the post holds *now*. The ones it was
-            // just removed from still show its card until they are rebuilt too,
-            // so the archive pass is over the union of before and after.
-            $newCatIds = array_map('intval', array_column($post->categories, 'id'));
-            $newTagIds = array_map('intval', array_column($post->tags, 'id'));
-            foreach (array_diff($before['catIds'] ?? [], $newCatIds) as $catId) {
-                $this->builder->buildCategoryArchive((int) $catId);
-            }
-            foreach (array_diff($before['tagIds'] ?? [], $newTagIds) as $tagId) {
-                $this->builder->buildTagArchive((int) $tagId);
-            }
-        } else {
-            // Draft/scheduled save — no public file needed.
-            $this->builder->buildPost($post);
-        }
+        $this->publisher()->rebuildAfterSave(
+            $post,
+            $before !== [] ? $before : $this->publisher()->snapshotOfNothing(),
+        );
     }
 
     // ── Taxonomy helpers ──────────────────────────────────────────────────────────

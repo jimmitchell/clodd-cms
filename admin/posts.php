@@ -13,20 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     $auth->verifyCsrf($_POST['csrf_token'] ?? '');
     $post = Post::findById($db, (int) ($_POST['id'] ?? 0));
     if ($post) {
-        $wasPublished = $post->status === 'published';
-        $prevNeighbor = $wasPublished ? Post::findPrev($db, $post) : null;
-        $nextNeighbor = $wasPublished ? Post::findNext($db, $post) : null;
-        // Before the row goes: the ids of the syndicated copies live on it.
-        $syndication->remove($post);
-        $post->delete();
-        // buildPost() removal path also rebuilds taxonomy archives for $post->categories.
-        $post->status = 'draft';
-        $builder->buildPost($post);
-        if ($wasPublished) {
-            if ($prevNeighbor) $builder->buildPost($prevNeighbor);
-            if ($nextNeighbor) $builder->buildPost($nextNeighbor);
-            $builder->rebuildSharedResources();
-        }
+        $publisher->deletePost($post);
     }
     header('Location: /admin/posts.php');
     exit;
@@ -37,13 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resto
     $auth->verifyCsrf($_POST['csrf_token'] ?? '');
     $post = Post::findById($db, (int) ($_POST['id'] ?? 0));
     if ($post && $post->deleted_at !== null) {
-        $post->restore();
-        if ($post->status === 'published') {
-            $builder->buildPost($post);
-            if ($p = Post::findPrev($db, $post)) $builder->buildPost($p);
-            if ($n = Post::findNext($db, $post)) $builder->buildPost($n);
-            $builder->rebuildSharedResources();
-        }
+        $publisher->restorePost($post);
     }
     header('Location: /admin/posts.php?status=deleted');
     exit;
