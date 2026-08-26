@@ -431,6 +431,17 @@ audio { width: 100%; }
     word-break: break-all;
 }
 
+/* The bookmark symbol is drawn (Font Awesome) where ♺, ♥ and ↩ are typed — see
+   Post::CONTEXT_ICONS. Sized in em and coloured by inheritance so it tracks
+   whatever line it lands on: the post page sets .875rem, a list card .8rem.
+   Cap height rather than em box, so it reads at the weight of the glyphs it
+   stands among instead of towering over them. */
+.post__context-icon {
+    height: .85em;
+    width: auto;
+    vertical-align: -.08em;
+}
+
 /* A titled post's featured image (u-featured) — between the header and the
    body.
 

@@ -676,6 +676,64 @@ PHP);
         );
     }
 
+    // ── The drawn context symbol ──────────────────────────────────────────────
+
+
+    /**
+     * The bookmark context is drawn on a page and typed in a status.
+     *
+     * ♺, ♥ and ↩ are characters, so they take the colour and weight of the line
+     * they sit on. Unicode offers nothing for a bookmark but 🔖, an emoji — full
+     * colour, emoji weight, beside three quiet glyphs — so the HTML renders Font
+     * Awesome's bookmark as inline SVG instead. Mastodon and Bluesky take
+     * characters, not markup, so `contextsText()` keeps the emoji.
+     *
+     * Both halves are pinned because either one alone looks like a leftover: an
+     * emoji in the HTML reads as a missed spot, and markup in a status would
+     * arrive as literal angle brackets.
+     */
+    public function testTheBookmarkSymbolIsDrawnInHtmlAndTypedInText(): void
+    {
+        $contexts = [['kind' => 'bookmark-of', 'url' => 'https://example.com/keep']];
+
+        $html = Post::contextsHtml($contexts);
+        $this->assertStringContainsString('post__context-icon', $html, 'The page must draw the bookmark, not type it.');
+        $this->assertStringNotContainsString('🔖', $html);
+
+        $this->assertSame('🔖 Bookmarked https://example.com/keep', Post::contextsText($contexts));
+    }
+
+    /**
+     * And it is drawn in the reader's terms, not its own.
+     *
+     * The icon lands on a `.post__context` line that the post page sets to
+     * .875rem and a list card to .8rem, both in `--color-muted`. A fill or a
+     * pixel size baked into the markup would hold still while the line around it
+     * moved — most visibly in dark mode, where a hard-coded colour is the one
+     * thing on the line that does not invert.
+     */
+    public function testTheDrawnSymbolInheritsTheLinesColourAndSize(): void
+    {
+        $html = Post::contextsHtml([['kind' => 'bookmark-of', 'url' => 'https://example.com/keep']]);
+        $this->assertStringContainsString('fill="currentColor"', $html);
+        $this->assertDoesNotMatchRegularExpression(
+            '/<svg[^>]*\b(width|height)="\d/',
+            $html,
+            'The icon carries a pixel size, so it will not track the line it sits on.'
+        );
+
+        $css = file_get_contents(dirname(__DIR__) . '/theme.css');
+        $this->assertNotFalse($css);
+        $css = preg_replace('!/\*.*?\*/!s', '', $css) ?? $css;
+
+        $this->assertMatchesRegularExpression(
+            '/\.post__context-icon\s*\{[^}]*height:\s*[\d.]+em/',
+            $css,
+            'theme.css must size .post__context-icon in em, so it scales with the line.'
+        );
+    }
+
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Put a file in the media directory so localPath() can resolve it. */

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.39.0] — 2026-08-26
+
+No schema change.
+
+### Changed
+
+- **The bookmark context line is drawn rather than typed.** A linked post opens with "Bookmarked example.com/…", and the symbol beside it was 🔖 — the only emoji in a set of three characters. ♺, ♥ and ↩ are drawn by the reader's own font, so they arrive in `--color-muted` at the size of the line; an emoji arrives as whatever full-colour picture the platform ships, at emoji weight, and in dark mode it is the one thing on the line that does not invert. Unicode has no plain bookmark glyph to swap it for, so `Post::CONTEXT_ICONS` now carries Font Awesome Free 6.7.2's solid bookmark as inline SVG, filled with `currentColor` and sized in `em` by `.post__context-icon`. It follows the line onto a list card, which sets .8rem where the post page sets .875rem.
+
+  Only the HTML rendering changed. `Post::contextsText()` still takes 🔖 from `CONTEXT_LABELS`, because Mastodon and Bluesky are handed characters and markup would arrive there as literal angle brackets — `BuilderOutputTest::testTheBookmarkSymbolIsDrawnInHtmlAndTypedInText()` pins both halves, since either one alone reads as a leftover. A feed reader that strips SVG leaves the line reading "Bookmarked example.com/…", which is the whole meaning: the symbol is `aria-hidden` on the site for the same reason.
+
+---
+
 ## [1.38.2] — 2026-08-26
 
 No schema change.

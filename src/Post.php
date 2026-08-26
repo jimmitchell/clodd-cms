@@ -997,6 +997,33 @@ class Post
     ];
 
     /**
+     * Context symbols that are drawn rather than typed, as inline SVG.
+     *
+     * ♺, ♥ and ↩ are characters: the reader's own font draws them, at the muted
+     * colour and weight of the line they sit on. Unicode has no bookmark among
+     * them — 🔖 is an emoji, so it arrives as whatever full-colour picture the
+     * platform ships, at emoji weight, beside three quiet glyphs. This one is
+     * drawn instead: Font Awesome Free 6.7.2's solid bookmark (icons CC BY 4.0),
+     * inlined so it inherits `currentColor` and the line's size like the others.
+     *
+     * Only the HTML rendering uses this. `contextsText()` still takes the symbol
+     * from CONTEXT_LABELS, because Mastodon and Bluesky are handed characters,
+     * not markup — which is why 🔖 stays in the table above rather than being
+     * replaced by it.
+     *
+     * A feed reader that strips SVG leaves the line reading "Bookmarked
+     * example.com", which is the whole meaning: the symbol is `aria-hidden` on
+     * the site for the same reason.
+     */
+    private const CONTEXT_ICONS = [
+        'bookmark-of' =>
+            '<svg class="post__context-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"'
+            . ' aria-hidden="true" focusable="false"><path fill="currentColor" d="M0 48V487.7C0 501.1'
+            . ' 10.9 512 24.3 512c5 0 9.9-1.5 14-4.4L192 400 345.7 507.6c4.1 2.9 9 4.4 14 4.4c13.4 0'
+            . ' 24.3-10.9 24.3-24.3V48c0-26.5-21.5-48-48-48H48C21.5 0 0 21.5 0 48z"/></svg>',
+    ];
+
+    /**
      * Render context lines ("↩ In reply to <a>…</a>") with mf2 u-* classes.
      * Shared by the feed generators and templates.
      *
@@ -1005,12 +1032,12 @@ class Post
     public static function contextsHtml(array $contexts): string
     {
         $html = '';
-        foreach (self::sortedContexts($contexts) as [$symbol, $verb, $class, $url]) {
+        foreach (self::sortedContexts($contexts) as [$symbol, $verb, $class, $url, $kind]) {
             $text = preg_replace('#^https?://#', '', $url);
             if (mb_strlen($text) > 60) {
                 $text = mb_substr($text, 0, 57) . '…';
             }
-            $html .= '<p class="post__context"><span aria-hidden="true">' . $symbol . '</span> ' . $verb
+            $html .= '<p class="post__context">' . self::symbolHtml($kind, $symbol) . ' ' . $verb
                 . ' <a class="' . $class . '" href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8')
                 . '" rel="nofollow">' . htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . '</a></p>' . "\n";
         }
@@ -1041,7 +1068,7 @@ class Post
      * bookmark), each resolved to the symbol, verb, class and URL to show.
      *
      * @param  array<array<string,string>> $contexts
-     * @return array<array{0:string,1:string,2:string,3:string}>
+     * @return array<array{0:string,1:string,2:string,3:string,4:string}>
      */
     private static function sortedContexts(array $contexts): array
     {
@@ -1057,9 +1084,19 @@ class Post
                 continue;
             }
             [$symbol, $verb, $class] = self::CONTEXT_LABELS[$kind];
-            $resolved[] = [$symbol, $verb, $class, $url];
+            $resolved[] = [$symbol, $verb, $class, $url, $kind];
         }
         return $resolved;
+    }
+
+    /**
+     * The symbol as it goes on a page: the drawn icon where there is one, the
+     * character otherwise. Decorative either way — the verb beside it carries
+     * the meaning, so both are hidden from a screen reader.
+     */
+    private static function symbolHtml(string $kind, string $symbol): string
+    {
+        return self::CONTEXT_ICONS[$kind] ?? '<span aria-hidden="true">' . $symbol . '</span>';
     }
 
     // ── Build helpers ─────────────────────────────────────────────────────────
