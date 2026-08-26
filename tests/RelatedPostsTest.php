@@ -7,7 +7,6 @@ namespace CMS\Tests;
 use CMS\Builder;
 use CMS\Database;
 use CMS\Post;
-use PHPUnit\Framework\TestCase;
 
 /**
  * The Related posts block: what it selects, and when it is rebuilt.
@@ -18,45 +17,16 @@ use PHPUnit\Framework\TestCase;
  * output depend on *other* posts — which is precisely what buildPost()'s
  * content_hash short-circuit assumes never happens.
  */
-final class RelatedPostsTest extends TestCase
+final class RelatedPostsTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-    private string $root;
     private Builder $builder;
-    /** @var array{paths: array{output: string, templates: string, content: string}} */
-    private array $config;
 
     protected function setUp(): void
     {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_rel_') . '.db';
-        $this->db     = new Database($this->dbPath);
-
-        // See BuilderOutputTest: isInsideOutputDir() compares a resolved root
-        // against a lexically normalised path, so the root must be realpath()ed.
-        $this->root = realpath(sys_get_temp_dir()) . '/clodd_rel_' . bin2hex(random_bytes(6));
-        mkdir($this->root . '/output', 0775, true);
-
-        $this->config = [
-            'paths' => [
-                'output'    => $this->root . '/output',
-                'templates' => $this->root . '/templates',
-                'content'   => $this->root . '/content',
-            ],
-        ];
-
+        parent::setUp();
         $this->builder = new Builder($this->config, $this->db);
     }
 
-    protected function tearDown(): void
-    {
-        $this->rmTree($this->root);
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
 
     // ── Selection ─────────────────────────────────────────────────────────────
 
@@ -398,18 +368,4 @@ PHP);
         return $this->db->insert('tags', ['name' => ucfirst($slug), 'slug' => $slug]);
     }
 
-    private function rmTree(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        foreach (scandir($dir) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-            $path = $dir . '/' . $entry;
-            is_dir($path) ? $this->rmTree($path) : unlink($path);
-        }
-        rmdir($dir);
-    }
 }

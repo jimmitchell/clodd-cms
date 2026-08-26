@@ -8,7 +8,6 @@ use CMS\Builder;
 use CMS\Database;
 use CMS\OgImage;
 use CMS\Post;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Teardown of a post's generated output.
@@ -19,47 +18,16 @@ use PHPUnit\Framework\TestCase;
  * prunes an empty directory, and og.png kept it non-empty). These tests pin
  * the invariant that matters: nothing generated for a post outlives it.
  */
-final class BuilderOutputTest extends TestCase
+final class BuilderOutputTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-    private string $root;
     private Builder $builder;
-    /** @var array{paths: array{output: string, templates: string, content: string}} */
-    private array $config;
 
     protected function setUp(): void
     {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-
-        // realpath() the temp dir: isInsideOutputDir() resolves the output root
-        // but normalises the candidate path lexically, so a symlinked root (macOS
-        // /var/folders -> /private/var/folders) fails the comparison.
-        $this->root = realpath(sys_get_temp_dir()) . '/clodd_out_' . bin2hex(random_bytes(6));
-        mkdir($this->root . '/output', 0775, true);
-
-        $this->config = [
-            'paths' => [
-                'output'    => $this->root . '/output',
-                'templates' => $this->root . '/templates',
-                'content'   => $this->root . '/content',
-            ],
-        ];
-
+        parent::setUp();
         $this->builder = new Builder($this->config, $this->db);
     }
 
-    protected function tearDown(): void
-    {
-        $this->rmTree($this->root);
-
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
 
     // ── The regression ────────────────────────────────────────────────────────
 
@@ -752,17 +720,6 @@ PHP);
         return $post;
     }
 
-    private function rmTree(string $path): void
-    {
-        if (!is_dir($path)) {
-            return;
-        }
-        foreach (array_diff(scandir($path) ?: [], ['.', '..']) as $entry) {
-            $child = $path . '/' . $entry;
-            is_dir($child) ? $this->rmTree($child) : unlink($child);
-        }
-        rmdir($path);
-    }
 
     /**
      * Every template gets $assetVersion, whoever renders it.

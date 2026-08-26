@@ -91,14 +91,10 @@ $flashMsg  = $flash['message'] ?? '';
 $flashType = $flash['type']    ?? 'success';
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Posts — <?= Helpers::e($siteTitle) ?></title>
-    <link rel="stylesheet" href="/admin/assets/admin.css">
-</head>
+<?php
+$adminTitle = 'Posts — ' . $siteTitle;
+require __DIR__ . '/partials/head.php';
+?>
 <body class="admin-page">
 
 <?php require __DIR__ . '/partials/nav.php'; ?>
@@ -237,6 +233,6 @@ $flashType = $flash['type']    ?? 'success';
     <?php $_paginTotal = $totalPosts; $_paginLabel = 'post'; ?>
     <?php require __DIR__ . '/partials/pagination.php'; ?>
 </main>
-<script src="/admin/assets/admin.js"></script>
+<script src="/admin/assets/admin.js?v=<?= rawurlencode(CMS_VERSION) ?>"></script>
 </body>
 </html>

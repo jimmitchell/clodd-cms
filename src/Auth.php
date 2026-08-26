@@ -151,12 +151,16 @@ class Auth
      * True when the session is authenticated *and* has not gone idle; false
      * otherwise, having destroyed an expired one on the way out.
      *
-     * This is the single copy of the idle-timeout rule. It used to live inside
-     * check(), which redirects — so the endpoints that answer differently when
-     * signed out could not reuse it and called isAuthenticated() instead,
+     * This is the single copy of the idle-timeout rule, and now the only way to
+     * ask the question. It used to live inside check(), which redirects — so the
+     * endpoints that answer differently when signed out could not reuse it and
+     * reached for a bare `!empty($_SESSION['authenticated'])` check instead,
      * skipping the timeout entirely. indieauth.php did exactly that on both the
      * consent render and the approval POST, which are the two requests that mint
      * `create`-scope tokens. Callers keep their own response; the rule is shared.
+     *
+     * The method that offered that shortcut, isAuthenticated(), was removed in
+     * 1.38.0 rather than left as a correct-looking alternative to this one.
      *
      * Destroying the session here rather than merely reporting false means a
      * caller that ignores the return value still cannot act on a dead session.
@@ -181,16 +185,6 @@ class Auth
         $_SESSION['last_seen'] = time();
 
         return true;
-    }
-
-    /**
-     * Whether the session carries an authenticated flag, ignoring the idle
-     * timeout. Prefer sessionIsLive() — this answers a narrower question and is
-     * only correct where expiry is irrelevant.
-     */
-    public function isAuthenticated(): bool
-    {
-        return !empty($_SESSION['authenticated']);
     }
 
     // ── CSRF ──────────────────────────────────────────────────────────────────

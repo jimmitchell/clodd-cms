@@ -71,7 +71,7 @@ class MicropubAuth
      * Extract the bearer token from the Authorization header or the form body.
      * Errors 400 when both are supplied (RFC 6750 §2: one method per request).
      */
-    public static function extractBearerToken(): string
+    private static function extractBearerToken(): string
     {
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
         if ($header === '' && function_exists('apache_request_headers')) {

@@ -18,14 +18,14 @@ namespace CMS;
 final class Byline
 {
     /** Stable identifier for the site author. */
-    public static function personId(string $siteUrl): string
+    private static function personId(string $siteUrl): string
     {
         $base = rtrim($siteUrl, '/');
         return ($base !== '' ? $base : 'urn:byline:author') . '/#author';
     }
 
     /** Stable identifier for the site as an org. */
-    public static function orgId(string $siteUrl): string
+    private static function orgId(string $siteUrl): string
     {
         $base = rtrim($siteUrl, '/');
         return ($base !== '' ? $base : 'urn:byline:org') . '/#org';

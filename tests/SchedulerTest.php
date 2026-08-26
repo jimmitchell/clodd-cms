@@ -9,7 +9,6 @@ use CMS\Database;
 use CMS\Post;
 use CMS\Scheduler;
 use CMS\Syndication;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Scheduled posts going live.
@@ -20,36 +19,20 @@ use PHPUnit\Framework\TestCase;
  * found again — the next request's promotion query no longer matched them.
  * These tests pin promotion and the build as one step.
  */
-final class SchedulerTest extends TestCase
+final class SchedulerTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-    private string $root;
     private Builder $builder;
     private Scheduler $scheduler;
 
     protected function setUp(): void
     {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-
-        $this->root = realpath(sys_get_temp_dir()) . '/clodd_out_' . bin2hex(random_bytes(6));
-        mkdir($this->root . '/output', 0775, true);
-        mkdir($this->root . '/templates', 0775, true);
-        file_put_contents($this->root . '/templates/post.php', '<h1><?= $post->title ?></h1>');
-
-        $config = [
-            'paths' => [
-                'output'    => $this->root . '/output',
-                'templates' => $this->root . '/templates',
-                'content'   => $this->root . '/content',
-            ],
-        ];
+        parent::setUp();
+        $this->stubTemplate('post.php', '<h1><?= $post->title ?></h1>');
 
         // rebuildSharedResources() wants the index, feed and sitemap templates,
         // none of which this is about. Everything else runs for real, so the
         // assertions are on files the builder genuinely wrote.
-        $this->builder = new class ($config, $this->db) extends Builder {
+        $this->builder = new class ($this->config, $this->db) extends Builder {
             public int $sharedRebuilds = 0;
 
             public function rebuildSharedResources(): void
@@ -60,19 +43,9 @@ final class SchedulerTest extends TestCase
 
         // No mastodon_* or bluesky_* settings in this database, so publish() finds
         // no configured client and makes no network call.
-        $this->scheduler = new Scheduler($this->db, $this->builder, new Syndication($this->db, $config));
+        $this->scheduler = new Scheduler($this->db, $this->builder, new Syndication($this->db, $this->config));
     }
 
-    protected function tearDown(): void
-    {
-        $this->rmTree($this->root);
-
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
 
     // ── The regression ────────────────────────────────────────────────────────
 
@@ -333,15 +306,4 @@ final class SchedulerTest extends TestCase
         return $post;
     }
 
-    private function rmTree(string $path): void
-    {
-        if (!is_dir($path)) {
-            return;
-        }
-        foreach (array_diff(scandir($path) ?: [], ['.', '..']) as $entry) {
-            $child = $path . '/' . $entry;
-            is_dir($child) ? $this->rmTree($child) : unlink($child);
-        }
-        rmdir($path);
-    }
 }

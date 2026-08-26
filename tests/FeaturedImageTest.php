@@ -6,7 +6,6 @@ namespace CMS\Tests;
 
 use CMS\Database;
 use CMS\Post;
-use PHPUnit\Framework\TestCase;
 
 /**
  * A titled post's featured image.
@@ -18,26 +17,8 @@ use PHPUnit\Framework\TestCase;
  * three limits that keep it from doing damage: it only fires on a titled post,
  * only when the picture actually leads the body, and never over a stored value.
  */
-final class FeaturedImageTest extends TestCase
+final class FeaturedImageTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-
-    protected function setUp(): void
-    {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_feat_') . '.db';
-        $this->db     = new Database($this->dbPath);
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
-
     private function makePost(string $content, string $postKind = 'standard', string $title = 'A post'): Post
     {
         $post               = new Post($this->db);

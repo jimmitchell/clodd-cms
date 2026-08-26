@@ -6,7 +6,6 @@ namespace CMS\Tests;
 
 use CMS\Auth;
 use CMS\Database;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Lockout scoping and CSRF verification.
@@ -15,31 +14,15 @@ use PHPUnit\Framework\TestCase;
  * without a scope, a client looping on a stale Micropub token locks the owner
  * out of the admin login.
  */
-final class AuthTest extends TestCase
+final class AuthTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-
     /** @var array<string,mixed> */
-    private array $config = [
+    private array $authConfig = [
         'admin'    => ['username' => 'admin', 'password_hash' => '', 'session_lifetime' => 3600],
         'security' => ['max_login_attempts' => 5, 'lockout_minutes' => 15],
     ];
 
-    protected function setUp(): void
-    {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_auth_') . '.db';
-        $this->db     = new Database($this->dbPath);
-    }
 
-    protected function tearDown(): void
-    {
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
 
     // ── Lockout scoping ───────────────────────────────────────────────────────
 
@@ -134,7 +117,7 @@ final class AuthTest extends TestCase
      */
     public function testFailedLoginDoesNotRecordAUsernameKeyedRow(): void
     {
-        $auth = new Auth($this->config, $this->db);
+        $auth = new Auth($this->authConfig, $this->db);
         $auth->login('admin', 'wrong-password');
 
         $rows = $this->db->select("SELECT ip FROM login_attempts");
@@ -156,7 +139,7 @@ final class AuthTest extends TestCase
      */
     public function testEmptyTokenOnBothSidesIsRejected(): void
     {
-        $auth = new Auth($this->config, $this->db);
+        $auth = new Auth($this->authConfig, $this->db);
         $_SESSION = [];
 
         $this->assertFalse($auth->isCsrfValid(''));
@@ -164,7 +147,7 @@ final class AuthTest extends TestCase
 
     public function testTokenWithoutASessionTokenIsRejected(): void
     {
-        $auth = new Auth($this->config, $this->db);
+        $auth = new Auth($this->authConfig, $this->db);
         $_SESSION = [];
 
         $this->assertFalse($auth->isCsrfValid('anything'));
@@ -172,7 +155,7 @@ final class AuthTest extends TestCase
 
     public function testEmptySubmittedTokenIsRejected(): void
     {
-        $auth = new Auth($this->config, $this->db);
+        $auth = new Auth($this->authConfig, $this->db);
         $_SESSION = ['csrf_token' => 'a-real-token'];
 
         $this->assertFalse($auth->isCsrfValid(''));
@@ -180,7 +163,7 @@ final class AuthTest extends TestCase
 
     public function testMismatchedTokenIsRejected(): void
     {
-        $auth = new Auth($this->config, $this->db);
+        $auth = new Auth($this->authConfig, $this->db);
         $_SESSION = ['csrf_token' => 'a-real-token'];
 
         $this->assertFalse($auth->isCsrfValid('a-different-token'));
@@ -188,7 +171,7 @@ final class AuthTest extends TestCase
 
     public function testMatchingTokenIsAccepted(): void
     {
-        $auth = new Auth($this->config, $this->db);
+        $auth = new Auth($this->authConfig, $this->db);
         $_SESSION = ['csrf_token' => 'a-real-token'];
 
         $this->assertTrue($auth->isCsrfValid('a-real-token'));
@@ -198,13 +181,13 @@ final class AuthTest extends TestCase
 
     /**
      * The gap this covers: the timeout used to live only inside check(), so the
-     * endpoints that answer differently when signed out called isAuthenticated()
+     * endpoints that answer differently when signed out read the session flag
      * and skipped it. indieauth.php did that on both the consent render and the
      * approval POST — the two requests that mint `create`-scope tokens.
      */
     public function testSessionIsLiveRejectsAnIdleSession(): void
     {
-        $auth = new Auth($this->config, $this->db);   // session_lifetime = 3600
+        $auth = new Auth($this->authConfig, $this->db);   // session_lifetime = 3600
         $_SESSION = ['authenticated' => true, 'last_seen' => time() - 3601];
 
         $this->assertFalse($auth->sessionIsLive());
@@ -215,7 +198,7 @@ final class AuthTest extends TestCase
 
     public function testSessionIsLiveAcceptsAnActiveSessionAndRefreshesLastSeen(): void
     {
-        $auth = new Auth($this->config, $this->db);
+        $auth = new Auth($this->authConfig, $this->db);
         $_SESSION = ['authenticated' => true, 'last_seen' => time() - 60];
 
         $this->assertTrue($auth->sessionIsLive());
@@ -224,7 +207,7 @@ final class AuthTest extends TestCase
 
     public function testSessionIsLiveRejectsAnUnauthenticatedSession(): void
     {
-        $auth = new Auth($this->config, $this->db);
+        $auth = new Auth($this->authConfig, $this->db);
         $_SESSION = [];
 
         $this->assertFalse($auth->sessionIsLive());
@@ -233,7 +216,7 @@ final class AuthTest extends TestCase
     /** A zero lifetime disables the timeout rather than expiring everything. */
     public function testSessionIsLiveTreatsAZeroLifetimeAsNoTimeout(): void
     {
-        $config = $this->config;
+        $config = $this->authConfig;
         $config['admin']['session_lifetime'] = 0;
         $auth = new Auth($config, $this->db);
         $_SESSION = ['authenticated' => true, 'last_seen' => time() - 999999];
@@ -252,7 +235,7 @@ final class AuthTest extends TestCase
      */
     public function testRegistrationOptionsRequireUserVerification(): void
     {
-        $auth    = new Auth($this->config, $this->db);
+        $auth    = new Auth($this->authConfig, $this->db);
         $options = json_decode($auth->passkeyRegisterOptions(), true);
 
         $this->assertSame(
@@ -263,7 +246,7 @@ final class AuthTest extends TestCase
 
     public function testAuthenticationOptionsRequireUserVerification(): void
     {
-        $auth    = new Auth($this->config, $this->db);
+        $auth    = new Auth($this->authConfig, $this->db);
         $options = json_decode($auth->passkeyAuthOptions(), true);
 
         $this->assertSame('required', $options['publicKey']['userVerification'] ?? null);
@@ -398,6 +381,6 @@ final class AuthTest extends TestCase
 
     private function lockedOut(string $ip, string $scope): bool
     {
-        return Auth::isLockedOutIn($this->db, $this->config, $ip, $scope);
+        return Auth::isLockedOutIn($this->db, $this->authConfig, $ip, $scope);
     }
 }

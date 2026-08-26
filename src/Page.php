@@ -83,24 +83,6 @@ class Page
         }
     }
 
-    /**
-     * Children of $parentId, optionally filtered by status. Same ordering as findAll.
-     *
-     * @return self[]
-     */
-    public static function findChildren(Database $db, int $parentId, ?string $status = null): array
-    {
-        $order  = "ORDER BY CASE WHEN nav_order = 0 THEN 1 ELSE 0 END ASC, nav_order ASC, title ASC";
-        $sql    = "SELECT * FROM pages WHERE parent_id = :pid"
-                . ($status !== null ? " AND status = :status" : "")
-                . " $order";
-        $params = ['pid' => $parentId];
-        if ($status !== null) {
-            $params['status'] = $status;
-        }
-        return array_map(fn($row) => self::fromRow($db, $row), $db->select($sql, $params));
-    }
-
     public static function hasChildren(Database $db, int $id): bool
     {
         $row = $db->selectOne("SELECT 1 FROM pages WHERE parent_id = :pid LIMIT 1", ['pid' => $id]);
@@ -154,13 +136,6 @@ class Page
         );
     }
 
-    public function needsRebuild(): bool
-    {
-        if ($this->built_at === null || $this->content_hash === null) {
-            return true;
-        }
-        return strtotime($this->updated_at) > strtotime($this->built_at);
-    }
 
     // ── Private ───────────────────────────────────────────────────────────────
 

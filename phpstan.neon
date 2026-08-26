@@ -1,0 +1,37 @@
+# Static analysis for Clodd CMS.
+#
+# Baselined rather than clean: the point is that *new* code is checked, not that
+# a weekend is spent silencing findings in code that has been running in
+# production for a year. phpstan-baseline.neon holds what was already there;
+# anything you add has to pass on its own.
+#
+#   php composer analyse          check
+#   php composer analyse-baseline regenerate the baseline after a real cleanup
+#
+# The root-level entry points and admin/ are included deliberately. They are
+# plain scripts rather than autoloaded classes, and they are where most of the
+# request handling lives — leaving them out would check the tidy half only.
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    # The default 128M is not enough for this tree — analysing Builder and
+    # XmlRpcServer together exhausts it and the run dies mid-worker.
+    level: 5
+    paths:
+        - src
+        - admin
+        - bin
+        - tests
+        - micropub.php
+        - indieauth.php
+        - indieauth-metadata.php
+        - token.php
+        - media.php
+        - track.php
+    excludePaths:
+        analyse:
+            - admin/assets
+    # config.php is gitignored and machine-specific; it returns an array whose
+    # shape PHPStan cannot see, so every $config[...] read would be a finding.
+    treatPhpDocTypesAsCertain: false

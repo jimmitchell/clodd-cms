@@ -23,7 +23,9 @@ $navItems = [
     ],
 ];
 ?>
-<link rel="stylesheet" href="/admin/assets/font-awesome.min.css">
+<?php /* Font Awesome is linked by partials/head.php, not here. A stylesheet
+         emitted from inside <body> is discovered late and blocks rendering
+         mid-document, and three pages linked it in <head> as well. */ ?>
 <script>try{if(localStorage.getItem('cms_nav_collapsed')==='1')document.body.classList.add('nav-collapsed');}catch(e){}</script>
 <nav class="admin-nav" id="admin-nav">
     <div class="admin-nav__brand">

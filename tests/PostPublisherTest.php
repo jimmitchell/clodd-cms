@@ -8,7 +8,6 @@ use CMS\Builder;
 use CMS\Database;
 use CMS\Post;
 use CMS\PostPublisher;
-use PHPUnit\Framework\TestCase;
 
 /**
  * The one place that knows what publishing a post entails.
@@ -18,31 +17,17 @@ use PHPUnit\Framework\TestCase;
  * against the publisher rather than against any one caller precisely so that
  * adding a sixth entry point cannot reintroduce them.
  */
-final class PostPublisherTest extends TestCase
+final class PostPublisherTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-    private string $root;
     private PostPublisher $publisher;
     private Builder $builder;
 
     protected function setUp(): void
     {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
+        parent::setUp();
+        $this->stubTemplate('post.php', '<h1><?= $post->title ?></h1>');
 
-        $this->root = realpath(sys_get_temp_dir()) . '/clodd_out_' . bin2hex(random_bytes(6));
-        mkdir($this->root . '/output', 0775, true);
-        mkdir($this->root . '/templates', 0775, true);
-        file_put_contents($this->root . '/templates/post.php', '<h1><?= $post->title ?></h1>');
-
-        $config = ['paths' => [
-            'output'    => $this->root . '/output',
-            'templates' => $this->root . '/templates',
-            'content'   => $this->root . '/content',
-        ]];
-
-        $this->builder = new class ($config, $this->db) extends Builder {
+        $this->builder = new class ($this->config, $this->db) extends Builder {
             /** @var string[] */ public array $built = [];
             /** @var int[] */    public array $categoryArchives = [];
             /** @var int[] */    public array $tagArchives = [];
@@ -64,16 +49,6 @@ final class PostPublisherTest extends TestCase
         };
 
         $this->publisher = new PostPublisher($this->db, $this->builder);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->rmTree($this->root);
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
     }
 
     // ── Neighbours ────────────────────────────────────────────────────────────
@@ -365,31 +340,4 @@ final class PostPublisherTest extends TestCase
         $this->builder->feeds            = [];
     }
 
-    private function publishedPost(string $slug, string $publishedAt): Post
-    {
-        $post               = new Post($this->db);
-        $post->title        = ucfirst($slug);
-        $post->slug         = $slug;
-        $post->content      = 'Body of ' . $slug . '.';
-        $post->status       = 'published';
-        $post->published_at = $publishedAt;
-        $post->save();
-
-        return $post;
-    }
-
-    private function rmTree(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        $it = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($it as $f) {
-            $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
-        }
-        @rmdir($dir);
-    }
 }

@@ -1,6 +1,6 @@
 {
     "name": "clodd-cms/cms",
-    "version": "1.37.0",
+    "version": "1.38.0",
     "description": "A lightweight flat-file CMS with PHP admin panel and static HTML output",
     "type": "project",
     "require": {
@@ -22,12 +22,16 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "phpunit",
+        "lint": "find src admin bin tests templates *.php -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "analyse-baseline": "phpstan analyse --memory-limit=1G --generate-baseline=phpstan-baseline.neon"
     },
     "config": {
         "optimize-autoloader": true
     },
     "require-dev": {
-        "phpunit/phpunit": "^10"
+        "phpunit/phpunit": "^10",
+        "phpstan/phpstan": "^2.2"
     }
 }

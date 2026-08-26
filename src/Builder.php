@@ -433,7 +433,7 @@ class Builder
     /**
      * Write search.json — an array of published posts for client-side search.
      */
-    public function buildSearchIndex(): void
+    private function buildSearchIndex(): void
     {
         $posts   = Post::findAll($this->db, 'published');
         $siteUrl = rtrim($this->settings['site_url'] ?? '', '/');
@@ -510,7 +510,7 @@ class Builder
     /**
      * Write search/index.html — the static search results page.
      */
-    public function buildSearchPage(): void
+    private function buildSearchPage(): void
     {
         $rendered = $this->render('search.php', []);
         $this->writeFile($this->outputDir . '/search/index.html', $rendered);
@@ -519,7 +519,7 @@ class Builder
     /**
      * Render and write 404.html — the themed not-found page.
      */
-    public function build404(): void
+    private function build404(): void
     {
         $rendered = $this->render('404.php', []);
         $this->writeFile($this->outputDir . '/404.html', $rendered);

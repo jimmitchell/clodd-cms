@@ -9,7 +9,6 @@ use CMS\Helpers;
 use CMS\Page;
 use CMS\Post;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
 
 /**
  * The slug → path chain.
@@ -18,26 +17,8 @@ use PHPUnit\Framework\TestCase;
  * on-disk output path, so an unsanitised slug is an arbitrary-file-write
  * primitive. These tests pin every link in that chain.
  */
-final class SlugPathTest extends TestCase
+final class SlugPathTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-
-    protected function setUp(): void
-    {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
-
     // ── slugify ───────────────────────────────────────────────────────────────
 
     /** @return array<string, array{string, string}> */

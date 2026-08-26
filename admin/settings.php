@@ -31,17 +31,12 @@ $flashMsg  = $flash['message'] ?? '';
 $flashType = $flash['type']    ?? 'success';
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= Helpers::e($tabs[$activeTab]) ?> — <?= Helpers::e($pageTitle) ?> — <?= Helpers::e($siteTitle) ?></title>
-    <link rel="stylesheet" href="/admin/assets/admin.css">
-    <?php if ($activeTab === 'account'): ?>
-    <link rel="stylesheet" href="/admin/assets/font-awesome.min.css">
-    <?php endif; ?>
-</head>
+<?php
+// The account tab's conditional Font Awesome link is gone: the shared head
+// links it for every page carrying the nav, which this one does.
+$adminTitle = $tabs[$activeTab] . ' — ' . $pageTitle . ' — ' . $siteTitle;
+require __DIR__ . '/partials/head.php';
+?>
 <body class="admin-page">
 
 <?php require __DIR__ . '/partials/nav.php'; ?>
@@ -60,6 +55,6 @@ $flashType = $flash['type']    ?? 'success';
     <?php require __DIR__ . '/partials/settings/' . $activeTab . '.view.php'; ?>
 </main>
 
-<script src="/admin/assets/admin.js"></script>
+<script src="/admin/assets/admin.js?v=<?= rawurlencode(CMS_VERSION) ?>"></script>
 </body>
 </html>

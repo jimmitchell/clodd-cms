@@ -1,0 +1,979 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/analytics.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/analytics.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 11
+			path: admin/analytics.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/categories.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 7
+			path: admin/categories.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/categories.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 7
+			path: admin/categories.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 2
+			path: admin/dashboard.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/dashboard.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 5
+			path: admin/dashboard.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/dashboard.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 8
+			path: admin/dashboard.php
+
+		-
+			message: '#^Variable \$scheduler might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/dashboard.php
+
+		-
+			message: '#^If condition is always false\.$#'
+			identifier: if.alwaysFalse
+			count: 3
+			path: admin/index.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 21
+			path: admin/index.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/index.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/logout.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/media.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: admin/media.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 4
+			path: admin/media.php
+
+		-
+			message: '#^Variable \$config might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/media.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: admin/media.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/page-edit.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type CMS\\Page\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: admin/page-edit.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/page-edit.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 7
+			path: admin/page-edit.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 8
+			path: admin/page-edit.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 11
+			path: admin/page-edit.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/pages.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 4
+			path: admin/pages.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 4
+			path: admin/pages.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 6
+			path: admin/pages.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/partials/head.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/nav.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/nav.php
+
+		-
+			message: '#^Variable \$activeTab might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/page-tabs.php
+
+		-
+			message: '#^Variable \$basePath might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/page-tabs.php
+
+		-
+			message: '#^Variable \$tabs might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/page-tabs.php
+
+		-
+			message: '#^Variable \$_paginLabel might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/pagination.php
+
+		-
+			message: '#^Variable \$_paginTotal might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/pagination.php
+
+		-
+			message: '#^Variable \$_paginationBase might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/pagination.php
+
+		-
+			message: '#^Variable \$page might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/pagination.php
+
+		-
+			message: '#^Variable \$totalPages might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/pagination.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 6
+			path: admin/partials/settings/account.handler.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 13
+			path: admin/partials/settings/account.handler.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 6
+			path: admin/partials/settings/account.handler.php
+
+		-
+			message: '#^Variable \$csrf might not be defined\.$#'
+			identifier: variable.undefined
+			count: 8
+			path: admin/partials/settings/account.view.php
+
+		-
+			message: '#^Variable \$errors might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/account.view.php
+
+		-
+			message: '#^Variable \$setupMode might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/settings/account.view.php
+
+		-
+			message: '#^Variable \$setupQrSvg might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/account.view.php
+
+		-
+			message: '#^Variable \$setupSecret might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/account.view.php
+
+		-
+			message: '#^Variable \$totpEnabled might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/account.view.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/general.handler.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: admin/partials/settings/general.handler.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 4
+			path: admin/partials/settings/general.handler.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/settings/general.handler.php
+
+		-
+			message: '#^Variable \$csrf might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/general.view.php
+
+		-
+			message: '#^Variable \$errors might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/general.view.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 4
+			path: admin/partials/settings/logs.handler.php
+
+		-
+			message: '#^Variable \$fmtDate might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/settings/logs.view.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: admin/partials/settings/micropub.handler.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 6
+			path: admin/partials/settings/micropub.handler.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 6
+			path: admin/partials/settings/micropub.handler.php
+
+		-
+			message: '#^Variable \$csrf might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/settings/micropub.view.php
+
+		-
+			message: '#^Variable \$endpoint might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/micropub.view.php
+
+		-
+			message: '#^Variable \$errors might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/micropub.view.php
+
+		-
+			message: '#^Variable \$hasToken might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/settings/micropub.view.php
+
+		-
+			message: '#^Variable \$indieauthEndpoints might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/micropub.view.php
+
+		-
+			message: '#^Variable \$justIssued might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/micropub.view.php
+
+		-
+			message: '#^Variable \$siteUrl might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/settings/micropub.view.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/tools/export.handler.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/tools/export.handler.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 17
+			path: admin/partials/tools/export.handler.php
+
+		-
+			message: '#^Variable \$catCount might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/export.view.php
+
+		-
+			message: '#^Variable \$csrf might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/export.view.php
+
+		-
+			message: '#^Variable \$draftCount might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/export.view.php
+
+		-
+			message: '#^Variable \$exportPageCount might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/export.view.php
+
+		-
+			message: '#^Variable \$pageDraftCount might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/export.view.php
+
+		-
+			message: '#^Variable \$postCount might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/export.view.php
+
+		-
+			message: '#^Variable \$tagCount might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/export.view.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import-media.handler.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: admin/partials/tools/import-media.handler.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: admin/partials/tools/import-media.handler.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 7
+			path: admin/partials/tools/import-media.handler.php
+
+		-
+			message: '#^Variable \$csrf might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import-media.view.php
+
+		-
+			message: '#^Variable \$distinctExternal might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/partials/tools/import-media.view.php
+
+		-
+			message: '#^Variable \$postsAffected might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import-media.view.php
+
+		-
+			message: '#^Variable \$postsWithImg might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import-media.view.php
+
+		-
+			message: '#^Variable \$rehostedCount might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import-media.view.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import.handler.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 8
+			path: admin/partials/tools/import.handler.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: admin/partials/tools/import.handler.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 16
+			path: admin/partials/tools/import.handler.php
+
+		-
+			message: '#^Variable \$csrf might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import.view.php
+
+		-
+			message: '#^Variable \$importedCount might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import.view.php
+
+		-
+			message: '#^Variable \$postMaxBytes might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import.view.php
+
+		-
+			message: '#^Variable \$totalPosts might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import.view.php
+
+		-
+			message: '#^Variable \$uploadMaxBytes might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/partials/tools/import.view.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/passkey-api.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 8
+			path: admin/passkey-api.php
+
+		-
+			message: '#^Variable \$config might not be defined\.$#'
+			identifier: variable.undefined
+			count: 3
+			path: admin/passkey-api.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 7
+			path: admin/passkey-api.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/post-edit.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type CMS\\Post\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: admin/post-edit.php
+
+		-
+			message: '#^Variable \$activityLog might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/post-edit.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 6
+			path: admin/post-edit.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 24
+			path: admin/post-edit.php
+
+		-
+			message: '#^Variable \$publisher might not be defined\.$#'
+			identifier: variable.undefined
+			count: 5
+			path: admin/post-edit.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/post-preview.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/post-preview.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/post-preview.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/posts.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 5
+			path: admin/posts.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 8
+			path: admin/posts.php
+
+		-
+			message: '#^Variable \$publisher might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/posts.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/settings.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/settings.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/settings.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/slug-check.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/slug-check.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/tags.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 8
+			path: admin/tags.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/tags.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 9
+			path: admin/tags.php
+
+		-
+			message: '#^Constant CMS_VERSION not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: admin/tools.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: admin/tools.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/tools.php
+
+		-
+			message: '#^Variable \$auth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/xmlrpc.php
+
+		-
+			message: '#^Variable \$builder might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/xmlrpc.php
+
+		-
+			message: '#^Variable \$config might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/xmlrpc.php
+
+		-
+			message: '#^Variable \$db might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: admin/xmlrpc.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: bin/publish-scheduled.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Builder.php
+
+		-
+			message: '#^Property CMS\\Post\:\:\$updated_at \(string\) on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.property
+			count: 1
+			path: src/Feed.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: src/Helpers.php
+
+		-
+			message: '#^Call to an undefined method League\\CommonMark\\Node\\Node\:\:getInfoWords\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/HighlightFencedCodeRenderer.php
+
+		-
+			message: '#^Call to an undefined method League\\CommonMark\\Node\\Node\:\:getLiteral\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/HighlightFencedCodeRenderer.php
+
+		-
+			message: '#^Call to an undefined method League\\CommonMark\\Node\\Node\:\:getTitle\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/ImageRenderer.php
+
+		-
+			message: '#^Call to an undefined method League\\CommonMark\\Node\\Node\:\:getUrl\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: src/ImageRenderer.php
+
+		-
+			message: '#^Property CMS\\Post\:\:\$updated_at \(string\) on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.property
+			count: 1
+			path: src/JsonFeed.php
+
+		-
+			message: '#^Comparison operation "\<" between int\<1, max\> and 1 is always false\.$#'
+			identifier: smaller.alwaysFalse
+			count: 4
+			path: src/Media.php
+
+		-
+			message: '#^Result of \|\| is always false\.$#'
+			identifier: booleanOr.alwaysFalse
+			count: 2
+			path: src/Media.php
+
+		-
+			message: '#^Comparison operation "\<" between int\<1, max\> and 1 is always false\.$#'
+			identifier: smaller.alwaysFalse
+			count: 2
+			path: src/OgImage.php
+
+		-
+			message: '#^Property CMS\\OgImage\:\:\$fontRegular is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/OgImage.php
+
+		-
+			message: '#^Result of \|\| is always false\.$#'
+			identifier: booleanOr.alwaysFalse
+			count: 1
+			path: src/OgImage.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Page.php
+
+		-
+			message: '#^Parameter \#1 \$target of static method CMS\\SafeHttp\:\:resolveOption\(\) expects array\{host\: string, port\: int, ip\: string, scheme\: string, is_literal\: bool\}, array\{host\: string, port\: int, ip\: string, scheme\: string\} given\.$#'
+			identifier: argument.type
+			count: 2
+			path: src/SafeHttp.php
+
+		-
+			message: '#^Offset ''og_image'' does not exist on array\{context\: string, title\: string, excerpt\: string, url\: string, links\: array\<string\>, images\: array\<array\{path\: string, mime\: string, alt\: string\}\>\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: src/Syndication.php
+
+		-
+			message: '#^Call to an undefined method DOMNameSpaceNode\|DOMNode\:\:getAttribute\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: src/Webmention.php
+
+		-
+			message: '#^Access to an undefined property CMS\\Builder\:\:\$built\.$#'
+			identifier: property.notFound
+			count: 2
+			path: tests/BuildFanoutTest.php
+
+		-
+			message: '#^Access to an undefined property CMS\\Builder\:\:\$categoryArchives\.$#'
+			identifier: property.notFound
+			count: 1
+			path: tests/BuildFanoutTest.php
+
+		-
+			message: '#^Empty array passed to foreach\.$#'
+			identifier: foreach.emptyArray
+			count: 1
+			path: tests/BuildFanoutTest.php
+
+		-
+			message: '#^Access to an undefined property CMS\\Builder\:\:\$built\.$#'
+			identifier: property.notFound
+			count: 6
+			path: tests/PostPublisherTest.php
+
+		-
+			message: '#^Access to an undefined property CMS\\Builder\:\:\$categoryArchives\.$#'
+			identifier: property.notFound
+			count: 2
+			path: tests/PostPublisherTest.php
+
+		-
+			message: '#^Access to an undefined property CMS\\Builder\:\:\$feeds\.$#'
+			identifier: property.notFound
+			count: 3
+			path: tests/PostPublisherTest.php
+
+		-
+			message: '#^Access to an undefined property CMS\\Builder\:\:\$sharedRebuilds\.$#'
+			identifier: property.notFound
+			count: 7
+			path: tests/PostPublisherTest.php
+
+		-
+			message: '#^Access to an undefined property CMS\\Builder\:\:\$tagArchives\.$#'
+			identifier: property.notFound
+			count: 2
+			path: tests/PostPublisherTest.php
+
+		-
+			message: '#^Empty array passed to foreach\.$#'
+			identifier: foreach.emptyArray
+			count: 1
+			path: tests/PostPublisherTest.php
+
+		-
+			message: '#^Offset ''is_literal'' does not exist on array\{host\: string, port\: 8080, ip\: ''1\.1\.1\.1'', scheme\: ''http''\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: tests/SafeHttpTest.php
+
+		-
+			message: '#^Access to an undefined property CMS\\Builder\:\:\$sharedRebuilds\.$#'
+			identifier: property.notFound
+			count: 2
+			path: tests/SchedulerTest.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: tests/SchedulerTest.php
+
+		-
+			message: '#^Method CMS\\Tests\\XmlRpcFeaturedImageTest\:\:mapperProvider\(\) should return array\<string\> but returns array\<string, list\<string\>\>\.$#'
+			identifier: return.type
+			count: 1
+			path: tests/XmlRpcFeaturedImageTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertTrue\(\) with true will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/XmlRpcTest.php

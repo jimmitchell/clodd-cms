@@ -6,7 +6,6 @@ namespace CMS\Tests;
 
 use CMS\Database;
 use CMS\Post;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Post::effectivePhotos() — the photos a post has, whichever way it was written.
@@ -17,26 +16,8 @@ use PHPUnit\Framework\TestCase;
  * that keep the fallback from firing where it would do damage: it is only for
  * photo posts, and it never displaces real rows.
  */
-final class PostEffectivePhotosTest extends TestCase
+final class PostEffectivePhotosTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-
-    protected function setUp(): void
-    {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
-
     private function makePost(string $content, string $postKind = 'photo', string $title = ''): Post
     {
         $post               = new Post($this->db);

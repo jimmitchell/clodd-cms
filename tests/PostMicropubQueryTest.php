@@ -6,7 +6,6 @@ namespace CMS\Tests;
 
 use CMS\Database;
 use CMS\Post;
-use PHPUnit\Framework\TestCase;
 
 /**
  * The Micropub "Query for Post List" extension.
@@ -16,26 +15,8 @@ use PHPUnit\Framework\TestCase;
  * point of most of these tests is that the two never disagree: if they drift,
  * a client's filtered list silently omits posts it can reach by URL.
  */
-final class PostMicropubQueryTest extends TestCase
+final class PostMicropubQueryTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-
-    protected function setUp(): void
-    {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
-
     /**
      * @param array<array{kind: string, url: string}> $contexts
      */

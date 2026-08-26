@@ -6,17 +6,14 @@ namespace CMS\Tests;
 
 use CMS\Database;
 use CMS\IndieAuth;
-use PHPUnit\Framework\TestCase;
 
 /**
  * IndieAuth code and token handling: PKCE verification, single-use codes, and
  * the binding of a code to the client_id / redirect_uri it was issued for.
  */
-final class IndieAuthTest extends TestCase
+final class IndieAuthTest extends TempSiteTestCase
 {
-    private Database $db;
     private IndieAuth $indie;
-    private string $dbPath;
 
     private const CLIENT   = 'https://app.example/';
     private const REDIRECT = 'https://app.example/callback';
@@ -24,19 +21,10 @@ final class IndieAuthTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_ia_') . '.db';
-        $this->db     = new Database($this->dbPath);
+        parent::setUp();
         $this->indie  = new IndieAuth($this->db);
     }
 
-    protected function tearDown(): void
-    {
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
 
     // ── PKCE ──────────────────────────────────────────────────────────────────
 

@@ -9,7 +9,6 @@ use CMS\Builder;
 use CMS\Database;
 use CMS\Post;
 use CMS\XmlRpcServer;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Featured images over XML-RPC — how MarsEdit sets a post's lead picture.
@@ -24,50 +23,23 @@ use PHPUnit\Framework\TestCase;
  * changed, and a save that silently dropped the picture would look like the CMS
  * losing data.
  */
-final class XmlRpcFeaturedImageTest extends TestCase
+final class XmlRpcFeaturedImageTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-    private string $root;
     private XmlRpcServer $server;
 
     protected function setUp(): void
     {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-
-        $this->root = realpath(sys_get_temp_dir()) . '/clodd_out_' . bin2hex(random_bytes(6));
-        mkdir($this->root . '/output', 0775, true);
-        mkdir($this->root . '/templates', 0775, true);
-
-        $config = [
-            'paths' => [
-                'output'    => $this->root . '/output',
-                'templates' => $this->root . '/templates',
-                'content'   => $this->root . '/content',
-            ],
-        ];
-
+        parent::setUp();
         $this->db->upsertSetting('site_url', 'https://example.com');
 
         $this->server = new XmlRpcServer(
             $this->db,
-            new Auth($config, $this->db),
-            $config,
-            new Builder($config, $this->db),
+            new Auth($this->config, $this->db),
+            $this->config,
+            new Builder($this->config, $this->db),
         );
     }
 
-    protected function tearDown(): void
-    {
-        $this->rmTree($this->root);
-
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
 
     /**
      * Both apply*Struct methods are private — internals of a dispatch that would
@@ -282,18 +254,4 @@ final class XmlRpcFeaturedImageTest extends TestCase
         $this->assertSame('image/jpeg', $struct['type']);
     }
 
-    private function rmTree(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        foreach (scandir($dir) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-            $path = $dir . '/' . $entry;
-            is_dir($path) ? $this->rmTree($path) : unlink($path);
-        }
-        rmdir($dir);
-    }
 }

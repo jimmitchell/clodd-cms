@@ -1267,18 +1267,6 @@ class Post
         $this->db->update('posts', $cols, 'id = :id', ['id' => $this->id]);
     }
 
-    /**
-     * Returns true if the rendered HTML would differ from the stored hash.
-     * The actual hash comparison is done by Builder; this is a quick shortcut
-     * based on updated_at vs built_at.
-     */
-    public function needsRebuild(): bool
-    {
-        if ($this->built_at === null || $this->content_hash === null) {
-            return true;
-        }
-        return strtotime($this->updated_at) > strtotime($this->built_at);
-    }
 
     // ── Excerpt resolution ────────────────────────────────────────────────────
 

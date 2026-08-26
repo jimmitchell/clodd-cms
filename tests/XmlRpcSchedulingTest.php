@@ -9,7 +9,6 @@ use CMS\Builder;
 use CMS\Database;
 use CMS\Post;
 use CMS\XmlRpcServer;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Scheduling a post over XML-RPC.
@@ -24,29 +23,13 @@ use PHPUnit\Framework\TestCase;
  * only. Asserting on the resolved status rather than the parsed date, because
  * the status is what the author actually noticed.
  */
-final class XmlRpcSchedulingTest extends TestCase
+final class XmlRpcSchedulingTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-    private string $root;
     private XmlRpcServer $server;
 
     protected function setUp(): void
     {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-
-        $this->root = realpath(sys_get_temp_dir()) . '/clodd_out_' . bin2hex(random_bytes(6));
-        mkdir($this->root . '/output', 0775, true);
-        mkdir($this->root . '/templates', 0775, true);
-
-        $config = [
-            'paths' => [
-                'output'    => $this->root . '/output',
-                'templates' => $this->root . '/templates',
-                'content'   => $this->root . '/content',
-            ],
-        ];
+        parent::setUp();
 
         // A site timezone deliberately behind UTC. It is what makes the two
         // date keys resolve differently, which is the whole point here.
@@ -54,22 +37,12 @@ final class XmlRpcSchedulingTest extends TestCase
 
         $this->server = new XmlRpcServer(
             $this->db,
-            new Auth($config, $this->db),
-            $config,
-            new Builder($config, $this->db),
+            new Auth($this->config, $this->db),
+            $this->config,
+            new Builder($this->config, $this->db),
         );
     }
 
-    protected function tearDown(): void
-    {
-        $this->rmTree($this->root);
-
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
 
     /**
      * Both apply*Struct methods are private — they are internals of a method
@@ -192,21 +165,4 @@ final class XmlRpcSchedulingTest extends TestCase
         $this->assertSame('draft', $post->status);
     }
 
-    private function rmTree(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-
-        foreach ($items as $item) {
-            $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
-        }
-
-        rmdir($dir);
-    }
 }

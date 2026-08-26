@@ -156,7 +156,7 @@ final class Scheduler
     // ── Heartbeat ─────────────────────────────────────────────────────────────
 
     /** Whether any post is due to go live right now. */
-    public function anythingDue(): bool
+    private function anythingDue(): bool
     {
         return $this->db->selectOne(
             "SELECT 1 FROM posts

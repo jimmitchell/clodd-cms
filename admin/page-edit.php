@@ -182,16 +182,11 @@ if (!$cantHaveParent) {
 }
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $isNew ? 'New Page' : Helpers::e($page->title) ?> — <?= Helpers::e($siteTitle) ?></title>
-    <link rel="stylesheet" href="/admin/assets/admin.css">
-    <link rel="stylesheet" href="/admin/assets/easymde.min.css">
-    <link rel="stylesheet" href="/admin/assets/font-awesome.min.css">
-</head>
+<?php
+$adminTitle = ($isNew ? 'New Page' : $page->title) . ' — ' . $siteTitle;
+$adminExtraCss = ['easymde.min.css'];
+require __DIR__ . '/partials/head.php';
+?>
 <body class="admin-page" data-slug-type="page"<?= $page?->id ? ' data-slug-id="' . $page->id . '"' : '' ?>>
 
 <?php require __DIR__ . '/partials/nav.php'; ?>
@@ -349,7 +344,7 @@ if (!$cantHaveParent) {
 </main>
 
 <script src="/admin/assets/easymde.min.js"></script>
-<script src="/admin/assets/admin.js"></script>
+<script src="/admin/assets/admin.js?v=<?= rawurlencode(CMS_VERSION) ?>"></script>
 
 </body>
 </html>

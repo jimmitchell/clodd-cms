@@ -114,14 +114,10 @@ $csrf      = $auth->csrfToken();
 $siteTitle = $db->getSetting('site_title', 'My CMS');
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Tags — <?= Helpers::e($siteTitle) ?></title>
-    <link rel="stylesheet" href="/admin/assets/admin.css">
-</head>
+<?php
+$adminTitle = 'Tags — ' . $siteTitle;
+require __DIR__ . '/partials/head.php';
+?>
 <body class="admin-page">
 
 <?php require __DIR__ . '/partials/nav.php'; ?>
@@ -229,7 +225,7 @@ $siteTitle = $db->getSetting('site_title', 'My CMS');
 
 </main>
 
-<script src="/admin/assets/admin.js"></script>
+<script src="/admin/assets/admin.js?v=<?= rawurlencode(CMS_VERSION) ?>"></script>
 <script>
 // Slug auto-gen for the tag name field.
 (function () {

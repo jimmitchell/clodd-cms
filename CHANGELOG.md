@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.38.0] — 2026-08-26
+
+No schema change.
+
+### Changed
+
+- **`webmentions.js` is a post-page script again.** `templates/base.php` emitted it on every page whenever a webmention domain was set, but the script's first act is to look for `#webmentions` and return if it is absent — and `templates/post.php` is the only template that renders it. So the home page, all 115 paginated index pages, every taxonomy archive, the search page and the 404 each fetched **18 KB (6.1 KB gzipped)** to do nothing. On the home page that was about as much again as the page's own HTML, on the one URL most first visits land on. 154 pages stop asking for it; the 693 post pages are unchanged.
+
+- **The admin has a shared `<head>`.** Twelve pages hand-rolled their own, which is exactly why they had drifted: Font Awesome was linked from inside `<body>` by `partials/nav.php` *and* again in `<head>` by three of them, and none of the twelve carried a cache-busting stamp while `nginx.conf.example` serves `/admin/assets/` with `expires 7d` — so an edit to `admin.css` could take a week to reach the browser, the exact failure the public theme fixed in 1.31.0. `admin/partials/head.php` now stamps `admin.css` and `admin.js` with `CMS_VERSION`, links Font Awesome once, from `<head>`, and skips it entirely on the login screen, which has no nav and so no icons — 31 KB of CSS and a 98 KB woff2 it never needed.
+
+  The vendored files are deliberately *not* stamped. They do not change between releases, and re-fetching Font Awesome every time the version ticks over would cost more than the stamp is worth.
+
+- **Static analysis, baselined.** PHPStan at level 5 over `src`, `admin`, `bin`, `tests` and the root endpoints, with the 475 pre-existing findings in `phpstan-baseline.neon`. The point is not a clean tree today — it is that anything written from here has to pass on its own. `php composer analyse` to check, `php composer lint` for a syntax pass over everything. It earned its place immediately: it caught two docblocks left stranded by the test refactor below.
+
+- **The test suite has a base class.** `CMS\Tests\TempSiteTestCase` gives every test a throwaway database and output tree. `rmTree()` had been written five times in two dialects, the temp-database teardown loop twelve times, the `$config['paths']` literal five times — `RelatedPostsTest` even carried a comment reading *"See BuilderOutputTest"*, which is the tell that a thing wants to live in one place. Those are now 1, 1 and 2. The schema is migrated once per process and copied per test instead of being rebuilt 248 times (6.65 ms → 2.57 ms per database), which is most of why **25 more tests now run in the same wall time**.
+
+  Four classes keep their own `makePost()`. Those take the post *body* first, because what they vary is the content; the shared helper is `publishedPost()` and varies slug and date. Different question, different helper.
+
+### Removed
+
+- **`Auth::isAuthenticated()`**, which had no callers and should not have had any. `sessionIsLive()`'s own docblock records it as the trap: endpoints that answer differently when signed out reached for it and skipped the idle timeout entirely, and `indieauth.php` did exactly that on the consent render and the approval POST — the two requests that mint `create`-scope tokens. Leaving a correct-looking shortcut next to the correct method is an invitation.
+
+- `Post::needsRebuild()`, `Page::needsRebuild()` and `Page::findChildren()` — no callers anywhere, tests included. `Builder` does the hash comparison inline and always has.
+
+- `Builder::buildSearchIndex()`, `buildSearchPage()` and `build404()` become private; so do `Byline::personId()`/`orgId()`, `MicropubAuth::extractBearerToken()` and `Scheduler::anythingDue()`. None had a caller outside its own class. `buildRssFeed()` stays public — `PostPublisher` calls it as of 1.37.0.
+
+- A stale 6.5 MB git worktree under `.claude/worktrees/`, detached at a commit already contained in `main`. Its copies of `Builder.php` and `Post.php` had been turning up in every `grep` of the repo.
+
+### Not done, and why
+
+- **The critical-CSS block keeps the search overlay.** Moving it below the marker looked like an easy 2.9 KB, until the comment at `theme.css:1276` — the overlay markup ships on every page, so the rules that *hide* it must be inlined or the bare form flashes at the foot of the document before the async stylesheet lands. Same reasoning rules out the search results page and the footer. With one global critical block, any rule that is above the fold on *any* page has to be critical on *every* page; the version that would actually pay is a per-template split (measured: 8.7 KB of listing-only rules inlined into 693 post pages, 9.3 KB of post-only rules inlined into 156 listing pages, ≈1 KB gzip per page), and that is a separate piece of work with a tested invariant to keep.
+
+---
+
 ## [1.37.0] — 2026-08-25
 
 No schema change.

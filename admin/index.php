@@ -97,14 +97,11 @@ $siteTitle    = $db->getSetting('site_title', 'My CMS');
 $hasPasskeys  = $auth->hasPasskeys();
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Admin Login</title>
-    <link rel="stylesheet" href="/admin/assets/admin.css">
-</head>
+<?php
+$adminTitle = 'Admin Login';
+$adminChrome = false;
+require __DIR__ . '/partials/head.php';
+?>
 <body class="login-page">
 
 <div class="login-box">

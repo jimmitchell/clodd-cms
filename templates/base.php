@@ -284,7 +284,13 @@ if (!function_exists('_e')) {
 </div>
 
 <script src="/theme.js<?= $_asset ?>" defer></script>
-<?php if (($settings['webmention_domain'] ?? '') !== ''): ?>
+<?php /* Post pages only. The script's first act is to look for #webmentions and
+         return if it is absent (webmentions.js:3), and templates/post.php is
+         the only place that renders it — so the home page, all 116 paginated
+         index pages, every taxonomy archive, the search page and the 404 were
+         each fetching 18 KB to do nothing. The home page is the common entry
+         point, which is where it cost the most. */ ?>
+<?php if (!empty($hasWebmentions)): ?>
 <script src="/webmentions.js<?= $_asset ?>" defer></script>
 <?php endif; ?>
 <?php if (!empty($is404Page)): ?><script>window.analyticsIs404=true;</script><?php endif; ?>

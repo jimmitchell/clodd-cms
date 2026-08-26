@@ -372,16 +372,11 @@ if ($post->published_at) {
 }
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $isNew ? 'New Post' : Helpers::e($post->title) ?> — <?= Helpers::e($siteTitle) ?></title>
-    <link rel="stylesheet" href="/admin/assets/admin.css">
-    <link rel="stylesheet" href="/admin/assets/easymde.min.css">
-    <link rel="stylesheet" href="/admin/assets/font-awesome.min.css">
-</head>
+<?php
+$adminTitle = ($isNew ? 'New Post' : $post->title) . ' — ' . $siteTitle;
+$adminExtraCss = ['easymde.min.css'];
+require __DIR__ . '/partials/head.php';
+?>
 <body class="admin-page" data-slug-type="post"<?= $post?->id ? ' data-slug-id="' . $post->id . '"' : '' ?>>
 
 <?php require __DIR__ . '/partials/nav.php'; ?>
@@ -756,7 +751,7 @@ window._existingTags = <?= json_encode(array_values(array_map(fn($t) => ['name' 
 })();
 </script>
 <script src="/admin/assets/easymde.min.js"></script>
-<script src="/admin/assets/admin.js"></script>
+<script src="/admin/assets/admin.js?v=<?= rawurlencode(CMS_VERSION) ?>"></script>
 
 </body>
 </html>

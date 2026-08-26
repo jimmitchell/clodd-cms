@@ -261,7 +261,8 @@ ob_start();
     <?php endif; ?>
 </article>
 
-<?php if (($settings['webmention_domain'] ?? '') !== ''): ?>
+<?php $hasWebmentions = ($settings['webmention_domain'] ?? '') !== ''; ?>
+<?php if ($hasWebmentions): ?>
 <?php /* data-link-tags carries the query suffixes other sites append to links
          pointing here, so webmentions.js can ask about those variants alongside
          the canonical. webmention.io matches and stores a target verbatim, so a
@@ -310,5 +311,8 @@ $bodyContent = ob_get_clean();
 
 echo $render('base.php', compact(
     'pageTitle', 'description', 'canonical', 'ogType', 'ogImageUrl', 'bodyContent',
-    'jsonLd', 'settings', 'navPages', 'siteUrl', 'render', 'criticalCss', 'headerAvatar'
+    'jsonLd', 'settings', 'navPages', 'siteUrl', 'render', 'criticalCss', 'headerAvatar',
+    // The only template that renders #webmentions, and so the only one whose
+    // page has any use for webmentions.js. See base.php.
+    'hasWebmentions'
 ));

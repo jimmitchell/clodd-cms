@@ -10,7 +10,6 @@ use CMS\Database;
 use CMS\FeedMarkdown;
 use CMS\Post;
 use CMS\XmlRpcServer;
-use PHPUnit\Framework\TestCase;
 
 /**
  * What a save has to rebuild besides the post itself.
@@ -22,38 +21,12 @@ use PHPUnit\Framework\TestCase;
  * wearing four hats, and all of them were invisible from the editor: the page
  * you just saved always looked right.
  */
-final class BuildFanoutTest extends TestCase
+final class BuildFanoutTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-    private string $root;
-    private array $config;
-
     protected function setUp(): void
     {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-
-        $this->root = realpath(sys_get_temp_dir()) . '/clodd_out_' . bin2hex(random_bytes(6));
-        mkdir($this->root . '/output', 0775, true);
-        mkdir($this->root . '/templates', 0775, true);
-        file_put_contents($this->root . '/templates/post.php', '<h1><?= $post->title ?></h1>');
-
-        $this->config = ['paths' => [
-            'output'    => $this->root . '/output',
-            'templates' => $this->root . '/templates',
-            'content'   => $this->root . '/content',
-        ]];
-    }
-
-    protected function tearDown(): void
-    {
-        $this->rmTree($this->root);
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
+        parent::setUp();
+        $this->stubTemplate('post.php', '<h1><?= $post->title ?></h1>');
     }
 
     // ── 1d: the deferTaxonomy guard ───────────────────────────────────────────
@@ -321,19 +294,6 @@ final class BuildFanoutTest extends TestCase
         return $ref->invokeArgs($server, $args);
     }
 
-    private function publishedPost(string $slug, string $publishedAt): Post
-    {
-        $post               = new Post($this->db);
-        $post->title        = ucfirst($slug);
-        $post->slug         = $slug;
-        $post->content      = 'Body of ' . $slug . '.';
-        $post->status       = 'published';
-        $post->published_at = $publishedAt;
-        $post->save();
-
-        return $post;
-    }
-
     /** Crude source slice: the body of a method, up to the next one at the same indent. */
     private function methodBody(string $src, string $method): string
     {
@@ -344,18 +304,4 @@ final class BuildFanoutTest extends TestCase
         return substr($src, $start, $next === false ? 2000 : $next - $start);
     }
 
-    private function rmTree(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        $it = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($it as $f) {
-            $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
-        }
-        @rmdir($dir);
-    }
 }

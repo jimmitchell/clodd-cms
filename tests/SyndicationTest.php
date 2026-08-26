@@ -11,7 +11,6 @@ use CMS\Pixelfed;
 use CMS\Post;
 use CMS\Syndication;
 use CMS\SyndicationText;
-use PHPUnit\Framework\TestCase;
 
 /**
  * What actually reaches Mastodon and Bluesky when a post is published.
@@ -20,26 +19,8 @@ use PHPUnit\Framework\TestCase;
  * else's server — so the two pieces that decide what gets sent are pinned here:
  * the words a note contributes, and the form encoding of the status POST.
  */
-final class SyndicationTest extends TestCase
+final class SyndicationTest extends TempSiteTestCase
 {
-    private Database $db;
-    private string $dbPath;
-
-    protected function setUp(): void
-    {
-        $this->dbPath = tempnam(sys_get_temp_dir(), 'clodd_test_') . '.db';
-        $this->db     = new Database($this->dbPath);
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ([$this->dbPath, $this->dbPath . '-wal', $this->dbPath . '-shm'] as $f) {
-            if (is_file($f)) {
-                unlink($f);
-            }
-        }
-    }
-
     private function photoPost(string $content, ?string $excerpt): Post
     {
         $post            = new Post($this->db);
