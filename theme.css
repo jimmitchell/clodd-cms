@@ -236,13 +236,19 @@ audio { width: 100%; }
 .site-header__title:hover { color: var(--color-link); }
 
 /* The avatar lives inside the home link so the whole lockup is one target.
-   Same treatment as the webmention avatars (.wm-avatar): a bare rounded square
-   on the page's own --radius, cropped to fill, with the code background standing
-   in until the image arrives. */
+   Same treatment as the webmention avatars (.wm-avatar): a circle, cropped to
+   fill, with the code background standing in until the image arrives.
+
+   Deliberately 50% and not --radius, which it was between 1.35.0 and here. A
+   face is the only thing on the page that is not a panel, and --radius is what
+   every panel is cornered with — so the circle is what keeps a person from
+   reading as more chrome. That also means the two must not move together:
+   changing --radius should leave every avatar alone. OgImage::AVATAR_RADIUS_RATIO
+   is the OG card's copy of this same decision. */
 .site-header__avatar {
     width: 32px;
     height: 32px;
-    border-radius: var(--radius);
+    border-radius: 50%;
     object-fit: cover;
     background: var(--color-code-bg);
     display: block;
@@ -2400,10 +2406,13 @@ audio { width: 100%; }
     gap: .35rem;
 }
 
+/* Circles, on the reasoning written above .site-header__avatar — these are the
+   same object at a different size. The link wrapper carries the radius too so a
+   focus ring follows the face rather than boxing it. */
 .wm-avatar-link {
     display: block;
     line-height: 0;
-    border-radius: var(--radius);
+    border-radius: 50%;
     transition: opacity .15s;
 }
 
@@ -2412,7 +2421,7 @@ audio { width: 100%; }
 .wm-avatar {
     width: 32px;
     height: 32px;
-    border-radius: var(--radius);
+    border-radius: 50%;
     object-fit: cover;
     background: var(--color-code-bg);
     display: block;

@@ -50,7 +50,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 11;
+    public const DESIGN_VERSION = 12;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -90,19 +90,20 @@ class OgImage
     private const AVATAR_GAP  = 26;
 
     /**
-     * The avatar's corner radius, as a fraction of its edge.
+     * The avatar's corner radius, as a fraction of its edge. 0.5 is a circle,
+     * which is what `.site-header__avatar` and `.wm-avatar` are.
      *
      * A fraction rather than a measurement, because the two avatars are drawn
-     * at sizes that have nothing to do with each other. `.site-header__avatar`
-     * is --radius (6px) on a 32px square; writing that same 6px onto a 76px
-     * square would not be the same treatment scaled up, it would be a hard
-     * corner with a nick taken out of it. Keeping the *ratio* is what makes the
-     * card's avatar and the header's read as the same object.
+     * at sizes that have nothing to do with each other — the header's is 32px
+     * and this is 76px, so only the *ratio* makes them read as the same object.
      *
-     * So this tracks --radius in theme.css the way the colours above track the
-     * dark-mode tokens: change the site's radius and this should follow.
+     * It tracks the avatars in theme.css, and pointedly not --radius: the site's
+     * panels are cornered with that token and a face is not a panel. Between
+     * 1.35.0 and 1.42.0 this was 6/32, following --radius; the circle is back
+     * because it is the one shape on the card that says "person" rather than
+     * "card". Change the avatars' radius and this follows them, not the token.
      */
-    private const AVATAR_RADIUS_RATIO = 6 / 32;
+    private const AVATAR_RADIUS_RATIO = 0.5;
 
     /**
      * Air between title lines, as a fraction of the em, added to the ink the
@@ -336,7 +337,7 @@ class OgImage
 
             if ($avatar !== null) {
                 $edge = self::AVATAR_EDGE;
-                $this->drawRoundedSquare($img, $avatar, $pad, $pad, $edge);
+                $this->drawAvatarMask($img, $avatar, $pad, $pad, $edge);
                 imagedestroy($avatar);
 
                 // The name sits on the avatar's centre line rather than sharing
@@ -469,12 +470,12 @@ class OgImage
     }
 
     /**
-     * Copy $avatar onto $dst as a rounded square with its top-left at ($x, $y).
+     * Copy $avatar onto $dst masked to AVATAR_RADIUS_RATIO, top-left at ($x, $y).
      *
      * GD has no rounded crop, so this is a per-pixel copy that skips anything
      * outside the shape. The outermost pixel is blended toward the card ground
-     * by how far it falls inside the edge — without it the corners render with a
-     * hard stair-stepped rim, which is very visible against a flat background.
+     * by how far it falls inside the edge — without it the rim renders hard and
+     * stair-stepped, which is very visible against a flat background.
      *
      * How far inside the shape a pixel falls is the signed distance to a rounded
      * box: push the sample point in from each side by the corner radius, and
@@ -482,8 +483,10 @@ class OgImage
      * to the straight-edge distance along the flats and to the arc's distance in
      * the corners, which is the whole point — one expression covers both, so the
      * blend along a flat edge and the blend around a corner cannot drift apart.
+     * At the ratio's top end the flats vanish entirely and the same expression
+     * is a circle, which is why a shape change here is a constant and not code.
      */
-    private function drawRoundedSquare(\GdImage $dst, \GdImage $avatar, int $x, int $y, int $edge): void
+    private function drawAvatarMask(\GdImage $dst, \GdImage $avatar, int $x, int $y, int $edge): void
     {
         $radius = $edge * self::AVATAR_RADIUS_RATIO;
         $half   = $edge / 2;

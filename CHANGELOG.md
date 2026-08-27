@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.42.0] — 2026-08-27
+
+No schema change.
+
+### Changed
+
+- **Avatars are circles again.** `.site-header__avatar`, `.wm-avatar` and its link wrapper, the admin's avatar preview and the OG card all go back to a full round, undoing the rounded square 1.35.0 gave them. They are now written as `50%` rather than `var(--radius)`, which is the point of the change as much as the shape is: every panel on the site is cornered with that token, and a face is not a panel — sharing the token made a person read as one more card. `--radius` and the avatars are now free to move separately.
+
+  The card followed, because it has to be told to: `OgImage::AVATAR_RADIUS_RATIO` is 0.5 and `DESIGN_VERSION` is bumped to 12, without which every card already on disk would keep its rounded square forever on a build that reports success. The mask needed no code — its rounded-box distance field collapses to a circle at 0.5 on its own, which is why the shape lives in a constant. `drawRoundedSquare()` is renamed `drawAvatarMask()` to stop the name asserting a shape it no longer draws.
+
+  `OgImageTest::testTheAvatarIsDrawnAsACircle()` replaces the rounded-square test and still samples three pixels, since the two failures pull opposite ways: a point out on the diagonal catches both a bare square crop and a reversion to the rounded corner, and a point just inside the circle catches a mask cut too small.
+
+---
+
 ## [1.41.0] — 2026-08-26
 
 No schema change.

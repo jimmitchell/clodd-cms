@@ -79,15 +79,15 @@ final class OgImageTest extends TestCase
     }
 
     /**
-     * The avatar is drawn, and it is drawn as a rounded square — neither a bare
-     * square nor the circle it was until 1.35.0.
+     * The avatar is drawn, and it is drawn as a circle — neither a bare square
+     * nor the rounded square it was between 1.35.0 and 1.42.0.
      *
      * Three samples, because the two failures pull in opposite directions and
      * one sample cannot see both. The lockup starts at PADDING (80) and is
      * AVATAR_EDGE (76) across, so it spans 80–155 with its centre at (118, 118)
-     * and a corner radius of AVATAR_RADIUS_RATIO × 76 ≈ 14px.
+     * and a radius of AVATAR_RADIUS_RATIO × 76 = 38px.
      */
-    public function testTheAvatarIsDrawnAsARoundedSquare(): void
+    public function testTheAvatarIsDrawnAsACircle(): void
     {
         $avatar = $this->solidAvatar('#C81E4A');
         $path   = $this->dir . '/avatar.png';
@@ -95,14 +95,14 @@ final class OgImageTest extends TestCase
 
         $this->assertSame('#C81E4A', $this->pixelAt($path, 118, 118), 'The avatar was not drawn at the lockup position.');
 
-        // The extreme corners fall outside the 14px arc, so a square crop — no
-        // rounding at all — is what would paint them.
-        $this->assertSame('#1A1715', $this->pixelAt($path, 82, 82), 'The avatar corner is filled, so it was drawn as a bare square.');
-        $this->assertSame('#1A1715', $this->pixelAt($path, 153, 153), 'The avatar corner is filled, so it was drawn as a bare square.');
+        // (88, 88) sits ~42px from the centre: outside the circle, but inside
+        // both a bare square crop and the 14px-cornered rounded square this
+        // replaced. Either regression paints it.
+        $this->assertSame('#1A1715', $this->pixelAt($path, 88, 88), 'The avatar corner is filled, so it was not cut back to a circle.');
 
-        // (88, 88) is well inside the arc but ~42px from the centre, which is
-        // outside a 38px-radius circle: only a rounded square covers it.
-        $this->assertSame('#C81E4A', $this->pixelAt($path, 88, 88), 'The avatar corner is cut back to the inscribed circle rather than rounded.');
+        // (142, 142) is ~35px out along the same diagonal — inside the circle
+        // with room to spare, so a mask drawn too small shows up here.
+        $this->assertSame('#C81E4A', $this->pixelAt($path, 142, 142), 'The circle is cut back further than the avatar edge.');
     }
 
     /**
