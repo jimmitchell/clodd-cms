@@ -68,8 +68,9 @@ class Builder
         $this->outputDir   = rtrim($config['paths']['output'],   '/\\');
         $this->templateDir = rtrim($config['paths']['templates'], '/\\');
         $this->mediaDir    = rtrim($config['paths']['content'],   '/\\') . '/media';
-        // Not where the card's font lives — where one *may* be pinned. See
-        // OgImage::__construct(); with nothing there the host's sans is used.
+        // Where the card's face is pinned: the static cut of the DM Sans the
+        // pages load. See OgImage::__construct() — with nothing there the
+        // host's own sans is drawn instead, and the card stops matching.
         $this->fontDir     = $this->outputDir . '/fonts/og';
         $this->shortcodes  = new ShortcodeRenderer($db, $this->mediaDir);
 

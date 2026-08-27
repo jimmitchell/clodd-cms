@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.40.0] — 2026-08-26
+
+No schema change.
+
+### Changed
+
+- **The site is set in DM Sans again**, replacing the `system-ui` stack 1.32.0 moved to. Two self-hosted variable `.woff2` files come back to `fonts/` — roman and italic, built from the upstream OFL sources, subset to latin + latin-ext, weight axis clamped to 200–800 and the optical-size axis pinned at 14 — and `--font-sans` names the family in front of the old stack, so every rule that already reached for the token follows without being touched. `fonts/OFL.txt` returns with them, since the licence requires it to travel alongside.
+
+  Self-hosted rather than linked from fonts.googleapis.com, for the reason it was the first time: every CSP in the repo is `font-src 'self'`, so the CDN would mean loosening the policy in three nginx configs and putting a third-party request in front of first paint. `templates/base.php` preloads the roman only — it sets essentially every glyph on a page, while the italic's 46 KB is for the occasional `<em>` and preloading it competed for the bandwidth that paints. That preload URL is deliberately *not* `?v=` stamped like the four theme assets beside it: it has to match the `src` in `theme.css` character for character or the browser fetches the face twice, and a stylesheet cannot write `$assetVersion` into a `url()`. A replacement face ships under a new filename instead.
+
+  Two things the rollback deliberately does not restore. The body leading stays at 1.6667 — DM Sans sets a .504em x-height, within a hair of the system faces it replaces, so the value needs no move; only Walsheim's .461em ever justified 1.5556. And the ten rules 1.26.0 flattened from 500/600 to 400/700 stay flat: that started as a limit of a two-cut family, but it outlived the face that forced it — `system-ui` could have rendered the in-between steps and was never asked to. The axis is live again, so a 500 written below will now be honoured — ask for one only on purpose.
+
+- **`/fonts/` is served again, and `/fonts/og/` is denied in its place.** 1.32.0 put the whole directory behind a deny rule because the family in it then was a licensed retail face reachable over the web. DM Sans is OFL and is *meant* to be downloaded by the reader's browser, but the card's static cut still has no business being fetched by anyone, so `fonts/og` takes the denied slot in all three nginx configs — a regex location beats the `/fonts/` prefix one, so the deny holds inside the directory the prefix serves. The files are cached `immutable` for a year, which is the other half of shipping a replacement under a new name.
+
+- **The OG card is set in DM Sans again too**, from the static cut pinned at `fonts/og/og-regular.ttf` and `og-bold.ttf` — the Nimbus Sans pair 1.33.0 pinned there is gone. The card and the page it opens are one typeface again, which is what the pin was originally for: GD cannot read the variable `.woff2` a browser downloads, so the family has to arrive server-side as a second copy rather than as the same asset.
+
+  `OgImage::DESIGN_VERSION` goes to 11, so the next full build redraws every card. Nothing else in `OgImage` moves: the title's line height is still measured from the resolved bold rather than written down, which is exactly what makes swapping the pin a one-directory job. `SYSTEM_FONTS` stays as the fallback, with its docblock corrected — its stack is grotesques, and none of them is a geometric humanist, so a card drawn from the fallback is now a visibly different card rather than a near miss. The Dockerfile keeps `fonts-urw-base35` for that case; no apt package carries DM Sans.
+
+---
+
 ## [1.39.0] — 2026-08-26
 
 No schema change.

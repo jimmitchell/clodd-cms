@@ -104,6 +104,20 @@ if (!function_exists('_e')) {
     <?php if ($googleSiteVerification !== '' && ($isHomepage ?? false)): ?>
     <meta name="google-site-verification" content="<?= _e($googleSiteVerification) ?>">
     <?php endif; ?>
+    <!-- Font preload — must come before the stylesheet.
+         Roman face only: it sets essentially all the text on a page, so it is
+         on the critical path. The italic (46 KB) is for the occasional <em>,
+         and preloading it competed for bandwidth with the face actually needed
+         to paint. It still loads from @font-face the moment something italic is
+         encountered.
+
+         Unstamped, unlike the four theme assets below: this URL has to match
+         the `src` in theme.css exactly or the browser fetches the face twice,
+         and a stylesheet cannot write $assetVersion into a url(). Nginx caches
+         /fonts/ immutable for a year, so a *replacement* face ships under a new
+         filename rather than by busting this one. -->
+    <link rel="preload" href="/fonts/DMSans-Variable.woff2"
+          as="font" type="font/woff2" crossorigin>
     <!-- Feeds -->
     <link rel="alternate" type="application/atom+xml"
           title="<?= _e($siteTitle) ?>"

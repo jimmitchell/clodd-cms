@@ -18,20 +18,20 @@ use RuntimeException;
  * social preview — usually the first thing anyone sees of a post — looks like
  * the page it opens.
  *
- * The type cannot be lifted the same way. `theme.css` asks for `system-ui`,
- * which resolves in the *reader's* browser, while this draws on the server —
- * there is no single face that is "the site's" any more. So the card is set in
- * Nimbus Sans, pinned in `fonts/og/`: a free Helvetica clone, chosen because a
- * card is read in a timeline next to everyone else's and a neutral grotesque
- * is the closest a fixed face gets to "whatever that reader's system font is".
- * SYSTEM_FONTS is only the fallback if the pin goes missing.
+ * The type is the site's too, again: `theme.css` loads DM Sans, and the static
+ * cut of it is pinned in `fonts/og/` as og-regular/og-bold. That is what the
+ * pin is for — GD needs a real file and cannot read the variable `.woff2` the
+ * pages download, so the family has to arrive here as a second copy rather than
+ * as the same asset. Keep the two in step: a card set in a face the page does
+ * not use is the one kind of mismatch nobody here will see.
  *
- * Pinned rather than resolved because the alternative made the face a property
- * of the host: a rebuilt server, a different base image, or a missing apt
- * package would each quietly restyle every card. Nothing here is tuned to a
- * named face even so — TITLE_LINE_HEIGHT in particular is measured from the
- * resolved font rather than written down, so changing the pin stays a
- * one-directory operation.
+ * Pinned rather than resolved from the host, which is what 1.32.0 did while the
+ * pages were on `system-ui`: that made the card's face a property of the
+ * machine, where a rebuilt server or a missing apt package quietly restyles
+ * every card. SYSTEM_FONTS survives only as the fallback if the pin goes
+ * missing, and nothing here is tuned to a named face regardless — the title's
+ * line height is measured from the resolved bold rather than written down, so
+ * changing the pin stays a one-directory operation.
  *
  * A host with no usable font throws, and `Builder::buildOgImage()` catches it:
  * the post keeps whatever card it already had and the build still reports
@@ -50,7 +50,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 10;
+    public const DESIGN_VERSION = 11;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -132,21 +132,21 @@ class OgImage
      * Where to look for a sans to draw with, most-preferred first, as
      * [regular, bold] pairs.
      *
-     * GD needs a file — `system-ui` means nothing to FreeType — so the stack
-     * `theme.css` names is approximated by the host's own default sans.
+     * GD needs a file, and with the pin gone there is none of the site's own
+     * face to hand — so the card falls back to the host's default sans.
      *
      * This is the *fallback*, not the design: `fonts/og/` carries the face the
      * card is meant to be set in, and the list below only runs when that pin is
      * missing. Nothing here should ever be reached on a healthy checkout.
      *
      * The order is a preference, not a guess at what exists — several of these
-     * are usually installed together. Nimbus Sans leads because it is the same
-     * face as the pin, so a host that has lost the pin degrades to the nearest
-     * thing rather than to something else entirely. Liberation Sans next: it is
-     * Arial's metrics and Arial's letterforms, which is a *different* grotesque
-     * — angled terminals on C and t, a spurred G, a curled R leg where
-     * Helvetica cuts all three flat. DejaVu behind that is the near-universal
-     * floor, and wider and rounder still.
+     * are usually installed together. None of them is DM Sans: no stock host
+     * carries a geometric humanist, so a fallback card is a visibly different
+     * card, not a near miss. What is left to choose between is grotesques, and
+     * the list runs from the most neutral outward — Nimbus Sans (Helvetica's
+     * letterforms), then Liberation Sans (Arial's: angled terminals on C and t,
+     * a spurred G, a curled R leg), then DejaVu, wider and rounder still, as
+     * the near-universal floor.
      *
      * Arial rather than SF on macOS for a dull reason: SFNS.ttf is a variable
      * font and FreeType hands GD its default instance, so a "bold" drawn from
@@ -158,8 +158,8 @@ class OgImage
      * rather than leaving a mix of two faces.
      */
     private const SYSTEM_FONTS = [
-        // Nimbus Sans — the pinned face, if the host happens to carry it too.
-        // Debian: fonts-urw-base35. GD reads CFF outlines, so .otf is fine.
+        // Nimbus Sans — Debian's fonts-urw-base35, and the Dockerfile installs
+        // it. GD reads CFF outlines, so .otf is fine.
         ['/usr/share/fonts/opentype/urw-base35/NimbusSans-Regular.otf',
          '/usr/share/fonts/opentype/urw-base35/NimbusSans-Bold.otf'],
         ['/usr/share/fonts/opentype/urw-base35/NimbusSanL-Reg.otf',
@@ -187,10 +187,10 @@ class OgImage
 
     /**
      * The pinned face: `og-regular` and `og-bold` in the override directory,
-     * in either outline format. GD reads CFF (`.otf`) as happily as TrueType,
-     * and several of the free grotesques worth pinning — Nimbus Sans among
-     * them — ship only as OTF, so refusing that extension would have meant
-     * converting a font to satisfy a string literal.
+     * in either outline format. DM Sans arrives as TrueType; GD reads CFF
+     * (`.otf`) just as happily, and several of the free faces worth pinning
+     * ship only as OTF, so refusing that extension would have meant converting
+     * a font to satisfy a string literal.
      *
      * Both halves must be present in the same format-agnostic pair; a lone
      * regular falls through to SYSTEM_FONTS rather than drawing the title in

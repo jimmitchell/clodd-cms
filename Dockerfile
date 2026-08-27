@@ -2,10 +2,10 @@ FROM php:8.3-fpm
 
 # ── System dependencies + PHP extensions (single layer) ──────────────────────
 # fonts-urw-base35 is a safety net, not the card's font: OgImage draws with the
-# Nimbus Sans pinned in fonts/og/, and this package is the same face for the case
-# where that pin has gone missing. Cheap insurance — GD needs a real font file
-# and the pages' `system-ui` is not one, so a fontless image draws no cards at
-# all and only says so on stderr.
+# DM Sans pinned in fonts/og/, and no apt package carries that face — this is
+# only the first entry in OgImage::SYSTEM_FONTS, for the case where the pin has
+# gone missing. Cheap insurance, because GD needs a real font file and a
+# fontless image draws no cards at all while the build still reports success.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libsqlite3-dev \
         libonig-dev \

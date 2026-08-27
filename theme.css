@@ -1,25 +1,48 @@
 /* ── Clodd CMS — Public Theme ─────────────────────────────────────────────── */
 
-/* ── Typeface — the reader's own system font ──────────────────────────────
-   Nothing here is downloaded. `--font-sans` resolves to San Francisco on
-   Apple, Segoe UI on Windows, and whatever the desktop has set as its UI face
-   on Linux — which means the site paints in a face the reader already has
-   installed, with no @font-face request in front of first paint and no licence
-   attached to it.
+/* ── DM Sans — self-hosted variable font (Google Fonts, OFL license) ─────────
+   Sets everything on the site: UI, prose, and headings, and the OG card the
+   server draws is set in the static cut of the same family — a shared link and
+   the page it opens are the one typeface.
 
-   The trade is that the face is no longer known when this file is written.
-   Two rules follow from that, and both are load-bearing:
+   Self-hosted rather than linked from fonts.googleapis.com: every CSP in the
+   repo is `font-src 'self'`, so the CDN would mean loosening the policy in
+   three nginx configs and putting a third-party request in front of first
+   paint. The files are built from the upstream OFL sources, subset to latin +
+   latin-ext, with the weight axis clamped to 200–800 and the optical-size axis
+   pinned at 14 — carrying opsz live cost 29 KB on the preloaded critical path
+   for an adjustment nothing on the page is large enough to show.
 
-   • **Assume a full weight range, but keep asking for round numbers.** Every
-     system UI face carries at least 400 and 700, and most carry the steps
-     between. The rules below still name 400 or 700 outright because that is
-     what they were designed at — not, as before, because the family had
-     nothing else.
+   Two things follow from the swap back off the system stack, and both are
+   load-bearing:
 
-   • **Set leading against the tallest x-height in the stack, not the
-     shortest.** SF, Segoe UI and Roboto all set a large lowercase (~.51–.53em
-     against the em), so a paragraph needs more air between lines than a
-     small-x-height face does. See `body` below. */
+   • **The face is downloaded, so it must not block paint.** `font-display:
+     swap` on both cuts, and `templates/base.php` preloads the roman — and only
+     the roman, which sets essentially every glyph on a page. That preload's
+     URL has to stay character-for-character identical to the `src` below, or
+     the browser fetches the file twice.
+
+   • **The weight axis is live again, and the rules below still ask for 400 or
+     700.** That is now a design decision rather than a limit of the family:
+     1.26.0 flattened the ten rules that asked for 500 or 600 because GT
+     Walsheim shipped as two static cuts, and the flatter UI outlived it. Ask
+     for 500 here and you will get 500 — so only ask deliberately. */
+
+@font-face {
+    font-family: 'DM Sans';
+    src: url('/fonts/DMSans-Variable.woff2') format('woff2');
+    font-weight: 200 800;
+    font-style:  normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'DM Sans';
+    src: url('/fonts/DMSans-Variable-Italic.woff2') format('woff2');
+    font-weight: 200 800;
+    font-style:  italic;
+    font-display: swap;
+}
 
 /* Reset */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -61,7 +84,7 @@
     /* The type stacks, named once. Every rule below reaches for these rather
        than repeating the list — eight copies of the sans stack is eight places
        for it to drift. */
-    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-sans: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
@@ -132,11 +155,11 @@ html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
 }
 
 
-/* 30px on the 18px root, back up from 28. Leading is set against the x-height
-   rather than the em, and the system faces set a tall one — SF and Roboto both
-   land near .52em where the outgoing face was .461. At 1.5556 that lowercase
-   fills the line and a paragraph closes up into a grey slab. Keep it a whole
-   pixel at the root size: 1.6667 is 30/18. */
+/* 30px on the 18px root. Leading is set against the x-height rather than the
+   em, and DM Sans sets a tall one — .504em, within a hair of the system faces
+   this replaces and a world away from Walsheim's .461, which is the face the
+   short-lived 1.5556 was tuned for. Keep it a whole pixel at the root size:
+   1.6667 is 30/18. */
 body {
     font-family: var(--font-sans);
     line-height: 1.6667;
@@ -151,8 +174,8 @@ body {
 
 /* .site-main { flex: 1; width: 100%; } */
 
-/* Headings run tighter than body copy — a UI face is spaced for menu items and
-   labels, so its default tracking reads loose at display sizes. Uppercase micro-labels (.webmentions__title and friends) set their own
+/* Headings run tighter than body copy — DM Sans sets a little loose above body
+   size. Uppercase micro-labels (.webmentions__title and friends) set their own
    positive tracking and keep it, since class beats element. */
 h1, h2, h3, h4, h5, h6 { letter-spacing: -0.02em; }
 
