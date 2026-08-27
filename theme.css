@@ -679,6 +679,52 @@ audio { width: 100%; }
 .prose em     { font-style: italic; }
 .prose u { text-decoration: none; border-bottom: 1px solid var(--color-muted) }
 
+/* An external link in a post body trails a small arrow. Scoped to `.prose`, so
+   it marks a departure from the text the reader is *in*; the header and the
+   syndication row are chrome and already say where they go by name. A note card
+   carries `.prose` too, which is why the arrows show on the index as well — a
+   note is its own body, published whole.
+
+   Three things the selector has to get right, and each one was a wrong arrow:
+
+   • `[href^="http"]` on its own flags *internal* absolute links, which a
+     couple of imported posts still carry. The exclusion is written against the
+     authority — `//jimmitchell.org` — rather than as a bare substring: `*=`
+     alone would also swallow `https://bsky.app/profile/jimmitchell.org`, while
+     this form matches either scheme and leaves `micro.` and `social.`
+     external, which is what they are. It is the only host-specific string in
+     this file; the alternative is tagging the links server-side from the
+     configured site_url.
+
+   • `:not(:has(img))` keeps the arrow off the ~140 pictures in the archive
+     that are wrapped in a link. Hung off the corner of a photo it reads as
+     part of the picture rather than as a note about where it goes.
+
+   • The space is `\00a0`. An ordinary one is a break opportunity, so a link
+     ending a line drops its arrow alone onto the next.
+
+   `--color-muted`, not `--color-border-hover`: a border token set as text is
+   1.9:1 against the light card and 1.8:1 against the dark one, which is not a
+   faint arrow but an invisible one. Muted is 5.2:1 and 6.0:1.
+
+   Above =END CRITICAL= on purpose. It adds a glyph to running body copy, so
+   from the deferred sheet it would reflow the paragraphs of an article after
+   first paint. */
+.prose a[href^="http"]:not([href*="//jimmitchell.org"]):not(:has(img))::after {
+    content: "\00a0↗";
+    /* Declared twice: the alt text stops a screen reader announcing "north
+       east arrow" after every link, and an engine that does not parse the
+       two-value syntax keeps the first declaration — losing the muting, not
+       the arrow. */
+    content: "\00a0↗" / "";
+    font-size: .8em;
+    color: var(--color-muted);
+}
+
+/* No selector beyond the hover is needed: an `::after` with no `content`
+   generates no box, so this reaches exactly the links drawn above. */
+.prose a:hover::after { color: var(--color-link); }
+
 .prose table {
     width: 100%;
     border-collapse: collapse;

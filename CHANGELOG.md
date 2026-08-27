@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.41.0] — 2026-08-26
+
+No schema change.
+
+### Added
+
+- **An external link in a post body trails a small arrow.** `.prose a[href^="http"]::after` sets a muted `↗`, so a link that leaves the site says so before it is clicked rather than after. Scoped to `.prose` on purpose: the header and the syndication row are chrome and already name where they go. A note card carries `.prose` too, so the arrows appear on the index as well — a note is its own body, published whole.
+
+  Three things the selector has to get right, and each one was a wrong arrow. `[href^="http"]` alone flags *internal* absolute links, which a couple of imported posts still carry — so the rule excludes `//jimmitchell.org`, written against the authority rather than as a bare substring, since `*=` would also swallow `https://bsky.app/profile/jimmitchell.org` while this form covers either scheme and leaves `micro.` and `social.` external, which is what they are. `:not(:has(img))` keeps the arrow off the ~140 pictures in the archive that are wrapped in a link, where it would read as part of the photo. And the space is `\00a0`, because an ordinary one is a break opportunity and a link ending a line would drop its arrow alone onto the next.
+
+  `content` is declared twice — plain, then with `/ ""` — so a screen reader is not left announcing "north east arrow" after every link, while an engine that does not parse the two-value syntax keeps the arrow and loses only the muting. The colour is `--color-muted`, not `--color-border-hover`: a border token set as text measures 1.9:1 against the light card and 1.8:1 against the dark one, which is not a faint arrow but an absent one. Hovering the link takes the arrow to `--color-link` along with it, from a rule that needs no selector beyond `.prose a:hover::after` — an `::after` with no `content` generates no box, so it reaches exactly the links the rule above drew.
+
+  It sits above `=END CRITICAL=`, which is the whole placement question: the rule adds a glyph to running body copy, so from the deferred sheet it would reflow an article's paragraphs after first paint. It costs ~230 bytes on the inlined critical block.
+
+---
+
 ## [1.40.0] — 2026-08-26
 
 No schema change.
