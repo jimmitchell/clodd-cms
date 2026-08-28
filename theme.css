@@ -1252,9 +1252,194 @@ audio { width: 100%; }
     grid-column: 1 / -1;
 }
 
+/* ── Friend cards ─────────────────────────────────────────────────────────────
+   A blogroll entry, built *on* the .post-card frame rather than beside it: the
+   surface, border, radius, hover lift and stretched-anchor click target all come
+   from the rules above, so a friend card cannot drift from the feed's cards.
+   Only what a person has and a post does not is defined here.
+
+   Three decisions worth keeping:
+
+   - **Two columns, always.** The feed runs one-up inside the 740px measure
+     because a post needs the measure; a friend needs a name and two addresses,
+     so this grid keeps both columns and folds at the same 640px breakpoint
+     .post-list uses — shared in the responsive block below, not restated.
+   - **The domain is set in --font-mono.** On a page whose whole subject is
+     where people live, the address is data rather than a subtitle, and it is
+     the one thing that tells a friend card from a post card at a glance. It is
+     also the only new note in the design; everything else is borrowed.
+   - **The face is a circle, on --radius's exclusion.** Reasoning is written
+     above .site-header__avatar: a person is not a panel. Changing --radius must
+     leave this alone; changing the site's avatars is what it follows.
+
+   This sits above =END CRITICAL= unlike the rest of the page-type CSS, and that
+   is deliberate. The cards render inside .post__content.prose, whose descendant
+   selectors (img, a[href^=http]::after) outrank a bare class — so without these
+   rules the page is not merely unstyled, it is a column of full-bleed avatars
+   with drop shadows. Deferring them would flash exactly that. */
+
+.friend-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    align-items: stretch;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* A friend card carries a name and two addresses, so it takes the note card's
+   tighter gutters rather than the article card's. Spacing between its two rows
+   is margin, not the inner's gap, because the footer has to bottom-align. */
+.post-card--friend .post-card__inner {
+    padding: 1.15rem 1.25rem;
+    gap: 0;
+}
+
+/* Avatar, name and domain are one link, the way .site-header__avatar sits inside
+   the home link — one lockup, one target. It also keeps the picture out of the
+   lightbox and away from the ↗ marker, both of which already exempt an image
+   that lives inside an anchor. */
+.friend-id {
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    margin-bottom: .8rem;
+    text-decoration: none;
+    color: inherit;
+}
+
+/* Stretch that link over the whole card, matching .post-card__title a — but on
+   ::before, where the cards above use ::after. Inside .prose the ::after of an
+   outbound link already belongs to the ↗ marker, and the two fought: the marker
+   won on specificity, so the overlay's content became an arrow drawn at the
+   card's top-left corner. Two pseudo-elements, no contest. */
+.post-card--friend .friend-id::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+/* min-width:0 so a long domain can wrap inside the flex row instead of forcing
+   the card wider than its grid track. */
+.friend-id__text {
+    display: block;
+    min-width: 0;
+}
+
+/* 48px, which is neither the header's 32 nor a webmention's 40 — those are a
+   byline and a reaction, and here the person is the subject of the card. */
+.friend-avatar {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    display: block;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--color-code-bg);
+}
+
+/* No photo to hand: the initial, in the same circle. Identical treatment to
+   .wm-avatar--fallback, one step up in size for the larger disc. */
+.friend-avatar--initial {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-muted);
+    text-transform: uppercase;
+}
+
+.friend-name {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--color-text);
+    transition: color .15s ease;
+}
+
+.post-card--friend:hover .friend-name { color: var(--color-link); }
+
+.friend-domain {
+    display: block;
+    margin-top: .15rem;
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    color: var(--color-muted);
+    word-break: break-word;
+}
+
+/* The other addresses take the article footer's slot and its hairline. On a post
+   that rule means there is further to go; here it means the same thing, only
+   literally. Left-aligned rather than spread, because this is a list of unknown
+   length, and pushed to the card's foot so a wrapped name cannot misalign the
+   rules across a row. */
+.post-card--friend .post-card__meta {
+    justify-content: flex-start;
+    gap: .5rem;
+    margin-top: auto;
+    list-style: none;
+}
+
+.friend-links li {
+    display: flex;
+    gap: .5rem;
+}
+
+.friend-links li + li::before { content: "·"; }
+
+.friend-links a {
+    /* Above the card's stretched anchor, so each address stays its own target. */
+    position: relative;
+    z-index: 1;
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-rule);
+}
+
+.friend-links a:hover {
+    color: var(--color-link);
+    border-bottom-color: currentColor;
+}
+
+/* Living inside .prose ───────────────────────────────────────────────────────
+   The page body is rendered Markdown, so every .prose rule reaches this markup
+   as a descendant and outranks an unqualified class. These restate only what
+   .prose would otherwise win — narrowing .prose itself would change body copy on
+   every post to suit one page. The three-class selector on the avatar is not
+   decoration: `.prose img:not(.gallery img)` is (0,2,2) and has to be beaten. */
+.prose .friend-list  { margin: 1.5rem 0; padding: 0; }
+.prose .friend-links { margin: auto 0 0; padding: 0; }
+
+.prose .friend-id .friend-avatar {
+    width: 48px;
+    height: 48px;
+    max-width: none;
+    margin: 0;
+    border-radius: 50%;
+    box-shadow: none;
+}
+
+/* Every link on a friends page leaves the site, so the ↗ that marks an outbound
+   link in running copy marks nothing here — it would sit inside the card's
+   footer and, on a friend with no photo, in the middle of the name lockup.
+   Four classes deep because the marker's own selector carries three plus three
+   type steps; anything shorter loses to it silently. */
+.prose .friend-list .post-card--friend .friend-id::after,
+.prose .friend-list .post-card--friend .friend-links a::after { content: none; }
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .post-list { grid-template-columns: 1fr; }
+    /* The friends grid folds where the feed's does. One breakpoint, so the two
+       card layouts can never disagree about what counts as a phone. */
+    .post-list,
+    .friend-list { grid-template-columns: 1fr; }
 
     /* Show hamburger, hide inline nav links */
     .nav-toggle { display: flex; }

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.44.0] — 2026-08-27
+
+No schema change, no PHP change: `theme.css` only, plus the hand-written markup on
+`/friends/`. **Deploy note:** the friends page body is content, not code — `git pull`
+ships the styling, but the cards themselves have to be pasted into the page in the
+admin.
+
+### Added
+
+- **Friend cards on `/friends/`.** The blogroll was a two-column Markdown table, which is a fine way to store the data and a poor way to read it: a table row gives a person the same weight as a cell, and the second column had to be labelled "Elsewhere" because nothing about a bare `<td>` says what it is. These are cards instead — two columns on desktop, one on a phone.
+
+  They are built **on** `.post-card` rather than beside it. The surface, border, radius, hover lift and stretched-anchor click target all come from the rules the feed's cards already use, so a friend card cannot drift from a post card; only what a person has and a post does not is defined in the new block. The other addresses take `.post-card__meta` — the article footer's hairline slot, which on a post means there is further to go and here means the same thing, only literally.
+
+  Three things are deliberate. The grid keeps **both columns inside the 740px measure** where the feed runs one-up: a post needs the measure, a person needs a name and two addresses. It folds at the same 640px breakpoint `.post-list` uses, shared in the responsive block rather than restated. The **domain is set in `--font-mono`**, because on a page whose whole subject is where people live the address is data rather than a subtitle — it is the one new note in the design and the one thing that tells a friend card from a post card at a glance. And the **face is a circle at 50%, not `--radius`**, on the reasoning already written above `.site-header__avatar`: a person is not a panel. A friend with no photo to hand gets the initial in the same circle, identical to `.wm-avatar--fallback`.
+
+  The disc is **48px**, which is neither the header's 32 nor a webmention's 40. Those are a byline and a reaction; here the person is the subject of the card.
+
+  Markup is `h-card` — `p-name`, `u-url u-uid`, `u-photo`, `rel="friend"` — so a blogroll that is a list of people is machine-readable as one.
+
+### Fixed
+
+- **The friend block sits above `=END CRITICAL=`, unlike the rest of the page-type CSS, and the avatar's selector is three classes deep.** Both are the same fact: these cards render inside `.post__content.prose`, and `.prose`'s descendant selectors outrank an unqualified class. `.prose img:not(.gallery img)` is (0,2,2) and would otherwise make every avatar a full-bleed picture with a drop shadow, so the override has to beat it. Deferring the block would flash exactly that, on the only content the page has.
+
+  The stretched anchor is on `::before` where every other card uses `::after`, because inside `.prose` the `::after` of an outbound link already belongs to the ↗ marker. The two fought and the marker won: the overlay's `content` became an arrow, drawn at the card's top-left corner. The marker is then suppressed inside the cards outright — every link on a friends page leaves the site, so a glyph that means "this one leaves the site" marks nothing.
+
+---
+
 ## [1.43.0] — 2026-08-27
 
 Schema v31: new `post_legacy_urls` table. New scripts: `bin/reslug-numeric-asides.php`,
