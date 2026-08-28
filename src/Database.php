@@ -42,7 +42,7 @@ class Database
     // maintain on every analytics beacon write. No index removes the need to
     // aggregate a third of the table; only pre-aggregation would, and that is
     // not worth building for a dashboard nobody loads in a loop.
-    private const SCHEMA_VERSION = 30;
+    private const SCHEMA_VERSION = 31;
 
     public function __construct(private string $dbPath)
     {
@@ -824,6 +824,39 @@ class Database
         // legitimately send one that has no media row behind it.
         $this->pdo->exec("ALTER TABLE posts ADD COLUMN featured_image_url TEXT");
         $this->pdo->exec("ALTER TABLE posts ADD COLUMN featured_image_alt TEXT NOT NULL DEFAULT ''");
+    }
+
+    private function applySchemaV31(): void
+    {
+        // post_legacy_urls: addresses a post used to be reachable at.
+        //
+        // A permalink here is derived, never stored — Post::datePath() builds it
+        // from published_at + slug every time it is needed — which is what keeps
+        // a rename internally consistent across the feeds, the sitemap, the
+        // search index and the neighbour links. The outside world is the part
+        // that does not follow: webmention.io files a mention against its target
+        // verbatim, so the mentions on a renamed post stay filed under an
+        // address the page has stopped asking about, and anyone holding the old
+        // link gets 404.html.
+        //
+        // So the vacated address is kept. path is the whole datePath output
+        // ("2026/06/30/783", no surrounding slashes) rather than the bare slug,
+        // because a changed publication date moves the URL exactly as a changed
+        // slug does, and holding the full path makes both consumers — the 301
+        // generator and the webmention query — a plain string compare with
+        // nothing to re-derive.
+        //
+        // UNIQUE on path is what makes an address belong to one post: two posts
+        // can each have occupied it over time, and the redirect has to name one.
+        $this->run(<<<SQL
+            CREATE TABLE IF NOT EXISTS post_legacy_urls (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+                path       TEXT    NOT NULL UNIQUE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        SQL);
+        $this->run("CREATE INDEX IF NOT EXISTS idx_post_legacy_urls_post_id ON post_legacy_urls(post_id)");
     }
 
     /** Insert or update a single settings row. */

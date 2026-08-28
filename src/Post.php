@@ -1627,6 +1627,68 @@ class Post
     }
 
     /**
+     * Record an address this post has moved away from, so the old URL can still
+     * be redirected and its webmentions still found.
+     *
+     * $oldPath is a Post::datePath() output — "2026/06/30/783", no surrounding
+     * slashes. Pass null (or the path the post still occupies) and this is a
+     * no-op, so callers can hand over a snapshot without testing it first.
+     *
+     * Two orderings matter here:
+     *
+     *  - The row for the post's *new* address is deleted first. A post moved
+     *    back onto an address it once had would otherwise redirect to itself,
+     *    which nginx answers as a loop.
+     *  - The insert ignores a conflict on path, so an address two posts have
+     *    each occupied belongs to whoever vacated it first and is not silently
+     *    stolen by the second. Whichever way that is resolved it must be
+     *    deterministic: the alternative is a 301 that changes destination
+     *    depending on save order.
+     */
+    public function recordLegacyPath(?string $oldPath, string $tz = ''): void
+    {
+        if ($oldPath === null || $oldPath === '' || $this->id === null) {
+            return;
+        }
+
+        $current = $this->published_at !== null
+            ? self::datePath($this->published_at, $this->slug, $tz)
+            : null;
+
+        if ($current === $oldPath) {
+            return;
+        }
+
+        if ($current !== null) {
+            $this->db->delete('post_legacy_urls', 'path = :path', ['path' => $current]);
+        }
+
+        // exec() rather than insert(): the helper builds a plain INSERT, and
+        // the OR IGNORE is the whole point — see the docblock.
+        $this->db->exec(
+            "INSERT OR IGNORE INTO post_legacy_urls (post_id, path) VALUES (:post_id, :path)",
+            ['post_id' => $this->id, 'path' => $oldPath]
+        );
+    }
+
+    /**
+     * Every address this post used to be reachable at, oldest first.
+     *
+     * Returned as datePath segments with no surrounding slashes, matching what
+     * recordLegacyPath() stores — the caller decides whether it wants a URL or
+     * a redirect rule out of them.
+     */
+    public static function legacyPaths(Database $db, int $postId): array
+    {
+        $rows = $db->select(
+            "SELECT path FROM post_legacy_urls WHERE post_id = :id ORDER BY id",
+            ['id' => $postId]
+        );
+
+        return array_map(static fn(array $row): string => (string) $row['path'], $rows);
+    }
+
+    /**
      * The path segment that addresses this post, with no leading or trailing
      * slash — the date-based permalink once there is a publish date, otherwise
      * the bare slug.

@@ -255,6 +255,21 @@ server {
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://tinylytics.app https://www.googletagmanager.com https://platform.twitter.com https://www.instagram.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https:; media-src 'self'; connect-src 'self' https://tinylytics.app https://webmention.io https://www.google-analytics.com; frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://gist.github.com https://www.instagram.com https://platform.twitter.com https://www.linkedin.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
     }
 
+    # ── Permanent redirects ───────────────────────────────────────────────────
+    # Generated: every address a post has moved away from, from post_legacy_urls.
+    # Regenerate after any slug or publish-date change:
+    #   php bin/build-redirects.php > /tmp/cms-legacy-redirects.conf
+    #   sudo mv /tmp/cms-legacy-redirects.conf /etc/nginx/snippets/cms-legacy-redirects.conf
+    #   sudo nginx -t && sudo systemctl reload nginx
+    # An exact location beats the dated-post regex below, so these need no
+    # ordering care. Hand-written ones follow — keep them out of the snippet,
+    # which is overwritten wholesale.
+    #
+    # Wildcard on purpose: nginx refuses to start on an include naming a file
+    # that is not there, and a fresh checkout has not generated one yet. A
+    # missing snippet should cost the redirects, not the site.
+    include /etc/nginx/snippets/cms-legacy-redirects*.conf;
+
     # ── Static HTML output ────────────────────────────────────────────────────
     location / {
         try_files $uri $uri/ $uri/index.html @page;

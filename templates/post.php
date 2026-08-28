@@ -1,7 +1,8 @@
 <?php
 /**
  * Single post template.
- * Variables: $post (Post), $html (rendered Markdown), $settings, $navPages, $siteUrl, $render
+ * Variables: $post (Post), $html (rendered Markdown), $settings, $navPages, $siteUrl, $render,
+ *            $legacyPaths (datePath segments this post has moved away from)
  */
 
 use CMS\Helpers;
@@ -263,13 +264,29 @@ ob_start();
 
 <?php $hasWebmentions = ($settings['webmention_domain'] ?? '') !== ''; ?>
 <?php if ($hasWebmentions): ?>
+<?php
+/* Every address this post has been reachable at, oldest first. webmention.io
+   matches and stores a target verbatim, so a mention sent before a rename stays
+   filed under the URL it was sent to — asking only about the canonical would
+   make it disappear from the page it belongs to. */
+$legacyUrls = array_map(
+    static fn(string $path): string => rtrim($siteUrl, '/') . '/' . $path . '/',
+    $legacyPaths ?? []
+);
+?>
 <?php /* data-link-tags carries the query suffixes other sites append to links
          pointing here, so webmentions.js can ask about those variants alongside
          the canonical. webmention.io matches and stores a target verbatim, so a
          mention from a link-tagging blog is filed under an address this page
-         would otherwise never query. */ ?>
+         would otherwise never query.
+
+         data-legacy-urls is the same problem in time rather than in shape: an
+         address this post used to have. Both are extra target[] values on the
+         one query; neither is ever the *submit* target above, which has to be
+         the live address or a new mention arrives somewhere already dead. */ ?>
 <section class="webmentions" id="webmentions" data-url="<?= htmlspecialchars($canonical, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
-         data-link-tags="<?= Helpers::e(implode(' ', Helpers::linkTagVariants($settings['webmention_link_tags'] ?? ''))) ?>">
+         data-link-tags="<?= Helpers::e(implode(' ', Helpers::linkTagVariants($settings['webmention_link_tags'] ?? ''))) ?>"
+         data-legacy-urls="<?= Helpers::e(implode(' ', $legacyUrls)) ?>">
     <h2 class="webmentions__title">Webmentions</h2>
     <div class="webmentions__body"></div>
 </section>

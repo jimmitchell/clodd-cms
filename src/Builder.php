@@ -154,6 +154,10 @@ class Builder
             'nextPost'     => $nextPost,
             'relatedPosts' => $relatedPosts,
             'ogImageUrl'   => $ogImageUrl,
+            // Addresses this post has moved away from. The page asks
+            // webmention.io about them alongside its own, because a mention is
+            // filed against the target it was sent to and stays there.
+            'legacyPaths'  => $post->id !== null ? Post::legacyPaths($this->db, $post->id) : [],
         ]);
         $hash     = hash('sha256', $rendered);
 
@@ -259,6 +263,26 @@ class Builder
         }
 
         return $this->outputDir . '/posts/' . Post::datePath($publishedAt, $slug, $this->settings['timezone'] ?? '');
+    }
+
+    /**
+     * The public path a post occupies — "2026/06/30/my-slug", no surrounding
+     * slashes — or null if it has no public one.
+     *
+     * Same shape and the same argument for taking values rather than a Post as
+     * postOutputDir() above, and deliberately alongside it: both are the site
+     * timezone applied to published_at + slug, and the two must never disagree
+     * about where a post is. This is the half the outside world holds — the
+     * redirect for an address the post has left, and the webmention target
+     * filed under it.
+     */
+    public function postUrlPath(?string $publishedAt, string $slug): ?string
+    {
+        if ($publishedAt === null || $slug === '') {
+            return null;
+        }
+
+        return Post::datePath($publishedAt, $slug, $this->settings['timezone'] ?? '');
     }
 
     /**
@@ -970,6 +994,9 @@ class Builder
             // the same reasoning that leaves prev/next null here.
             'relatedPosts' => [],
             'ogImageUrl'   => '',
+            // A preview is not a published address, so nothing has moved away
+            // from it — same reasoning as the nulls above.
+            'legacyPaths'  => [],
         ]);
 
         $post->published_at = $originalPublishedAt;

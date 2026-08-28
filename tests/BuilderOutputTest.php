@@ -518,6 +518,44 @@ PHP);
         );
     }
 
+    public function testThePageQueriesItsOldAddressesButNeverSubmitsToOne(): void
+    {
+        $template = file_get_contents(dirname(__DIR__) . '/templates/post.php');
+        $this->assertNotFalse($template);
+
+        // The two halves pull opposite ways, which is why one test pins both.
+        // webmention.io files a mention against the target it was sent to, so:
+        //
+        //  - the *query* has to name every address the post has ever had, or a
+        //    rename makes the existing mentions vanish from the page;
+        //  - the *submit* target has to name only the live one, or a new mention
+        //    is accepted against an address that no longer resolves.
+        $this->assertMatchesRegularExpression(
+            '/id="webmentions".*?data-legacy-urls="<\?=[^?]*\$legacyUrls[^?]*\?>"/s',
+            $template,
+            'the webmentions section must ask about the addresses this post has left'
+        );
+
+        $this->assertSame(
+            1,
+            preg_match('/name="target"\s+value="<\?=\s*(.+?)\s*\?>"/s', $template, $submitted),
+            'precondition: the syndication footer carries a hidden webmention target'
+        );
+        $this->assertStringNotContainsString(
+            'legacy',
+            $submitted[1],
+            'a new mention must be submitted against the live address, never a vacated one'
+        );
+
+        $js = file_get_contents(dirname(__DIR__) . '/webmentions.js');
+        $this->assertNotFalse($js);
+        $this->assertStringContainsString(
+            'section.dataset.legacyUrls',
+            $js,
+            'the attribute is inert unless webmentions.js reads it into the target[] list'
+        );
+    }
+
     /**
      * A featured image is styled by sharing the body image's rules, never by
      * restating them.

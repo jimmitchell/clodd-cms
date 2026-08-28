@@ -51,6 +51,72 @@ final class PostPublisherTest extends TempSiteTestCase
         $this->publisher = new PostPublisher($this->db, $this->builder);
     }
 
+    // ── Vacated addresses ─────────────────────────────────────────────────────
+
+    public function testRenamingAPublishedPostRemembersTheAddressItLeft(): void
+    {
+        $post = $this->publishedPost('the-old-name', '2026-01-02 09:00:00');
+
+        $before = $this->publisher->snapshot($post);
+        $post->slug = 'the-new-name';
+        $post->save();
+        $this->publisher->rebuildAfterSave($post, $before);
+
+        // Pinned against the publisher, not any one caller: six entry points
+        // reach this method, and a redirect that exists only when the edit came
+        // from the admin is the shape of bug this class was written to end.
+        $this->assertSame(
+            ['2026/01/02/the-old-name'],
+            Post::legacyPaths($this->db, (int) $post->id)
+        );
+    }
+
+    public function testRedatingAPublishedPostRemembersTheAddressItLeft(): void
+    {
+        $post = $this->publishedPost('same-slug', '2026-01-02 09:00:00');
+
+        $before = $this->publisher->snapshot($post);
+        $post->published_at = '2026-06-01 09:00:00';
+        $post->save();
+        $this->publisher->rebuildAfterSave($post, $before);
+
+        // The date is half the permalink, so moving it moves the URL just as a
+        // rename does — which is why the whole path is stored, not the slug.
+        $this->assertSame(
+            ['2026/01/02/same-slug'],
+            Post::legacyPaths($this->db, (int) $post->id)
+        );
+    }
+
+    public function testASaveThatMovesNothingRecordsNothing(): void
+    {
+        $post = $this->publishedPost('stays-put', '2026-01-02 09:00:00');
+
+        $before = $this->publisher->snapshot($post);
+        $post->title = 'Retitled, same address';
+        $post->save();
+        $this->publisher->rebuildAfterSave($post, $before);
+
+        $this->assertSame([], Post::legacyPaths($this->db, (int) $post->id));
+    }
+
+    public function testADraftRenamedBeforeItIsEverPublicLeavesNoRedirect(): void
+    {
+        $post = $this->publishedPost('working-title', '2026-01-02 09:00:00');
+        $post->status = 'draft';
+        $post->save();
+
+        $before = $this->publisher->snapshot($post);
+        $post->slug = 'final-title';
+        $post->save();
+        $this->publisher->rebuildAfterSave($post, $before);
+
+        // An address nobody could reach is not one to redirect: snapshot() keeps
+        // 'path' only while the post was published, for the same reason it keeps
+        // 'dir' only then.
+        $this->assertSame([], Post::legacyPaths($this->db, (int) $post->id));
+    }
+
     // ── Neighbours ────────────────────────────────────────────────────────────
 
     public function testMovingAPostRebuildsBothTheOldAndNewNeighbours(): void

@@ -23,6 +23,16 @@
         if (tag) { _wmQuery += '&target[]=' + encodeURIComponent(withTag(target, tag)); }
     });
 
+    /* Addresses this post used to have, asked about in the same request. Same
+       reason as the tags: the mention is where it was sent, and a rename does not
+       move it. Bare only — a link-tagged mention against an address that has been
+       dead since before the tag setting existed is not worth the extra values,
+       and target[] is a URL each. Renders identically either way: the dedupe
+       below is on source and property, not on which target answered. */
+    (section.dataset.legacyUrls || '').split(/\s+/).forEach(function (url) {
+        if (url) { _wmQuery += '&target[]=' + encodeURIComponent(url); }
+    });
+
     var _wmCacheKey  = 'wm:' + target;
     var _wmCached    = null;
     var _wmRaw       = sessionStorage.getItem(_wmCacheKey);

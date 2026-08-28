@@ -60,6 +60,10 @@ final class PostPublisher
         return [
             'wasPublished' => $wasPublished,
             'dir'          => $wasPublished ? $this->builder->postOutputDir($post->published_at, $post->slug) : null,
+            // The same position as 'dir', addressed the way the outside world
+            // holds it. Kept only while the post was public: an address nobody
+            // could reach is not one to redirect.
+            'path'         => $wasPublished ? $this->builder->postUrlPath($post->published_at, $post->slug) : null,
             // Unhydrated on purpose: rebuildAfterSave() only re-renders these,
             // and Builder::buildPost() hydrates whatever it renders.
             'neighbours'   => $wasPublished
@@ -82,7 +86,7 @@ final class PostPublisher
     public function snapshotOfNothing(): array
     {
         return [
-            'wasPublished' => false, 'dir' => null, 'neighbours' => [],
+            'wasPublished' => false, 'dir' => null, 'path' => null, 'neighbours' => [],
             'catIds' => [], 'tagIds' => [], 'title' => null, 'slug' => null,
             'content' => null, 'publishedAt' => null, 'excerpt' => null, 'postKind' => null,
             'featuredUrl' => null, 'featuredAlt' => null,
@@ -106,6 +110,14 @@ final class PostPublisher
     {
         // Stale output at the old date-path, when a slug or published date moved.
         $this->builder->removeVacatedPostOutput($before['dir'] ?? null, $post);
+
+        // The address the post just left, kept so the old URL still redirects
+        // and the webmentions filed under it are still found. Deliberately
+        // beside removeVacatedPostOutput(): they are the two halves of a move —
+        // one clears what we serve there, this remembers that we used to.
+        // Every write path reaches this method, which is the point; doing it in
+        // Builder instead would have the renderer writing rows about posts.
+        $post->recordLegacyPath($before['path'] ?? null, $this->db->getSetting('timezone', ''));
 
         $isPublished  = $post->status === 'published' && $post->deleted_at === null;
         $wasPublished = (bool) ($before['wasPublished'] ?? false);

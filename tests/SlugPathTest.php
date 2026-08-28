@@ -200,6 +200,74 @@ final class SlugPathTest extends TempSiteTestCase
         $this->assertSame('2026/07/30/tz-post', $post->addressablePath());
     }
 
+    // ── Legacy addresses ──────────────────────────────────────────────────────
+
+    public function testRenamingAPostRecordsTheAddressItLeft(): void
+    {
+        $post = $this->makePost('the-old-name');
+
+        $post->recordLegacyPath('2026/07/29/the-old-name');
+        $this->assertSame([], Post::legacyPaths($this->db, (int) $post->id),
+            'the address a post still occupies is not one it has left');
+
+        $post->slug = 'the-new-name';
+        $post->save();
+        $post->recordLegacyPath('2026/07/29/the-old-name');
+
+        $this->assertSame(
+            ['2026/07/29/the-old-name'],
+            Post::legacyPaths($this->db, (int) $post->id)
+        );
+    }
+
+    public function testANullOrRepeatedVacatedPathIsHarmless(): void
+    {
+        $post = $this->makePost('first');
+        $post->slug = 'second';
+        $post->save();
+
+        $post->recordLegacyPath(null);
+        $post->recordLegacyPath('');
+        $post->recordLegacyPath('2026/07/29/first');
+        $post->recordLegacyPath('2026/07/29/first');
+
+        $this->assertSame(['2026/07/29/first'], Post::legacyPaths($this->db, (int) $post->id),
+            'callers hand over a snapshot without testing it, and a rebuild may run twice');
+    }
+
+    public function testAPostMovedBackDropsTheRedirectToItself(): void
+    {
+        $post = $this->makePost('home');
+
+        $post->slug = 'away';
+        $post->save();
+        $post->recordLegacyPath('2026/07/29/home');
+        $this->assertSame(['2026/07/29/home'], Post::legacyPaths($this->db, (int) $post->id));
+
+        // Back to where it started. Keeping the row would 301 /home/ to /home/,
+        // which nginx answers as a redirect loop.
+        $post->slug = 'home';
+        $post->save();
+        $post->recordLegacyPath('2026/07/29/away');
+
+        $this->assertSame(['2026/07/29/away'], Post::legacyPaths($this->db, (int) $post->id));
+    }
+
+    public function testTheVacatedAddressUsesTheSiteTimezone(): void
+    {
+        $post = $this->makePost('tz-move');
+        $post->published_at = '2026-07-30 02:00:00';   // the 29th in UTC-7
+        $post->slug         = 'tz-moved';
+        $post->save();
+
+        // Same instant, same post: under the site timezone the address it has
+        // now is the 29th, so a vacated 29th path must still register as a move
+        // rather than being mistaken for where it already is.
+        $post->recordLegacyPath('2026/07/29/tz-move', 'America/Los_Angeles');
+
+        $this->assertSame(['2026/07/29/tz-move'], Post::legacyPaths($this->db, (int) $post->id));
+    }
+
     private function makePost(string $slug): Post
     {
         $post = new Post($this->db);

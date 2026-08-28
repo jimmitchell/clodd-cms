@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.43.0] — 2026-08-27
+
+Schema v31: new `post_legacy_urls` table. New scripts: `bin/reslug-numeric-asides.php`,
+`bin/build-redirects.php`. **Deploy note:** `jimmitchell.org.nginx.conf` gains an
+`include`, so the redirect snippet has to be generated and nginx reloaded.
+
+### Added
+
+- **A post remembers the addresses it has moved away from.** A permalink here is derived and never stored — `Post::datePath()` rebuilds it from `published_at` + `slug` every time — which is what makes a rename internally consistent: the feeds, the sitemap, the search index and the neighbour links all follow at once. The outside world does not. Someone's bookmark, another blog's link and a search engine's index all still name the old URL, and since 1.13.1 the builder correctly *deletes* the directory that used to answer it, so the old address goes from serving the post to serving `404.html`.
+
+  `post_legacy_urls` keeps the vacated address. `PostPublisher::rebuildAfterSave()` records it, immediately beside the `removeVacatedPostOutput()` call it is the other half of — one clears what we serve there, the other remembers that we used to. Putting it there rather than at any one caller is the whole point: six entry points reach that method, and CLAUDE.md already records this exact class of bug being fixed at one entry point and missed at the rest, twice.
+
+  The full `datePath` is stored rather than the bare slug, because the publication date is the other half of a permalink and moving it moves the URL just as a rename does. `UNIQUE` on the path is what lets one address belong to one post. A post moved *back* onto an address it once held has that row dropped, or the redirect below would point at itself, which nginx answers as a loop.
+
+- **`bin/build-redirects.php` turns those into real 301s.** It emits exact-match `location` blocks — both the slashed and slashless forms, since the dated-post block rewrites either — included into the server block from `/etc/nginx/snippets/`. Exact locations beat the regex, so there is no ordering to get right, and they need no `http`-level context the way a `map` would. Only published, undeleted posts are emitted: a 301 to a page that also 404s is worse than the 404.
+
+  The `include` is wildcarded on purpose. nginx refuses to start on an include naming a file that is not there, and a fresh checkout has generated nothing yet — a missing snippet should cost the redirects, not the site. The line is in **both** `jimmitchell.org.nginx.conf` and `nginx.conf.example`, which previously had no redirects section at all.
+
+- **The post page asks webmention.io about its old addresses too.** webmention.io matches and stores a target *verbatim* — the fact 1.31.0 was built around — so a mention sent before a rename stays filed under the URL it was sent to. Asking only about the canonical would make it vanish from the page it belongs to, silently and permanently, since nothing here stores a webmention and there is no local copy to re-point.
+
+  `data-legacy-urls` on `#webmentions` carries them, and `webmentions.js` appends one `target[]` per address to the request it already makes — the same one-request, many-targets shape the link-tag variants use, and the existing `wm-source|wm-property` dedupe already collapses a mention returned under two of them. The submit target stays the canonical and only the canonical: the query wants every address the post has ever had, the form wants the one that still resolves, and a new mention accepted against a dead URL is invisible forever. `BuilderOutputTest` pins both halves.
+
+### Changed
+
+- **The 635 legacy numeric asides get readable slugs.** A titleless note had nothing to slugify before 1.11.0, so it took the autoincrement id and published at `/2026/06/30/783/`. 1.11.0 started deriving one from the body and deliberately left the backlog alone, because re-slugging would have broken every URL already out in the world; the two additions above are what make it affordable now. `bin/reslug-numeric-asides.php` is read-only until `--apply`, and prints the whole old → new table first — a slug is a URL, and this rewrites hundreds at once.
+
+  The new slug comes from the last segment of `import_guid`, the post's original micro.blog permalink: micro.blog derived it from the same body, better truncated than a fresh five-word cut, and it is the address these posts were actually read at for years. `Post::slugFromContent()` is the fallback for a note written here rather than imported. A note with no words to name it — a bare `like-of`, a photo-only post — keeps its id, which is the case that fallback exists for.
+
+  Two things it has to get right that are invisible until they fail. `Post::resolveUniqueSlug()` only knows what is in the database, and nothing is written until the transaction, so two posts whose bodies open the same way would both be handed the same free slug and the second `UPDATE` would hit the `UNIQUE` constraint — the script tracks in-flight claims as well. Not hypothetical: seven of the 635 collide, one of them three ways. And the outbound webmention clock is held still, because `bin/send-webmentions.php` re-sends when `updated_at > webmentions_sent_at` and a bulk rename would otherwise re-ping every site these posts link to. Only our source URL moved; a second ping would just file a duplicate on someone else's page under two addresses.
+
 ## [1.42.0] — 2026-08-27
 
 No schema change.
