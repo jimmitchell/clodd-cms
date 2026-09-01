@@ -755,7 +755,7 @@ PHP);
         $html = Post::contextsHtml([['kind' => 'bookmark-of', 'url' => 'https://example.com/keep']]);
         $this->assertStringContainsString('fill="currentColor"', $html);
         $this->assertDoesNotMatchRegularExpression(
-            '/<svg[^>]*\b(width|height)="\d/',
+            '/<svg[^>]*\b(width|height)="[\d.]+(px)?"/',
             $html,
             'The icon carries a pixel size, so it will not track the line it sits on.'
         );
@@ -769,6 +769,35 @@ PHP);
             $css,
             'theme.css must size .post__context-icon in em, so it scales with the line.'
         );
+    }
+
+    /**
+     * The same icon has to survive having no stylesheet at all.
+     *
+     * `contextsHtml()` is shared by the page and all three feeds, and a feed
+     * reader renders the markup without theme.css. An `<svg>` with no intrinsic
+     * size then falls back to the SVG default — 100% wide by 150px tall — so the
+     * bookmark arrives the width of the reading column, which is what it did
+     * until 1.44.1. Both dimensions are needed: height alone still leaves the
+     * width at 100%, and the icon sits centred in a column-wide gap.
+     *
+     * They stay in `em` so the rule above still holds in a reader, and stay as
+     * attributes rather than a `style=` so `.post__context-icon` outranks them
+     * on the site. Nothing here can assert what a reader does, so this asserts
+     * the property that makes it behave: a size, in em, on both axes, in the
+     * feed output as well as the page.
+     */
+    public function testTheDrawnSymbolCarriesItsOwnSizeForFeedReaders(): void
+    {
+        $html = Post::contextsHtml([['kind' => 'bookmark-of', 'url' => 'https://example.com/keep']]);
+
+        foreach (['width', 'height'] as $axis) {
+            $this->assertMatchesRegularExpression(
+                '/<svg[^>]*\b' . $axis . '="\.?\d[\d.]*em"/',
+                $html,
+                "The icon has no intrinsic $axis, so a feed reader draws it at the SVG default."
+            );
+        }
     }
 
 

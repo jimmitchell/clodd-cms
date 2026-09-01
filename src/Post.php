@@ -1014,11 +1014,20 @@ class Post
      * A feed reader that strips SVG leaves the line reading "Bookmarked
      * example.com", which is the whole meaning: the symbol is `aria-hidden` on
      * the site for the same reason.
+     *
+     * A feed reader that *keeps* it has no theme.css, and an `<svg>` with no
+     * intrinsic size falls back to the SVG default of 100% by 150px — the icon
+     * arrives the width of the column, which is what it did until 1.44.1. So the
+     * markup carries its own width and height, in `em` rather than pixels: the
+     * attributes are the lowest-priority sizing there is, so `.post__context-icon`
+     * still wins on the site and the icon still tracks the line it sits on
+     * (.875rem on a post page, .8rem on a card) in both places.
      */
     private const CONTEXT_ICONS = [
         'bookmark-of' =>
             '<svg class="post__context-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"'
-            . ' aria-hidden="true" focusable="false"><path fill="currentColor" d="M0 48V487.7C0 501.1'
+            . ' width=".64em" height=".85em" aria-hidden="true" focusable="false">'
+            . '<path fill="currentColor" d="M0 48V487.7C0 501.1'
             . ' 10.9 512 24.3 512c5 0 9.9-1.5 14-4.4L192 400 345.7 507.6c4.1 2.9 9 4.4 14 4.4c13.4 0'
             . ' 24.3-10.9 24.3-24.3V48c0-26.5-21.5-48-48-48H48C21.5 0 0 21.5 0 48z"/></svg>',
     ];

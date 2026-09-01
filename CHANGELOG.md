@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.44.1] — 2026-09-01
+
+No schema change, no CSS change: one line of markup in `src/Post.php`, plus the test
+that pins it. A full rebuild is needed — the bookmark icon is baked into every post
+page and all three feeds.
+
+### Fixed
+
+- **The bookmark icon filled the column in a feed reader.** `Post::contextsHtml()` is shared by the page and the RSS, Atom and JSON feeds, and the bookmark symbol is the one context marker drawn as inline SVG rather than typed as a character. Its size lived entirely in `theme.css`, which a feed reader does not load — and an `<svg>` with no intrinsic size falls back to the SVG default of 100% wide by 150px tall, so a bookmarked post arrived with a bookmark the width of the reading column above it.
+
+  The markup now carries `width=".64em" height=".85em"`. Both axes are needed: a height alone still leaves the width at 100%, which trades a huge icon for a small one centred in a column-wide gap. They are **`em`, not pixels**, so the rule the icon was already written to follow — track the line it sits on, .875rem on a post page and .8rem on a card — holds in a reader too, where the line is whatever size that reader sets. And they are **attributes, not a `style=`**, because a presentation attribute is the lowest-priority sizing there is: `.post__context-icon` still wins wherever theme.css is loaded, so nothing about the site changes.
+
+  `BuilderOutputTest` gains `testTheDrawnSymbolCarriesItsOwnSizeForFeedReaders()`, and the existing test that forbade a size on the icon is narrowed to what it actually meant — no *pixel* size — rather than no size at all.
+
+---
+
 ## [1.44.0] — 2026-08-27
 
 No schema change, no PHP change: `theme.css` only, plus the hand-written markup on
