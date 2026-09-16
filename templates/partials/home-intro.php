@@ -42,9 +42,10 @@ if ($introName !== ''):
         endif; ?>
     </p>
     <?php /* The same links as the footer, minus the feed — the home page already
-             advertises that through <link rel="alternate">. Here they are named
-             rather than icons alone: this is a first-time visitor's first look at
-             where else to find the author. They sit inside the h-card so their
+             advertises that through <link rel="alternate">. $socialNames writes
+             each network's name into the link as text rather than an aria-label;
+             theme.css clips it away, so the row shows marks alone while a screen
+             reader still hears "Mastodon". They sit inside the h-card so their
              rel="me" is found on the representative h-card, not only down in the
              footer. */ ?>
     <?php if ($introSocial !== ''): ?>

@@ -16,9 +16,12 @@
  * Optional in scope:
  *   $socialFeed  — true to append the RSS link (footer only; the home page
  *                  already discovers the feed via <link rel="alternate">)
- *   $socialNames — true to print each network's name beside its icon (home page
- *                  only; the footer keeps icons alone). The name then labels the
- *                  link, so aria-label is dropped rather than saying it twice.
+ *   $socialNames — true to write each network's name into the link as text (home
+ *                  page only; the footer names its links with aria-label). The
+ *                  name then labels the link, so aria-label is dropped rather
+ *                  than saying it twice. The home page clips the text away in
+ *                  CSS and shows the marks alone — it is there to be read aloud,
+ *                  not looked at.
  *
  * The options are read once and unset, so an earlier include cannot leak its
  * settings into a later one.

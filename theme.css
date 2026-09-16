@@ -874,28 +874,45 @@ audio { width: 100%; }
 .home-intro__text .p-note { color: var(--color-muted); }
 
 /* The links that go somewhere sit on their own line, so the eye lands on them
-   after the sentence rather than competing with it. Unlike the footer these are
-   named, not icons alone — a first-time visitor should not have to recognise a
-   glyph to know where a link goes. The type is small enough that the row still
-   reads as a caption under the greeting rather than a second sentence. */
+   after the sentence rather than competing with it. Marks alone, like the
+   footer: the network names are still in the markup — they are what names each
+   link for a screen reader — but clipped away, so the row reads as a short strip
+   of marks under the greeting rather than a second sentence competing with the
+   first. With the words gone the marks carry the whole job, so they are drawn a
+   touch larger than the footer's and spaced further apart; the padding gives each
+   one a hit area taller than the glyph. They are one size at every width — at
+   1rem there is nothing left to tighten on desktop, so only the gap closes. */
 .home-intro__social {
     margin-top: .8rem;
     display: flex;
     align-items: center;
-    gap: 1.1rem;
-    font-size: .85rem;
+    gap: 1.15rem;
 }
 
-.home-intro__social .social-link { padding: .15rem 0; }
+.home-intro__social .social-link { padding: .3rem 0; }
 .home-intro__social .social-link svg {
-    width: .95rem;
-    height: .95rem;
-    margin-right: .3rem;
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Clipped, not display:none — the latter takes the name out of the accessibility
+   tree along with the layout, which would leave each link announced as nothing
+   but its URL. */
+.home-intro__social .social-link__name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 /* Desktop and up: the greeting becomes a panel. The social row tightens with it
    — inside a frame the row is a caption on a block rather than a line adrift on
-   the page, so it can sit closer and smaller without losing its footing. */
+   the page, so the marks can sit closer without losing their footing. */
 @media (min-width: 640px) {
     .home-intro {
         margin: 1rem 0 1.5rem;
@@ -906,13 +923,7 @@ audio { width: 100%; }
     }
 
     .home-intro__social {
-        gap: .75rem;
-        font-size: .8rem;
-    }
-
-    .home-intro__social .social-link svg {
-        width: .8rem;
-        height: .8rem;
+        gap: 1rem;
     }
 }
 
