@@ -242,6 +242,50 @@ $showRelatedPosts = $_SERVER['REQUEST_METHOD'] === 'POST'
     </div>
 
     <div class="panel">
+        <h2>Newsletter (EmailOctopus)</h2>
+
+        <label for="emailoctopus_api_key">API key</label>
+        <input type="password" id="emailoctopus_api_key" name="emailoctopus_api_key"
+               value=""
+               placeholder="<?= ($settings['emailoctopus_api_key'] ?? '') !== '' ? '(saved — leave blank to keep)' : 'Paste your API key here' ?>"
+               autocomplete="new-password"
+               style="max-width:360px">
+        <p class="form-hint">Create one in EmailOctopus under Integrations &amp; API.</p>
+
+        <label for="emailoctopus_list_id">List ID</label>
+        <input type="text" id="emailoctopus_list_id" name="emailoctopus_list_id"
+               value="<?= Helpers::e($_POST['emailoctopus_list_id'] ?? $settings['emailoctopus_list_id'] ?? '') ?>"
+               spellcheck="false" style="max-width:360px">
+
+        <label for="emailoctopus_automation_id">Automation ID</label>
+        <input type="text" id="emailoctopus_automation_id" name="emailoctopus_automation_id"
+               value="<?= Helpers::e($_POST['emailoctopus_automation_id'] ?? $settings['emailoctopus_automation_id'] ?? '') ?>"
+               spellcheck="false" style="max-width:360px">
+
+        <p class="form-hint">
+            When all three are set, a signup form appears under every article, and
+            <code>[subscribe]</code> in a page puts one there too. Each new article is
+            emailed to confirmed subscribers about ten minutes after it is published,
+            by <code>bin/send-newsletter.php</code> running from cron. Notes, photo posts
+            and replies are never emailed.
+        </p>
+        <?php if (($settings['newsletter_enabled_from'] ?? '') !== ''): ?>
+        <p class="form-hint">
+            Emailing articles published since <?= Helpers::e($settings['newsletter_enabled_from'] ?? '') ?> UTC.
+            Earlier posts are never sent.
+        </p>
+        <?php endif; ?>
+        <p class="form-hint">
+            <strong>Set up in EmailOctopus first.</strong> On the list, turn on double
+            opt-in and add the custom fields <code>ArticleTitle</code>, <code>ArticleUrl</code>,
+            <code>ArticleExcerpt</code> and <code>ArticleImage</code>. Then create an automation
+            that is <em>Started via API</em>, with <em>Allow contacts to repeat</em> turned on,
+            holding one email written with those fields as merge tags, e.g.
+            <code>{{ArticleTitle}}</code>.
+        </p>
+    </div>
+
+    <div class="panel">
         <h2>Email Reply</h2>
 
         <label for="reply_email">Reply-to email address</label>

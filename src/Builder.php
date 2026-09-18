@@ -72,7 +72,7 @@ class Builder
         // pages load. See OgImage::__construct() — with nothing there the
         // host's own sans is drawn instead, and the card stops matching.
         $this->fontDir     = $this->outputDir . '/fonts/og';
-        $this->shortcodes  = new ShortcodeRenderer($db, $this->mediaDir);
+        $this->shortcodes  = new ShortcodeRenderer($db, $this->mediaDir, $this->templateDir);
 
         // Allow trusted admin to embed <video>/<audio> in Markdown.
         $env = new Environment([

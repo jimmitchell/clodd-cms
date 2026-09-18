@@ -314,3 +314,55 @@
     }
 
 }());
+
+/*
+ * Newsletter signup: answer inline instead of leaving the page.
+ *
+ * The form works without this — a native POST lands on subscribe.php's own
+ * reply page. Asking for JSON is what tells subscribe.php to answer in a form
+ * this can show under the field. Everything reaches the page through
+ * textContent, so the server's message is inert.
+ */
+(function () {
+    var form = document.getElementById('subscribe');
+    if (!form || !window.fetch || !window.FormData) return;
+
+    var status = form.querySelector('.subscribe__status');
+    var button = form.querySelector('.subscribe__send');
+    if (!status || !button) return;
+
+    function say(text) {
+        status.textContent = text;
+        status.hidden = false;
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        button.disabled = true;
+        button.textContent = 'Subscribing…';
+
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        }).then(function (res) {
+            return res.json().catch(function () { return { ok: false }; });
+        }).then(function (data) {
+            if (data && data.ok) {
+                form.classList.add('is-sent');
+                say(data.message);
+                return;
+            }
+            // A failure leaves the address in the field, so fixing a typo does
+            // not mean typing it all again.
+            button.disabled = false;
+            button.textContent = 'Subscribe';
+            say((data && data.message) || 'That didn’t go through. Please try again.');
+        }).catch(function () {
+            button.disabled = false;
+            button.textContent = 'Subscribe';
+            say('That didn’t go through. Check your connection and try again.');
+        });
+    });
+}());

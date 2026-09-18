@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.45.0] — 2026-09-18
+
+**Schema v32.** Adds `posts.newsletter_skip`, `posts.newsletter_at` and a
+`newsletter_deliveries` table. New public endpoint (`subscribe.php`) and new cron script
+(`bin/send-newsletter.php`). **Deploy note:** all three nginx configs gain a `subscribe`
+rate-limit zone and a `/subscribe.php` location, and `jimmitchell.org.nginx.conf` is
+gitignored, so it has to be copied up by hand. A full rebuild follows the settings save
+automatically.
+
+### Added
+
+- **Email subscriptions for articles, through EmailOctopus.** A signup form sits under every article (titled posts only: never notes, photos or replies), and `[subscribe]` in a page body puts the same form anywhere else, which is what a `/subscribe` page is written around. Readers are added to the list as *pending*, so EmailOctopus sends the double opt-in confirmation and no mail server runs here.
+
+  EmailOctopus's API cannot create or send a campaign, so an article goes out through an automation instead. For each confirmed subscriber, `bin/send-newsletter.php` writes the article into contact fields (`ArticleTitle`, `ArticleUrl`, `ArticleExcerpt`, `ArticleImage`) and then starts a *Started via API* automation whose single email uses them as merge tags. Each subscriber queued gets a `newsletter_deliveries` row, so a run that dies halfway picks up where it stopped and never emails anyone twice.
+
+  What is never sent: anything published before the feature was first configured (`newsletter_enabled_from`, stamped once, which is what stops the first run emailing the archive); anything older than three days; anything still in its ten-minute grace period after publishing; and anything with **Email to subscribers** unticked in the editor. One article goes out per run, and a new one waits an hour behind the last, because the contact fields hold one article at a time. See `CMS\Newsletter`.
+
+- **`subscribe.php`** follows the public-endpoint invariants: `display_errors` off, POST only, an Origin check, a honeypot, the same reply whether the address was new or already listed, and a new `Auth::SCOPE_SUBSCRIBE` checked before EmailOctopus is called. nginx meters it with its own `subscribe` zone. It works without JavaScript by rendering its own small reply page; `theme.js` upgrades it to an inline reply.
+
+- **Settings → General → Newsletter** takes the API key (stored like the other tokens: blank keeps it), the list ID and the automation ID, and checks the key and list against EmailOctopus on save.
+
+---
+
 ## [1.44.1] — 2026-09-01
 
 No schema change, no CSS change: one line of markup in `src/Post.php`, plus the test

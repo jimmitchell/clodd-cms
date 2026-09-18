@@ -288,6 +288,29 @@ the heartbeat has gone stale and posts are waiting**, which is how you find out
 the cron has stopped. Don't rely on the fallback as the normal path: it only
 fires when somebody happens to visit.
 
+## Newsletter (cron)
+
+**Required only if you use the EmailOctopus signup form.** New articles are
+emailed from cron, never on the publish path. Set up the list, the four custom
+fields and the *Started via API* automation first; Settings → General →
+Newsletter lists them.
+
+```bash
+php /var/www/cms/bin/send-newsletter.php             # send the next article, if one is due
+php /var/www/cms/bin/send-newsletter.php --dry-run   # show what would go out and to how many
+php /var/www/cms/bin/send-newsletter.php --quiet     # silent unless it sent or failed
+```
+
+Add it to www-data's crontab, like the scheduler:
+
+```
+0-59/5 * * * * /usr/bin/php /var/www/cms/bin/send-newsletter.php --quiet >> /var/www/cms/storage/newsletter.log 2>&1
+```
+
+An article goes out about ten minutes after it is published. Only articles
+published after the settings were first saved are ever sent, so enabling this
+does not email the archive.
+
 ---
 
 ## Retention pruning (cron)

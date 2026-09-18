@@ -37,6 +37,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'pixelfed_url'         => rtrim(trim($_POST['pixelfed_url']      ?? ''), '/'),
         'pixelfed_instance'    => rtrim(trim($_POST['pixelfed_instance'] ?? ''), '/'),
         'pixelfed_token'       => trim($_POST['pixelfed_token']       ?? ''),
+        'emailoctopus_api_key'       => trim($_POST['emailoctopus_api_key']       ?? ''),
+        'emailoctopus_list_id'       => trim($_POST['emailoctopus_list_id']       ?? ''),
+        'emailoctopus_automation_id' => trim($_POST['emailoctopus_automation_id'] ?? ''),
         'reply_email'          => trim($_POST['reply_email']          ?? ''),
         'github_url'           => rtrim(trim($_POST['github_url']           ?? ''), '/'),
         'tinylytics_code'        => trim($_POST['tinylytics_code']        ?? ''),
@@ -102,9 +105,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Both go into API paths, so hold them to the shape EmailOctopus issues.
+    foreach (['emailoctopus_list_id' => 'List ID', 'emailoctopus_automation_id' => 'Automation ID'] as $key => $label) {
+        if ($fields[$key] !== '' && preg_match('/^[A-Za-z0-9-]{1,64}$/', $fields[$key]) !== 1) {
+            $errors[] = "EmailOctopus {$label} should be the ID from EmailOctopus: letters, numbers and hyphens.";
+        }
+    }
+
     if (empty($errors)) {
         // Secret fields are left blank to keep the saved value — skip them when empty.
-        $secretFields = ['mastodon_token', 'bluesky_app_password', 'pixelfed_token'];
+        $secretFields = ['mastodon_token', 'bluesky_app_password', 'pixelfed_token', 'emailoctopus_api_key'];
         foreach ($fields as $key => $value) {
             if (in_array($key, $secretFields, true) && $value === '') {
                 continue;
@@ -112,12 +122,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->upsertSetting($key, $value);
         }
 
+        // The newsletter's start line. Only articles published after the moment
+        // it was first fully set up are ever emailed — without this the first
+        // cron run would send the whole archive. Stamped once and never moved,
+        // so re-saving the settings does not skip articles waiting to go out.
+        $newsletter = \CMS\EmailOctopus::fromSettings($db);
+        $flashMsg   = 'Settings saved — site rebuild started in the background. Check the activity log to confirm completion.';
+        if ($newsletter !== null) {
+            if ($db->getSetting('newsletter_enabled_from') === '') {
+                $db->upsertSetting('newsletter_enabled_from', date('Y-m-d H:i:s'));
+            }
+            if (!$newsletter->checkList()) {
+                $flashMsg .= ' Warning: EmailOctopus did not accept that API key and list ID, so signups and article emails will fail until they are corrected.';
+            }
+        }
+
         // Rebuilding posts, pages, shared resources, and taxonomy archives can take
         // many minutes — long enough that nginx's fastcgi_read_timeout would cut the
         // response off and the admin UI would appear locked. Send the redirect
         // immediately, then keep building after FastCGI hangs up. Completion is
         // recorded in the activity log.
-        $auth->flash('Settings saved — site rebuild started in the background. Check the activity log to confirm completion.');
+        $auth->flash($flashMsg);
         header('Location: /admin/settings.php?tab=general');
 
         ignore_user_abort(true);

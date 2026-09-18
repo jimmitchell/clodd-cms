@@ -42,7 +42,7 @@ class Database
     // maintain on every analytics beacon write. No index removes the need to
     // aggregate a third of the table; only pre-aggregation would, and that is
     // not worth building for a dashboard nobody loads in a loop.
-    private const SCHEMA_VERSION = 31;
+    private const SCHEMA_VERSION = 32;
 
     public function __construct(private string $dbPath)
     {
@@ -857,6 +857,32 @@ class Database
             )
         SQL);
         $this->run("CREATE INDEX IF NOT EXISTS idx_post_legacy_urls_post_id ON post_legacy_urls(post_id)");
+    }
+
+    private function applySchemaV32(): void
+    {
+        // Emailing a new article to subscribers through EmailOctopus — see
+        // Newsletter. newsletter_skip is the per-post opt-out, the same shape as
+        // the three syndication *_skip columns; newsletter_at is when the send
+        // finished, NULL until then.
+        //
+        // newsletter_deliveries is one row per subscriber an article was
+        // queued for. EmailOctopus has no "send a campaign" call, so a send is
+        // one API round-trip pair per subscriber — long enough for a cron run
+        // to die halfway. The rows are what let the next run carry on from
+        // where it stopped instead of starting over and emailing the first
+        // half twice. contact_id is EmailOctopus's id, not an address: nothing
+        // here needs to know who the subscribers are.
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN newsletter_skip INTEGER NOT NULL DEFAULT 0");
+        $this->pdo->exec("ALTER TABLE posts ADD COLUMN newsletter_at   DATETIME");
+        $this->run(<<<SQL
+            CREATE TABLE IF NOT EXISTS newsletter_deliveries (
+                post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+                contact_id TEXT    NOT NULL,
+                queued_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (post_id, contact_id)
+            )
+        SQL);
     }
 
     /** Insert or update a single settings row. */

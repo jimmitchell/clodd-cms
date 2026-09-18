@@ -4,6 +4,11 @@
 # Rate-limit zone for the analytics beacon: 2 requests/second per IP, 10 MB state.
 limit_req_zone $binary_remote_addr zone=beacon:10m rate=2r/s;
 
+# Rate-limit zone for newsletter signups: 1 request/minute per IP with a burst
+# of 5, which no person filling in a form will reach. subscribe.php also locks
+# an IP out after repeated bad input (Auth::SCOPE_SUBSCRIBE) as a second layer.
+limit_req_zone $binary_remote_addr zone=subscribe:10m rate=1r/m;
+
 server {
     listen 80;
     server_name example.com www.example.com;
@@ -98,6 +103,22 @@ server {
         include        fastcgi_params;
         fastcgi_pass   unix:/run/php/php8.3-fpm.sock;
         fastcgi_param  SCRIPT_FILENAME $document_root/track.php;
+        fastcgi_param  HTTPS           on;
+
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control          "no-store" always;
+    }
+
+    # ── Newsletter signup — POST only, rate-limited ───────────────────────────
+    location = /subscribe.php {
+        limit_except POST { deny all; }
+        limit_req zone=subscribe burst=5 nodelay;
+        limit_req_status 429;
+        client_max_body_size 4k;
+
+        include        fastcgi_params;
+        fastcgi_pass   unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param  SCRIPT_FILENAME $document_root/subscribe.php;
         fastcgi_param  HTTPS           on;
 
         add_header X-Content-Type-Options "nosniff" always;

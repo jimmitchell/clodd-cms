@@ -2024,7 +2024,8 @@ audio { width: 100%; }
     line-height: 1.5;
 }
 
-.wm-submit__row {
+.wm-submit__row,
+.subscribe__row {
     display: flex;
     gap: .375rem;
 }
@@ -2033,7 +2034,8 @@ audio { width: 100%; }
    down to the 4px radius small chrome keeps instead of --radius. 1rem is not a
    whim either: iOS zooms the viewport on focus for anything smaller, which would
    throw the reader out of the page they are trying to respond to. */
-.wm-submit__input {
+.wm-submit__input,
+.subscribe__input {
     flex: 1;
     min-width: 0;
     border: 1px solid var(--color-border);
@@ -2047,14 +2049,16 @@ audio { width: 100%; }
     transition: border-color .15s;
 }
 
-.wm-submit__input:focus { border-color: var(--color-link); }
+.wm-submit__input:focus,
+.subscribe__input:focus { border-color: var(--color-link); }
 
 /* The label is --color-bg, not #fff: --color-link is a deep navy on paper but a
    pale sky in dark mode, where white text on it lands around 1.9:1 and is barely
    readable. Taking the page's own ground colour inverts with the theme and clears
    7:1 both ways. .search-page__form button takes the same token for the same
    reason. */
-.wm-submit__send {
+.wm-submit__send,
+.subscribe__send {
     flex: none;
     background: var(--color-link);
     color: var(--color-bg);
@@ -2067,9 +2071,11 @@ audio { width: 100%; }
     transition: background .15s;
 }
 
-.wm-submit__send:hover { background: color-mix(in srgb, var(--color-link) 90%, #000); }
+.wm-submit__send:hover,
+.subscribe__send:hover { background: color-mix(in srgb, var(--color-link) 90%, #000); }
 
-.wm-submit__status {
+.wm-submit__status,
+.subscribe__status {
     margin-top: .5rem;
     line-height: 1.5;
 }
@@ -2080,6 +2086,87 @@ audio { width: 100%; }
 .wm-submit__form.is-sent .wm-submit__label,
 .wm-submit__form.is-sent .wm-submit__row {
     display: none;
+}
+
+/* ── Newsletter signup ───────────────────────────────────────────────────── */
+/* Below the critical marker: it sits after the article, never in first paint.
+
+   A panel, and deliberately the article card's own surface, border and radius:
+   a raised sheet the reader lands on at the end of the piece, centred because
+   it is one offer with nothing to scan. The field keeps the webmention form's
+   rules (shared above), including its --color-bg fill, which is what makes it
+   read as recessed into the panel rather than floating on it. */
+.subscribe {
+    margin-top: 2.5rem;
+    padding: 1.75rem 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    text-align: center;
+    color: var(--color-text);
+}
+
+/* Two classes deep so it holds inside .prose, whose paragraph margins would
+   otherwise win when the form arrives through the [subscribe] shortcode. */
+.subscribe .subscribe__label {
+    max-width: 30rem;
+    margin: 0 auto 1rem;
+    font-size: .9375rem;
+    line-height: 1.55;
+}
+
+.subscribe__row {
+    max-width: 30rem;
+    margin: 0 auto;
+    gap: .625rem;
+}
+
+/* The one departure from the webmention button: a pill. It is the only action
+   in the panel, and the full round is what sets it apart from the square-ish
+   field beside it. Colours stay the theme's link pair, which clears 7:1 in
+   both modes (see .wm-submit__send). */
+.subscribe__send {
+    border-radius: 999px;
+    padding: .5rem 1.25rem;
+    font-weight: 600;
+}
+
+.subscribe .subscribe__status {
+    margin: .75rem 0 0;
+    font-size: .875rem;
+    color: var(--color-muted);
+}
+
+/* In a page body it sits in running prose, which sets its own rhythm. */
+.prose .subscribe { margin-top: 1.5rem; }
+
+/* The honeypot: off-screen rather than display:none, which some bots skip. */
+.subscribe__hp {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+/* Same state-class reasoning as .wm-submit__form.is-sent: the row's display
+   comes from a class selector, which would outrank [hidden]. */
+.subscribe.is-sent .subscribe__label,
+.subscribe.is-sent .subscribe__row {
+    display: none;
+}
+
+.subscribe.is-sent .subscribe__status {
+    margin-top: 0;
+    color: var(--color-text);
+    font-size: .9375rem;
+}
+
+/* subscribe.php's own reply page, for a reader without JavaScript. */
+.subscribe-result {
+    max-width: 36rem;
+    margin: 4rem auto;
+    padding: 0 1rem;
 }
 
 /* ── Related posts ───────────────────────────────────────────────────────── */

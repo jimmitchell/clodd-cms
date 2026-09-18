@@ -33,6 +33,10 @@ class Post
     public ?string $pixelfed_url  = null;
     public ?string $pixelfed_status_id = null;
     public int     $pixelfed_skip = 0;
+    /** 1 to keep this article out of subscribers' inboxes — see Newsletter. */
+    public int     $newsletter_skip = 0;
+    /** When the subscriber email went out; null until it has. */
+    public ?string $newsletter_at   = null;
     public ?string $og_image_hash      = null;
     public ?string $webmentions_sent_at = null;
     public string  $post_kind    = 'standard';
@@ -150,8 +154,11 @@ class Post
     /**
      * SQL predicate selecting posts of one Post Type Discovery type, against a
      * `posts` row aliased `p`. Mirrors micropubType() — see the note there.
+     *
+     * Public because Newsletter asks the same question ("which posts are
+     * articles?") and must get the same answer the Micropub list does.
      */
-    private static function micropubTypePredicate(string $type): string
+    public static function micropubTypePredicate(string $type): string
     {
         $has    = fn(string $kind) => "EXISTS (SELECT 1 FROM post_contexts pc WHERE pc.post_id = p.id AND pc.kind = '{$kind}')";
         $anyCtx = "EXISTS (SELECT 1 FROM post_contexts pc WHERE pc.post_id = p.id)";
@@ -424,6 +431,7 @@ class Post
             'mastodon_skip' => $this->mastodon_skip,
             'bluesky_skip'  => $this->bluesky_skip,
             'pixelfed_skip' => $this->pixelfed_skip,
+            'newsletter_skip' => $this->newsletter_skip,
             'post_kind'     => $this->post_kind,
             'featured_image_url' => $this->featured_image_url,
             'featured_image_alt' => $this->featured_image_alt,
@@ -1859,6 +1867,8 @@ class Post
         $post->pixelfed_url       = $row['pixelfed_url']       ?? null;
         $post->pixelfed_status_id = $row['pixelfed_status_id'] ?? null;
         $post->pixelfed_skip      = (int) ($row['pixelfed_skip'] ?? 0);
+        $post->newsletter_skip    = (int) ($row['newsletter_skip'] ?? 0);
+        $post->newsletter_at      = $row['newsletter_at'] ?? null;
         $post->og_image_hash       = $row['og_image_hash']       ?? null;
         $post->webmentions_sent_at = $row['webmentions_sent_at'] ?? null;
         $post->post_kind           = $row['post_kind']           ?? 'standard';

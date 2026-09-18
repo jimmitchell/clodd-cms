@@ -27,6 +27,7 @@ $hasBluesky         = $blueskyHandle !== '' && $blueskyAppPassword !== '';
 $pixelfedInstance = $db->getSetting('pixelfed_instance');
 $pixelfedToken    = $db->getSetting('pixelfed_token');
 $hasPixelfed      = $pixelfedInstance !== '' && $pixelfedToken !== '';
+$hasNewsletter    = \CMS\EmailOctopus::isConfigured($db->getAllSettings());
 
 // Timezone — loaded once, used in POST handler and template.
 $cfgTz = $db->getSetting('timezone', '');
@@ -178,6 +179,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // and back would silently leave it skipped.
         if ($post->isPhoto()) {
             $post->pixelfed_skip = empty($_POST['send_to_pixelfed']) ? 1 : 0;
+        }
+
+        // The newsletter checkbox is only on the form for a titled post that has
+        // not been emailed yet, so read it only then — same reasoning as Pixelfed.
+        if ($hasNewsletter && !$post->isNote() && $post->newsletter_at === null) {
+            $post->newsletter_skip = empty($_POST['send_to_newsletter']) ? 1 : 0;
         }
 
         // Only toot on first publish (not when the result is 'scheduled').
@@ -564,6 +571,27 @@ require __DIR__ . '/partials/head.php';
                     </div>
                     <?php endif; ?>
 
+                    <?php if ($hasNewsletter && $post->newsletter_at === null): ?>
+                    <!-- Articles only; follows the Post kind select like the
+                         featured-image panel. bin/send-newsletter.php sends it
+                         about ten minutes after publish, so unticking during
+                         that window still stops it. -->
+                    <?php $newsletterSent = $post->id !== null ? \CMS\Newsletter::deliveryCount($db, $post->id) : 0; ?>
+                    <div id="newsletter-block" <?= $post->isNote() ? 'hidden' : '' ?>>
+                        <label for="send_to_newsletter" style="display:flex;gap:.5rem;align-items:center;font-size:.875rem;font-weight:400;margin-bottom:.75rem">
+                            <input type="checkbox" id="send_to_newsletter" name="send_to_newsletter" value="1"
+                                   <?= $post->newsletter_skip === 0 ? 'checked' : '' ?>>
+                            Email to subscribers
+                        </label>
+                        <?php if ($newsletterSent > 0): ?>
+                        <p class="form-hint" style="margin-bottom:.75rem">Sending &mdash; queued for <?= (int) $newsletterSent ?> subscriber<?= $newsletterSent === 1 ? '' : 's' ?> so far.</p>
+                        <?php endif; ?>
+                    </div>
+                    <?php elseif ($hasNewsletter && $post->newsletter_at !== null): ?>
+                    <?php $newsletterSent = \CMS\Newsletter::deliveryCount($db, (int) $post->id); ?>
+                    <p class="form-hint" style="margin-bottom:.75rem">&#10003; Emailed to <?= (int) $newsletterSent ?> subscriber<?= $newsletterSent === 1 ? '' : 's' ?> on <?= Helpers::e(Helpers::formatDate($post->newsletter_at, 'F j, Y', '', $cfgTz)) ?></p>
+                    <?php endif; ?>
+
                     <label for="publish_date" style="margin-top:0">Publish date<?php if ($cfgTz !== ''): ?> <span style="font-weight:400;color:var(--color-muted)">(<?= Helpers::e($cfgTz) ?>)</span><?php endif; ?></label>
                     <input type="datetime-local" id="publish_date" name="publish_date"
                            value="<?= Helpers::e($pubInputVal) ?>"
@@ -736,17 +764,19 @@ window._existingTags = <?= json_encode(array_values(array_map(fn($t) => ['name' 
 // The server decides too — an unchecked box on a post saved as an article is
 // never read — so this is presentation, not enforcement.
 // A featured image belongs to a titled post, so its panel follows the kind
-// select the other way round. Same rule: the server clears the columns for a
+// select the other way round, and so does the newsletter checkbox. Same rule: the server clears the columns for a
 // note regardless (Post::save()), so this is presentation, not enforcement.
 (function () {
     var kind     = document.getElementById('post_kind');
     var pixelfed = document.getElementById('pixelfed-block');
     var featured = document.getElementById('featured-block');
+    var newsletter = document.getElementById('newsletter-block');
     if (!kind) return;
 
     kind.addEventListener('change', function () {
         if (pixelfed) pixelfed.hidden = kind.value !== 'photo';
         if (featured) featured.hidden = kind.value !== 'standard';
+        if (newsletter) newsletter.hidden = kind.value !== 'standard';
     });
 })();
 </script>

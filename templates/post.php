@@ -262,6 +262,15 @@ ob_start();
     <?php endif; ?>
 </article>
 
+<?php /* Articles only: that is what the newsletter sends, so a signup offered
+         under a note would promise something the email never delivers. After
+         the article and before the responses, where a reader who got to the end
+         decides what to do next. */ ?>
+<?php if ($post->micropubType() === 'article' && CMS\EmailOctopus::isConfigured($settings)): ?>
+<?php $subscribeReturn = '/' . CMS\Post::datePath($post->published_at, $post->slug, $settings['timezone'] ?? '') . '/'; ?>
+<?php include __DIR__ . '/partials/subscribe-form.php'; ?>
+<?php endif; ?>
+
 <?php $hasWebmentions = ($settings['webmention_domain'] ?? '') !== ''; ?>
 <?php if ($hasWebmentions): ?>
 <?php

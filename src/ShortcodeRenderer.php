@@ -9,7 +9,8 @@ namespace CMS;
  *
  * CommonMark wraps a bare shortcode paragraph in <p>…</p>; render() matches
  * that wrapper and replaces it with the embed markup. Supported tags:
- * gallery, youtube, vimeo, gist, mastodon, instagram, tweet, linkedin.
+ * gallery, youtube, vimeo, gist, mastodon, instagram, tweet, linkedin,
+ * subscribe.
  *
  * Each provider renderer validates its input and returns '' on a bad value
  * so malformed shortcodes silently drop rather than emit broken embeds.
@@ -18,7 +19,8 @@ class ShortcodeRenderer
 {
     public function __construct(
         private Database $db,
-        private string $mediaDir
+        private string $mediaDir,
+        private string $templateDir = ''
     ) {
     }
 
@@ -43,6 +45,7 @@ class ShortcodeRenderer
                     'instagram' => $this->renderInstagram($attrs),
                     'tweet'     => $this->renderTweet($attrs),
                     'linkedin'  => $this->renderLinkedIn($attrs),
+                    'subscribe' => $this->renderSubscribe(),
                     default     => $m[0], // unknown tag — leave as-is
                 };
             },
@@ -63,6 +66,26 @@ class ShortcodeRenderer
         }
 
         return $result;
+    }
+
+    /**
+     * The newsletter signup form — what a /subscribe page is written around.
+     * The same partial templates/post.php puts under an article, so the two
+     * cannot drift. Empty when EmailOctopus is not fully set up.
+     */
+    private function renderSubscribe(): string
+    {
+        if (!EmailOctopus::isConfigured($this->db->getAllSettings())) {
+            return '';
+        }
+
+        // The page this form sits on is not known here, so the no-JS reply
+        // links home.
+        $subscribeReturn = '/';
+        ob_start();
+        include ($this->templateDir !== '' ? $this->templateDir : dirname(__DIR__) . '/templates')
+            . '/partials/subscribe-form.php';
+        return (string) ob_get_clean();
     }
 
     /**

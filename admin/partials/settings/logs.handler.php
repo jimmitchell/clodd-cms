@@ -69,6 +69,7 @@ $scopeLabels = [
     \CMS\Auth::SCOPE_API       => 'REST API',
     \CMS\Auth::SCOPE_XMLRPC    => 'XML-RPC',
     \CMS\Auth::SCOPE_INDIEAUTH => 'IndieAuth',
+    \CMS\Auth::SCOPE_SUBSCRIBE => 'Newsletter signup',
 ];
 
 $typeLabels = [

@@ -246,6 +246,12 @@ class Auth
     public const SCOPE_XMLRPC    = 'xmlrpc';
     /** token.php and indieauth.php: unauthenticated code redemption. */
     public const SCOPE_INDIEAUTH = 'indieauth';
+    /**
+     * subscribe.php: newsletter signups. Only bad input counts — a malformed
+     * address, the honeypot, a cross-origin post — so a reader who typo'd once
+     * is not penalised. Sheer volume is nginx's `subscribe` zone's job.
+     */
+    public const SCOPE_SUBSCRIBE = 'subscribe';
 
     /** Returns true if the IP is currently locked out for the given scope. */
     public function isLockedOut(string $ip, string $scope = self::SCOPE_ADMIN): bool
