@@ -50,8 +50,10 @@ Create a new automation with these settings:
     broken image. Add it only if EmailOctopus can hide an image when the field is empty.
   - Check that the email has an unsubscribe link. EmailOctopus normally adds one to
     its footer.
-- **Start (activate) the automation**, then note its **automation ID** from the page
-  address or its settings.
+- **Start (activate) the automation**, then note its **automation ID**. It appears
+  only in the page address, `https://emailoctopus.com/automations/<automationId>`,
+  while the automation is open. The API cannot list automations, so the address is
+  the only place to find it.
 
 ## 5. Deploy 1.45.0
 
