@@ -292,8 +292,8 @@ fires when somebody happens to visit.
 
 **Required only if you use the EmailOctopus signup form.** New articles are
 emailed from cron, never on the publish path. Set up the list, the four custom
-fields and the *Started via API* automation first; Settings → General →
-Newsletter lists them.
+fields and the *Started via API* automation first. The step-by-step guide is in
+[docs/emailoctopus-setup.md](docs/emailoctopus-setup.md).
 
 ```bash
 php /var/www/cms/bin/send-newsletter.php             # send the next article, if one is due
