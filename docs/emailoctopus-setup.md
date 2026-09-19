@@ -21,6 +21,12 @@ Create a list for the newsletter, or use an existing one.
 
 - In the list's settings, **turn on double opt-in.** New subscribers are added as
   unconfirmed, and nobody gets an article until they click the confirmation link.
+  It is under **Consent & customisation → Double opt-in email**. **If it is off,
+  nothing fails and nothing is sent:** the site still adds each signup as pending,
+  EmailOctopus accepts it without sending a confirmation email, and the contact
+  stays pending for good, so it never receives an article either. Turning it on
+  later does not send one to contacts already pending; delete them and have them
+  sign up again.
 - Note the **list ID**. It is in the list's settings, and usually in the page
   address when the list is open. It looks like `a1b2c3d4-...`.
 
