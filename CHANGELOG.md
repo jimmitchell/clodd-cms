@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.0] — 2026-09-19
+
+No schema change.
+
+### Changed
+
+- **The site is set in Inter**, replacing DM Sans across UI, prose and headings. Two self-hosted variable `.woff2` files take over in `fonts/`, roman and italic, built from the upstream Inter 4.1 variable fonts with the same treatment DM Sans had: weight axis clamped to 200–800 and optical size pinned at 14, the text cut. Hinting is stripped. `--font-sans` and the two `@font-face` rules name the new family, and the `templates/base.php` preload follows the roman's new filename. That URL is new rather than overwritten because nginx caches `/fonts/` immutable for a year. `fonts/OFL.txt` now carries Inter's copyright line.
+
+  The subset is narrower than DM Sans's: Latin-1 + Latin Extended-A, general punctuation and the arrows block (the `↗` on outbound prose links), not the full latin-ext range. Inter covers that range three times as thoroughly as DM Sans did, so the wide cut came to 105 KB on the preloaded critical path. This one is 49 KB (italic 53 KB), against DM Sans's 42 KB. Every character outside it in the published archive is an emoji, which no text face draws anyway.
+
+  Inter's x-height is .546em against DM Sans's .504, on a slightly taller cap height (.728 vs .700), so lowercase reads visibly larger at the same `font-size`. The type scale and the 1.6667 body leading are left as they were. A taller x-height wants more leading, not less, so the leading holds. The `-0.02em` heading tracking stays for the same reason it was added: Inter is spaced for text and sets loose above it.
+
+- **The OG card is set in Inter too**, from its static text cut (`Inter-Regular` / `Inter-Bold`, subset to the same range) pinned at `fonts/og/og-regular.ttf` and `og-bold.ttf`. `OgImage::DESIGN_VERSION` goes to 13, so the next full build redraws every card. Nothing else in `OgImage` moves, because the title's line height is measured from the resolved bold. The `SYSTEM_FONTS` docblock is corrected: Inter is a grotesque like the fallback stack, so a fallback card is now a near miss rather than a visibly different card, which makes a missing pin easier to overlook.
+
+---
+
 ## [1.45.0] — 2026-09-18
 
 **Schema v32.** Adds `posts.newsletter_skip`, `posts.newsletter_at` and a

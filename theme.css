@@ -1,17 +1,20 @@
 /* ── Clodd CMS — Public Theme ─────────────────────────────────────────────── */
 
-/* ── DM Sans — self-hosted variable font (Google Fonts, OFL license) ─────────
+/* ── Inter — self-hosted variable font (rsms/inter, OFL license) ─────────────
    Sets everything on the site: UI, prose, and headings, and the OG card the
    server draws is set in the static cut of the same family — a shared link and
    the page it opens are the one typeface.
 
-   Self-hosted rather than linked from fonts.googleapis.com: every CSP in the
-   repo is `font-src 'self'`, so the CDN would mean loosening the policy in
-   three nginx configs and putting a third-party request in front of first
-   paint. The files are built from the upstream OFL sources, subset to latin +
-   latin-ext, with the weight axis clamped to 200–800 and the optical-size axis
-   pinned at 14 — carrying opsz live cost 29 KB on the preloaded critical path
-   for an adjustment nothing on the page is large enough to show.
+   Self-hosted rather than linked from a CDN: every CSP in the repo is
+   `font-src 'self'`, so the CDN would mean loosening the policy in three nginx
+   configs and putting a third-party request in front of first paint. The files
+   are built from the upstream Inter 4.1 variable fonts with the weight axis
+   clamped to 200–800, the optical-size axis pinned at 14 (the text cut), and
+   hinting stripped. The subset is Latin-1 + Latin Extended-A plus punctuation
+   and arrows, not the full latin-ext range DM Sans shipped: Inter's coverage
+   there is three times the size, and the wider cut came to 105 KB on the
+   preloaded critical path against 49 KB for this one. Every character outside
+   it in the published archive is an emoji, which no text face draws anyway.
 
    Two things follow from the swap back off the system stack, and both are
    load-bearing:
@@ -29,16 +32,16 @@
      for 500 here and you will get 500 — so only ask deliberately. */
 
 @font-face {
-    font-family: 'DM Sans';
-    src: url('/fonts/DMSans-Variable.woff2') format('woff2');
+    font-family: 'Inter';
+    src: url('/fonts/InterVariable.woff2') format('woff2');
     font-weight: 200 800;
     font-style:  normal;
     font-display: swap;
 }
 
 @font-face {
-    font-family: 'DM Sans';
-    src: url('/fonts/DMSans-Variable-Italic.woff2') format('woff2');
+    font-family: 'Inter';
+    src: url('/fonts/InterVariable-Italic.woff2') format('woff2');
     font-weight: 200 800;
     font-style:  italic;
     font-display: swap;
@@ -84,7 +87,7 @@
     /* The type stacks, named once. Every rule below reaches for these rather
        than repeating the list — eight copies of the sans stack is eight places
        for it to drift. */
-    --font-sans: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
@@ -156,10 +159,10 @@ html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
 
 
 /* 30px on the 18px root. Leading is set against the x-height rather than the
-   em, and DM Sans sets a tall one — .504em, within a hair of the system faces
-   this replaces and a world away from Walsheim's .461, which is the face the
-   short-lived 1.5556 was tuned for. Keep it a whole pixel at the root size:
-   1.6667 is 30/18. */
+   em, and Inter sets a tall one — .546em, taller than DM Sans's .504 and far
+   from Walsheim's .461, which is the face the short-lived 1.5556 was tuned
+   for. A taller x-height wants more leading, never less, so this holds. Keep
+   it a whole pixel at the root size: 1.6667 is 30/18. */
 body {
     font-family: var(--font-sans);
     line-height: 1.6667;
@@ -174,8 +177,8 @@ body {
 
 /* .site-main { flex: 1; width: 100%; } */
 
-/* Headings run tighter than body copy — DM Sans sets a little loose above body
-   size. Uppercase micro-labels (.webmentions__title and friends) set their own
+/* Headings run tighter than body copy — Inter is spaced for text sizes and
+   sets loose above them. Uppercase micro-labels (.webmentions__title and friends) set their own
    positive tracking and keep it, since class beats element. */
 h1, h2, h3, h4, h5, h6 { letter-spacing: -0.02em; }
 

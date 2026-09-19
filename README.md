@@ -378,9 +378,9 @@ Both the Atom and RSS feeds embed [Byline 1.0](https://bylinespec.org/1.0) eleme
 
 When PHP's GD extension is compiled with FreeType support, the CMS generates a 1200×630 PNG for each published post. The image includes the post title and site name. Images are cached by a hash of the title, site name, avatar, card design version and font; they regenerate only when one of those changes.
 
-The card is set in **DM Sans**, the same face the pages load, so a shared link and the page it opens are the one typeface. GD needs an actual font file and cannot read the variable `.woff2` a browser downloads, so the static cut is pinned separately at `fonts/og/` and travels with the repo. See [`fonts/og/README.md`](fonts/og/README.md) to change it — and keep it in step with `--font-sans` in `theme.css`.
+The card is set in **Inter**, the same face the pages load, so a shared link and the page it opens are the one typeface. GD needs an actual font file and cannot read the variable `.woff2` a browser downloads, so the static cut is pinned separately at `fonts/og/` and travels with the repo. See [`fonts/og/README.md`](fonts/og/README.md) to change it — and keep it in step with `--font-sans` in `theme.css`.
 
-`OgImage::SYSTEM_FONTS` is the fallback if that pin ever goes missing, walking Nimbus, Liberation, DejaVu and Noto on Linux and Arial on macOS — all grotesques, none of them DM Sans, so a fallback card is a visibly different card. With none of them either, the build logs `[OgImage] No font found` and skips the card — it still succeeds.
+`OgImage::SYSTEM_FONTS` is the fallback if that pin ever goes missing, walking Nimbus, Liberation, DejaVu and Noto on Linux and Arial on macOS — all grotesques, none of them Inter, so a fallback card is a near miss that is easy to overlook. With none of them either, the build logs `[OgImage] No font found` and skips the card — it still succeeds.
 
 A post with a [featured image](#featured-images) advertises that picture as its `og:image` instead. The title card is still generated and stays the fallback, so removing the featured image leaves something behind.
 
@@ -664,7 +664,7 @@ The public theme is a single file, `theme.css`, edited directly — there is no 
 
 Dark mode activates automatically when the system preference is `dark`. The toggle button in the header overrides this and persists the choice in `localStorage`. An inline script in `<head>` applies the stored preference before the stylesheet loads, preventing any flash of the wrong color scheme.
 
-The site is set in **DM Sans**, self-hosted from `fonts/` as two variable `.woff2` files — roman and italic, subset to latin + latin-ext with the weight axis clamped to 200–800 — and named once as `--font-sans` in `theme.css`. Self-hosted rather than served from Google's CDN because every CSP here is `font-src 'self'`. `templates/base.php` preloads the roman only; the italic loads when something italic is first encountered. To add custom styles without editing `theme.css`, use **Settings → Custom CSS**.
+The site is set in **Inter**, self-hosted from `fonts/` as two variable `.woff2` files — roman and italic, subset to Latin-1 + Latin Extended-A with the weight axis clamped to 200–800 and optical size pinned at the text cut — and named once as `--font-sans` in `theme.css`. Self-hosted rather than served from Google's CDN because every CSP here is `font-src 'self'`. `templates/base.php` preloads the roman only; the italic loads when something italic is first encountered. To add custom styles without editing `theme.css`, use **Settings → Custom CSS**.
 
 ### Critical CSS
 
@@ -705,7 +705,7 @@ clodd-cms/
 │   └── media/              # Uploaded files (not committed)
 ├── data/                   # SQLite database (not committed)
 ├── docker/                 # Docker-specific Nginx config, PHP ini, entrypoint
-├── fonts/                  # DM Sans .woff2 (public) + og/ static cut (denied)
+├── fonts/                  # Inter .woff2 (public) + og/ static cut (denied)
 ├── src/                    # PHP source classes (namespace CMS\)
 │   ├── ActivityLog.php     # Admin activity logger
 │   ├── Auth.php            # Login, session, CSRF, rate limiting, TOTP 2FA
