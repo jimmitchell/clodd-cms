@@ -1654,7 +1654,7 @@ audio { width: 100%; }
 .search-page__form input[type="search"] {
     flex: 1;
     border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border-radius: var(--radius);
     background: var(--color-bg);
     color: var(--color-text);
     font: inherit;
@@ -1672,7 +1672,7 @@ audio { width: 100%; }
     background: var(--color-link);
     color: var(--color-bg);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius);
     padding: .5rem 1rem;
     cursor: pointer;
     display: flex;
@@ -2039,7 +2039,7 @@ audio { width: 100%; }
     flex: 1;
     min-width: 0;
     border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border-radius: var(--radius);
     background: var(--color-bg);
     color: var(--color-text);
     font: inherit;
@@ -2063,7 +2063,7 @@ audio { width: 100%; }
     background: var(--color-link);
     color: var(--color-bg);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius);
     padding: .5rem 1rem;
     font: inherit;
     font-size: .875rem;
