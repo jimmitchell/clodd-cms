@@ -2091,16 +2091,16 @@ audio { width: 100%; }
 /* ── Newsletter signup ───────────────────────────────────────────────────── */
 /* Below the critical marker: it sits after the article, never in first paint.
 
-   A panel, and deliberately the article card's own surface, border and radius:
-   a raised sheet the reader lands on at the end of the piece, centred because
-   it is one offer with nothing to scan. The field keeps the webmention form's
-   rules (shared above), including its --color-bg fill, which is what makes it
-   read as recessed into the panel rather than floating on it. */
+   A panel on the code-block fill, with no border: a quiet tinted well the
+   reader lands on at the end of the piece, set apart by tone alone and centred
+   because it is one offer with nothing to scan. The field and button keep the
+   webmention form's rules (shared above), so the site has one text-and-send
+   control. The field's --color-bg fill is what makes it read as recessed into
+   the panel rather than floating on it. */
 .subscribe {
     margin-top: 2.5rem;
     padding: 1.75rem 1.25rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-code-bg);
     border-radius: var(--radius);
     text-align: center;
     color: var(--color-text);
@@ -2121,20 +2121,12 @@ audio { width: 100%; }
     gap: .625rem;
 }
 
-/* The one departure from the webmention button: a pill. It is the only action
-   in the panel, and the full round is what sets it apart from the square-ish
-   field beside it. Colours stay the theme's link pair, which clears 7:1 in
-   both modes (see .wm-submit__send). */
-.subscribe__send {
-    border-radius: 999px;
-    padding: .5rem 1.25rem;
-    font-weight: 600;
-}
-
+/* Full text colour, not --color-muted: on the code-bg panel muted lands at
+   4.42:1 in light mode, under AA for text this size. */
 .subscribe .subscribe__status {
     margin: .75rem 0 0;
     font-size: .875rem;
-    color: var(--color-muted);
+    color: var(--color-text);
 }
 
 /* In a page body it sits in running prose, which sets its own rhythm. */
@@ -2158,7 +2150,6 @@ audio { width: 100%; }
 
 .subscribe.is-sent .subscribe__status {
     margin-top: 0;
-    color: var(--color-text);
     font-size: .9375rem;
 }
 
