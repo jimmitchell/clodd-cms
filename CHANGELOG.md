@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.1] — 2026-09-19
+
+No schema change.
+
+### Changed
+
+- **The newsletter signup's field and button sit at the webmention form's gap.** `.wm-submit__row` and `.subscribe__row` share one flex rule so the site has a single text-and-send control, but `.subscribe__row` then re-declared `gap: .625rem` alongside the width and centring it actually needed, putting the two forms 10px and 6px apart on the same page. The override is gone and the shared `.375rem` stands; the width and `margin: 0 auto` stay, since those are the panel's own business.
+
+---
+
 ## [1.46.0] — 2026-09-19
 
 No schema change.
