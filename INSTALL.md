@@ -44,7 +44,7 @@ systemctl restart php8.3-fpm
 ## 2 — Clone and install dependencies
 
 ```bash
-git clone https://github.com/your-org/clodd-cms /var/www/cms
+git clone https://github.com/jimmitchell/clodd-cms.git /var/www/cms
 cd /var/www/cms
 composer install --no-dev --optimize-autoloader
 ```
