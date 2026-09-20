@@ -56,14 +56,6 @@
 
   If this is revisited, note there is no good third option: Micropub defines no `not_found` code, so keeping 404 means keeping a mismatched pair, and the choice is genuinely between a self-consistent response and an informative one. Change all four sites together or the endpoint contradicts itself differently depending on the verb. A test asserting the specific expectation would be the thing that settles it — not another reading of the spec, which has already been done twice.
 
-- [ ] **A `checkin` post loses its venue, and micropub.rocks 204 passes anyway.** The test sends an h-entry whose `checkin` property is a nested h-card — venue name, Foursquare URL, lat/long and a full postal address. We answer 201, store `content` and `published`, and drop the h-card entirely. Nothing in the codebase reads `checkin`.
-
-  **This is already the documented behaviour**, not a new finding: `mp_post_types()`'s docblock (`micropub.php:159`) says video, audio, rsvp and checkin "are currently dropped on create, so advertising them would invite posts that lose their point", which is why `q=config` does not offer them. A client that reads our post-types will never send one.
-
-  What is worth recording is that **the test passes regardless** — 204 only checks that the create succeeds, so the green badge says nothing about whether the venue survived. Confirmed 2026-09-20 on the isolated test instance.
-
-  Supporting it is a feature, not a fix: it needs somewhere to put a venue (name, URL, coordinates, address), a decision about rendering, and `mp_post_types()` updated to advertise `checkin` once the data round-trips. The same applies to rsvp, video and audio.
-
 ## Security
 
 - [x] **Atomic config.php writes** — `admin/account.php` writes password changes with a temp file + rename pattern; wrap with `flock()` to prevent race conditions during concurrent reads
@@ -96,12 +88,28 @@
 
   Note for anyone re-measuring: `data/cms.db` in a dev checkout is **not** representative. It is full of *Test Post* / *Lorem Ipusm* rows, holds 12 `post_tags` sitewide, and its `post_categories` is dominated by *Photos* — measuring coverage against it predicted that 45 of 56 titled posts would show nothing, which is wrong for prod, where the tags are real and in active use. Sample the live site instead.
 
+- [ ] **Micropub `checkin`, `rsvp`, `video` and `audio` post types.** Wanted eventually (Jim, 2026-09-20). None of the four is read on create — the properties simply never reach storage — and `mp_post_types()` deliberately does not advertise them for exactly that reason — *"advertising them would invite posts that lose their point"* (`micropub.php:159`). micropub.rocks sends one anyway: its test 204 is a `checkin` whose h-card carries venue name, Foursquare URL, lat/long and a full postal address, all discarded. **204 passes regardless**, because it only checks that the create succeeded, so the suite will never tell you this is missing.
+
+  They are not equal work. Rough order of cheapness:
+
+  - **`video` / `audio` first.** `photo` already has the whole shape — `post_photos` (with alt text and sort order), `Post::savePhotos()`, `mp_parse_photo_values()` for the URL-or-`{value, alt}` forms, create *and* update handling including `add`/`delete`, and `q=source` round-tripping. Either add a media-kind column to `post_photos` or mirror the table. Decide up front how this relates to the existing route: CLAUDE.md's raw-HTML accepted risk exists precisely so `<video>`/`<audio>` can be written into Markdown by hand, so a first-class type is an alternative to that, not a replacement.
+  - **`rsvp` next.** It rides on machinery that is already there: an RSVP is an `in-reply-to` — already a `CONTEXT_KIND` in `post_contexts` — plus one value from `yes`/`no`/`maybe`/`interested`. Mostly a column and a rendering decision.
+  - **`checkin` last.** The only one needing genuinely new storage: a venue is a nested h-card with ~9 fields, and it wants `p-checkin h-card` markup with `u-url`, `p-latitude`/`p-longitude` and the address parts. The nested-object parse is the piece to write first, since `rsvp`/`video`/`audio` are flat.
+
+  Whichever comes first, three things are not optional:
+
+  - **The PTD ladder changes in two places.** `Post::micropubType()` and `Post::micropubTypePredicate()` encode it twice, once in PHP and once as SQL, and its docblock says plainly: change one and you must change the other, or the Micropub post list hides posts a client can reach by URL. `PostMicropubQueryTest` exists to catch that drift.
+  - **`q=source` must report the property back** from `mp_post_source_properties()`, or a client loads the post, saves it, and silently strips what it could not see.
+  - **`mp_post_types()` is updated last**, only once the data actually round-trips. Advertising a type we drop is the situation this whole entry describes.
+
+  Needs a schema change, so confirm the migration before any edits. Worth checking what syndication should do with each — Pixelfed is photos-only by design, and neither Mastodon nor Bluesky gets video or audio from us today.
+
 - [ ] **Scheduled post notifications** — Send an email/webhook when a scheduled post is auto-published
 - [ ] **Activity log filters** — Add date range + action type filter to the Logs tab (`admin/settings.php?tab=logs`)
 - [x] **Micropub `summary` property** — `micropub.php` reads `properties.summary` on create and supports replace/add/delete on update, assigning to `$post->excerpt` so Mastodon/Bluesky syndication and feeds use a client-supplied summary instead of always auto-deriving via `effectiveExcerpt()`.
 - [x] **Micropub IndieAuth flow + token scopes** — Self-hosted IndieAuth server: `indieauth.php` (authorization endpoint with consent screen, PKCE S256 required), `token.php` (code exchange, revocation, introspection), `indieauth-metadata.php`, discovery links in `templates/base.php`, scoped tokens (`profile`/`create`/`update`/`delete`/`media`) stored hashed in `indieauth_tokens`, enforced via `MicropubAuth::requireScope()`. Authorized apps are listed/revocable in Settings → Micropub. Manual-token mode (iA Writer) stays as a full-scope fallback.
 - [x] **Micropub `q=category` query** — `micropub.php` implements `?q=category`, returning `{categories: [name, …]}` merged from the `categories` and `tags` tables (deduped via `UNION`, sorted `COLLATE NOCASE`) so clients can populate a category/tag picker. `q=config` now advertises supported queries via a `q` array.
-- [x] **Micropub indieweb context properties** — `in-reply-to`, `like-of`, `repost-of`, `bookmark-of` persist to a `post_contexts` table (V23), round-trip through create/update/`q=source`, and render as context lines with mf2 `u-*` classes on post pages, list cards, and feeds — so `bin/send-webmentions.php` picks the target URLs up from the built HTML automatically. Titleless context posts become asides. (`syndication`, `location`, `rsvp` still dropped — niche, revisit if a client needs them.)
+- [x] **Micropub indieweb context properties** — `in-reply-to`, `like-of`, `repost-of`, `bookmark-of` persist to a `post_contexts` table (V23), round-trip through create/update/`q=source`, and render as context lines with mf2 `u-*` classes on post pages, list cards, and feeds — so `bin/send-webmentions.php` picks the target URLs up from the built HTML automatically. Titleless context posts become asides. (`syndication` and `location` still dropped. `rsvp` is dropped too, but is now planned — see the checkin/rsvp/video/audio entry under Features.)
 - [x] **Micropub `action=undelete`** — Posts soft-delete via `posts.deleted_at` (V20); Micropub delete sets it, undelete restores and rebuilds. Deleted posts are excluded from finders, feeds, and builds; the admin post list gains a Deleted filter with Restore / Delete permanently.
 - [x] **Micropub `syndicate-to` exposes configured targets** — `q=config` / `q=syndicate-to` return `{uid, name}` for configured Mastodon/Bluesky accounts; create honors `mp-syndicate-to` (when present, only listed targets syndicate; absent keeps auto-POSSE).
 - [x] **Micropub post list (`q=source` with no `url`)** — The [Query for Post List](https://indieweb.org/Micropub-extensions#Query_for_Post_List) extension: `{items: [h-entry, …]}`, newest first, drafts and scheduled posts included, so a client can offer a post picker instead of demanding a pasted URL. `limit` (default 20, cap 100), `offset`, `post-type` (PTD name) and `post-status` filter it; unknown filter values are a `400`. `Post::micropubType()` derives the PTD name from the hydrated contexts and `Post::findForMicropub()` mirrors that ladder in SQL — `tests/PostMicropubQueryTest.php` asserts the two agree. `q=source` also now emits a `url` for unpublished posts (`addressablePath()`), matching the create/update `Location:`. (`filter=`, `after`/`before` cursors, `order=` still unimplemented — all still brainstorming upstream.)
