@@ -13,7 +13,8 @@ No schema change.
 
 ### Changed
 
-- **The newsletter signup's label says "new articles delivered to your inbox".** This replaces 1.46.2's "articles like this", which neither version has been deployed under. "New" is the thing a reader is actually deciding about — whether there will be more, not whether the next one resembles the one they just read — and "delivered to" says a mail arrives, where "in" only describes where it ends up. The RSS link beside it is unchanged.
+- **The newsletter signup's label reads "Subscribe to get new articles delivered to your inbox".** The form renders at the foot of an article and from the `[subscribe]` shortcode, and the reader is deciding whether there will be more — so the label names what arrives ("new articles") and says a mail is sent ("delivered to"), rather than only naming where it ends up. The RSS link beside it is unchanged.
+- **The label sets a little smaller, on a slightly wider measure.** `.subscribe__label` drops from `.9375rem` to `.8375rem`, and `--max-content` goes from 740px to 760px. Inter's taller x-height (1.46.0) reads larger at the same `font-size`, so the panel's secondary line takes the step down to sit back under the button row.
 
 ---
 
@@ -24,17 +25,6 @@ No schema change.
 ### Changed
 
 - **The newsletter signup's field row runs to 32rem.** `.subscribe__row` matched the label's 30rem measure, which drew the field and button at exactly the width of the text explaining them. The row is now 2rem wider than the label, so the control reads as the panel's subject rather than another line of it. The gap between field and button is untouched — that stays on the rule `.wm-submit__row` shares (1.46.1).
-
----
-
-## [1.46.2] — 2026-09-20
-
-No schema change.
-
-### Changed
-
-- **The newsletter signup says what the articles will be like.** The form's label now reads "Subscribe to get articles like this in your inbox" rather than "new articles": it renders at the foot of an article and from the `[subscribe]` shortcode, so in both places the reader has just finished the thing being offered more of. The RSS link beside it is unchanged.
-- **The label sets a little smaller, on a slightly wider measure.** `.subscribe__label` drops from `.9375rem` to `.8375rem`, and `--max-content` goes from 740px to 760px. Inter's taller x-height (1.46.0) reads larger at the same `font-size`, so the panel's secondary line takes the step down to sit back under the button row.
 
 ---
 
