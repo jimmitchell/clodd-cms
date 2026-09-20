@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.7] — 2026-09-20
+
+No schema change.
+
+### Fixed
+
+- **A Micropub `add` or a scoped `delete` on `category` destroyed the post's other terms.** Both update handlers read the post's current terms as `$post->categories` and wrote their result back over the whole set. But Micropub has one `category` namespace where this CMS has two tables, and an incoming name becomes a category only when one already holds that slug — everything else becomes a **tag**. So on a typical post `$post->categories` is empty: `add: {category: [gamma]}` merged `gamma` into nothing and left the post with `gamma` alone, and `delete: {category: [beta]}` diffed `beta` out of nothing and cleared every term. Measured on a post carrying `alpha, beta`: adding `gamma` gave `gamma`; removing `beta` gave nothing.
+
+  Both now read `Post::micropubTermNames()`, which returns categories *and* tags as the one flat list Micropub means — the same list `q=source` already reported, which is why the source representation was right while the writes were wrong. `delete: [category]` still clears everything, which is a different operation and was never broken.
+
+  `obsidian-micropub` is unaffected: it sends the full list as `replace`, never `add`/`delete`, so it always overwrote with the complete set. Any client that edits conservatively would have lost the post's tags on the first partial update.
+
+  Found by running micropub.rocks tests 17 and 18 by hand against a throwaway instance — both failed. Test 21 (an update that moves the post's URL) passed in the same run: 201 with the new `Location`, and a `post_legacy_urls` row recorded, so the redirect machinery works through Micropub too.
+
+---
+
 ## [1.46.6] — 2026-09-20
 
 No schema change.

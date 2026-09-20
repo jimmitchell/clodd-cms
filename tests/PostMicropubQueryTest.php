@@ -260,6 +260,81 @@ final class PostMicropubQueryTest extends TempSiteTestCase
     }
 
     /**
+     * Micropub's single `category` namespace spans two tables here, and a name
+     * arriving over Micropub becomes a *tag* unless a category already claims
+     * that slug. So the common case is a post whose terms are all tags and
+     * whose `categories` is empty.
+     *
+     * micropub.php's `add` and `delete` update handlers each read
+     * `$post->categories` alone. They saw nothing, then wrote their result back
+     * over the whole set: adding one term destroyed the rest, and deleting one
+     * named term cleared all of them. Both are silent data loss on a post the
+     * client thought it was editing conservatively.
+     */
+    public function testMicropubTermNamesSpansBothCategoriesAndTags(): void
+    {
+        $post = $this->makePost('terms-subject', 'Terms Subject');
+        $post->categories = [['id' => 1, 'name' => 'Essays', 'slug' => 'essays', 'description' => '']];
+        $post->tags       = [['id' => 7, 'name' => 'alpha', 'slug' => 'alpha'],
+                             ['id' => 8, 'name' => 'beta',  'slug' => 'beta']];
+
+        $this->assertSame(
+            ['Essays', 'alpha', 'beta'],
+            $post->micropubTermNames(),
+            'a post\'s Micropub terms are its categories and its tags, categories first'
+        );
+    }
+
+    public function testMicropubTermNamesSeesTagsWhenNoCategoryIsSet(): void
+    {
+        $post = $this->makePost('tags-only', 'Tags Only');
+        $post->categories = [];
+        $post->tags       = [['id' => 7, 'name' => 'alpha', 'slug' => 'alpha']];
+
+        // The exact shape the update handlers used to miss: reading
+        // ->categories here returns [], and writing that back wipes the post.
+        $this->assertSame(['alpha'], $post->micropubTermNames());
+        $this->assertNotSame([], $post->micropubTermNames(), 'this is the read that used to come back empty');
+    }
+
+    /**
+     * The method above is only worth anything if the update handlers use it.
+     * Source-level because those handlers live in micropub.php, and including
+     * that file executes the endpoint.
+     */
+    public function testTheUpdateHandlersReadTermsThroughThatMethod(): void
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents(__DIR__ . '/../micropub.php')) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $this->assertStringNotContainsString(
+            "array_map(fn(\$c) => (string) \$c['name'], \$post->categories)",
+            $code,
+            'reading ->categories alone misses tags, which is where Micropub terms usually live'
+        );
+
+        $this->assertSame(
+            3,
+            substr_count($code, '$post->micropubTermNames()'),
+            'q=source plus the add and delete handlers — all three read terms the same way'
+        );
+    }
+
+    public function testMicropubTermNamesDropsBlankNames(): void
+    {
+        $post = $this->makePost('blank-terms', 'Blank Terms');
+        $post->categories = [['id' => 1, 'name' => '', 'slug' => '', 'description' => '']];
+        $post->tags       = [['id' => 7, 'name' => 'kept', 'slug' => 'kept']];
+
+        $this->assertSame(['kept'], $post->micropubTermNames());
+    }
+
+    /**
      * A titleless post must report no `name` property at all.
      *
      * `templates/post.php` omits `p-name` for a note, so emitting one from

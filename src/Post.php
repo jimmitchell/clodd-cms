@@ -152,6 +152,35 @@ class Post
     }
 
     /**
+     * This post's `category` values as Micropub sees them: one flat list of
+     * category *and* tag names, categories first.
+     *
+     * Micropub has a single `category` namespace where this CMS has two tables.
+     * A name arriving over Micropub becomes a category only if one already has
+     * that slug; everything else becomes a tag. So a post created with
+     * `category: [alpha, beta]` normally holds both as **tags**, and
+     * `$post->categories` is empty.
+     *
+     * That asymmetry is why this lives here rather than being written out at
+     * each call site. micropub.php's `add` and `delete` update handlers each
+     * read `$post->categories` alone, found nothing, and wrote their result
+     * back over the whole set — so an `add` destroyed the post's existing terms
+     * and a `delete` naming one value cleared all of them. Anything that needs a
+     * post's current terms asks here.
+     *
+     * @return string[]
+     */
+    public function micropubTermNames(): array
+    {
+        $names = array_merge(
+            array_map(fn($c) => (string) $c['name'], $this->categories),
+            array_map(fn($t) => (string) $t['name'], $this->tags),
+        );
+
+        return array_values(array_filter($names, fn($n) => $n !== ''));
+    }
+
+    /**
      * SQL predicate selecting posts of one Post Type Discovery type, against a
      * `posts` row aliased `p`. Mirrors micropubType() — see the note there.
      *

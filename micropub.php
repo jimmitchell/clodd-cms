@@ -345,9 +345,7 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
         }
     }
 
-    $catNames = array_map(fn($c) => (string) $c['name'], $post->categories);
-    $tagNames = array_map(fn($t) => (string) $t['name'], $post->tags);
-    $allTerms = array_values(array_filter(array_merge($catNames, $tagNames), fn($n) => $n !== ''));
+    $allTerms = $post->micropubTermNames();
     if ($allTerms !== []) {
         $props['category'] = $allTerms;
     }
@@ -848,7 +846,7 @@ if ($action === 'update') {
     // `add` for category appends; `summary` is single-valued so add ≈ replace.
     foreach ($updateOps['add'] as $prop => $vals) {
         if ($prop === 'category') {
-            $current = array_map(fn($c) => (string) $c['name'], $post->categories);
+            $current = $post->micropubTermNames();
             $merged  = array_values(array_unique(array_merge($current, array_map('strval', $vals))));
             $applyCategories($merged);
             $touchedTerms = true;
@@ -897,7 +895,7 @@ if ($action === 'update') {
                 $applyCategories([]);
             } else {
                 $remove  = array_map('strval', $vals);
-                $current = array_map(fn($c) => (string) $c['name'], $post->categories);
+                $current = $post->micropubTermNames();
                 $kept    = array_values(array_diff($current, $remove));
                 $applyCategories($kept);
             }
