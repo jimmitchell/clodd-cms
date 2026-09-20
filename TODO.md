@@ -56,9 +56,13 @@
 
   If this is revisited, note there is no good third option: Micropub defines no `not_found` code, so keeping 404 means keeping a mismatched pair, and the choice is genuinely between a self-consistent response and an informative one. Change all four sites together or the endpoint contradicts itself differently depending on the verb. A test asserting the specific expectation would be the thing that settles it — not another reading of the spec, which has already been done twice.
 
-- [ ] **Nested Microformats2 objects are accepted and silently discarded.** micropub.rocks test 204 sends an h-entry with a nested `location` h-card; we answer 201, store the entry, and drop the h-card without comment. `q=source` on the resulting post shows no trace of it. The test passes — it only checks the create succeeds — so this is invisible from the report.
+- [ ] **A `checkin` post loses its venue, and micropub.rocks 204 passes anyway.** The test sends an h-entry whose `checkin` property is a nested h-card — venue name, Foursquare URL, lat/long and a full postal address. We answer 201, store `content` and `published`, and drop the h-card entirely. Nothing in the codebase reads `checkin`.
 
-  Defensible as-is: there is no location field in this CMS, and a Micropub server is not obliged to retain properties it does not model. Worth revisiting only if location or venue support is ever wanted, at which point the nested-object parse is the thing to write first. Confirmed 2026-09-20 on the isolated test instance.
+  **This is already the documented behaviour**, not a new finding: `mp_post_types()`'s docblock (`micropub.php:159`) says video, audio, rsvp and checkin "are currently dropped on create, so advertising them would invite posts that lose their point", which is why `q=config` does not offer them. A client that reads our post-types will never send one.
+
+  What is worth recording is that **the test passes regardless** — 204 only checks that the create succeeds, so the green badge says nothing about whether the venue survived. Confirmed 2026-09-20 on the isolated test instance.
+
+  Supporting it is a feature, not a fix: it needs somewhere to put a venue (name, URL, coordinates, address), a decision about rendering, and `mp_post_types()` updated to advertise `checkin` once the data round-trips. The same applies to rsvp, video and audio.
 
 ## Security
 
