@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.2] — 2026-09-20
+
+No schema change.
+
+### Changed
+
+- **The newsletter signup says what the articles will be like.** The form's label now reads "Subscribe to get articles like this in your inbox" rather than "new articles": it renders at the foot of an article and from the `[subscribe]` shortcode, so in both places the reader has just finished the thing being offered more of. The RSS link beside it is unchanged.
+- **The label sets a little smaller, on a slightly wider measure.** `.subscribe__label` drops from `.9375rem` to `.8375rem`, and `--max-content` goes from 740px to 760px. Inter's taller x-height (1.46.0) reads larger at the same `font-size`, so the panel's secondary line takes the step down to sit back under the button row.
+
+---
+
 ## [1.46.1] — 2026-09-19
 
 No schema change.

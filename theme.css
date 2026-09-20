@@ -77,7 +77,7 @@
     --color-rule:       color-mix(in srgb, var(--color-border) 60%, transparent);
     /* A neutral black shadow reads blue against warm paper. */
     --shadow-rgb:       60, 40, 20;
-    --max-content:      740px;
+    --max-content:      760px;
     --max-wide:         780px;
     /* Corner radius for content surfaces — cards, images, embeds, pills. Small
        chrome (icon buttons, the nav dropdown, search inputs) keeps its own
@@ -2114,7 +2114,7 @@ audio { width: 100%; }
 .subscribe .subscribe__label {
     max-width: 30rem;
     margin: 0 auto 1rem;
-    font-size: .9375rem;
+    font-size: .8375rem;
     line-height: 1.55;
 }
 
