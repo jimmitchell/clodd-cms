@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.3] — 2026-09-20
+
+No schema change.
+
+### Changed
+
+- **The newsletter signup's field row runs to 32rem.** `.subscribe__row` matched the label's 30rem measure, which drew the field and button at exactly the width of the text explaining them. The row is now 2rem wider than the label, so the control reads as the panel's subject rather than another line of it. The gap between field and button is untouched — that stays on the rule `.wm-submit__row` shares (1.46.1).
+
+---
+
 ## [1.46.2] — 2026-09-20
 
 No schema change.
