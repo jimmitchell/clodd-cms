@@ -50,6 +50,12 @@
 
   Which client was used matters — MarsEdit vs something else — since it decides which of the two paths ran.
 
+- [ ] **`invalid_request` is returned with a 404 on a Micropub URL that resolves to nothing.** Four sites — `micropub.php:455` (`q=source`), `:628` and `:651` (delete/undelete) and `:674` (update) — answer `mp_error('invalid_request', 'post not found for url', 404)`. Both specs define that error code as a **400** condition (RFC 6750 §3.1; the Micropub error table), and the Micropub spec's only example of a missing post uses 400, so the code and the status contradict each other — the same shape as the `invalid_token`/`unauthorized` bug fixed in 1.46.5.
+
+  **Deliberately left as 404 on 2026-09-20.** Nothing observed turns on it: micropub.rocks sent `q=source&url=false` three times during that run and the 404 was never the stated reason for a failure, and `obsidian-micropub` only tests `res.status < 200 || res.status >= 300`, so it cannot tell the two apart. Against that, 404 says something 400 does not — *that post does not exist*, as opposed to *your request was malformed* — which is worth more to whoever is debugging a client than spec-tidiness is.
+
+  If this is revisited, note there is no good third option: Micropub defines no `not_found` code, so keeping 404 means keeping a mismatched pair, and the choice is genuinely between a self-consistent response and an informative one. Change all four sites together or the endpoint contradicts itself differently depending on the verb. A test asserting the specific expectation would be the thing that settles it — not another reading of the spec, which has already been done twice.
+
 ## Security
 
 - [x] **Atomic config.php writes** — `admin/account.php` writes password changes with a temp file + rename pattern; wrap with `flock()` to prevent race conditions during concurrent reads
