@@ -22,7 +22,7 @@ use CMS\Helpers;
     <?php /* A <p> named by aria-labelledby rather than a <label>: it holds a
              link, and a click on a link inside a label also moves focus to the
              field, which reads as the page jumping. */ ?>
-    <p class="subscribe__label" id="subscribe-label">Subscribe to get articles like this in your inbox (or grab the <a href="/feed.rss">RSS feed</a>)</p>
+    <p class="subscribe__label" id="subscribe-label">Subscribe to get new articles delivered to your inbox (or grab the <a href="/feed.rss">RSS feed</a>)</p>
     <div class="subscribe__row">
         <input class="subscribe__input" type="email" name="email" id="subscribe-email"
                aria-labelledby="subscribe-label"

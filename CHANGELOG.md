@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.4] — 2026-09-20
+
+No schema change.
+
+### Changed
+
+- **The newsletter signup's label says "new articles delivered to your inbox".** This replaces 1.46.2's "articles like this", which neither version has been deployed under. "New" is the thing a reader is actually deciding about — whether there will be more, not whether the next one resembles the one they just read — and "delivered to" says a mail arrives, where "in" only describes where it ends up. The RSS link beside it is unchanged.
+
+---
+
 ## [1.46.3] — 2026-09-20
 
 No schema change.
