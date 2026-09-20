@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.47.1] — 2026-09-20
+
+No schema change.
+
+### Changed
+
+- **The last three `3px` corners now take `--radius` with everything else.** The nav dropdown (`.site-nav__sub`), the theme and menu icon buttons (`.theme-toggle`, `.nav-toggle`) and the search toggle each hard-coded their own radius, so the site rounded its corners at two values depending on which part of the header you looked at. All three read the token now, which makes `--radius` the single knob it was meant to be: the avatar is the only exception left, and it says why above `.site-header__avatar` — a face is not a panel.
+
+  Visible mostly on the dropdown, which carries a border and a fill and now matches the cards below it. The icon buttons have no resting background, so their corner only shows on the keyboard focus ring.
+
+- **The admin's inline `code` chip takes `--radius` too.** `admin/assets/admin.css` declares the same 6px token and was the one place still at 3px; the public theme's `.prose code` has been on the token all along, so this is the admin catching up with the site.
+
+- **Two comments that described the old arrangement are corrected.** The `--radius` docblock claimed small chrome kept a tighter radius, which is no longer true of anything; and the webmention/subscribe field still said it matched `.search-page__form` "down to the 4px radius small chrome keeps instead of `--radius`", which stopped being true when those controls moved onto the token.
+
+---
+
+## [1.47.0] — 2026-09-20
+
+No schema change.
+
+### Changed
+
+- **The site is set in DM Sans again**, reversing 1.46.0. Inter held the slot for a day; DM Sans is the face the site was designed around, in 1.40.0 and before that. The two variable `.woff2` files come back to `fonts/` byte-for-byte as they left — which matters, because nginx caches `/fonts/` immutable for a year: a reader still holding `DMSans-Variable.woff2` from before 1.46.0 has the right file, so the name is reused rather than fingerprinted. `--font-sans`, both `@font-face` rules, the `templates/base.php` preload and `fonts/OFL.txt` all name DM Sans, and the Inter files are gone.
+
+  The leading and the type scale do not move. 1.46.0 left them alone on the way up — Inter's taller x-height (.546em against .504) wanted no *less* leading — so coming back down leaves nothing to undo. The `-0.02em` heading tracking stays: DM Sans sets a little loose above body size, which is the reason it was added in the first place.
+
+- **The newsletter signup's label goes back to `.9375rem`, on a 740px measure.** Both values stepped in 1.46.2 because Inter read larger at the same `font-size`; with that gone, the reason is gone. The label's wording is untouched.
+
+- **The OG card is set in DM Sans too**, from the static cut restored at `fonts/og/og-regular.ttf` and `og-bold.ttf`. `OgImage::DESIGN_VERSION` goes to **14** — forward, not back to 12 — so the next full build redraws every card. The `SYSTEM_FONTS` docblock returns to the truth it stated before: no stock host carries a geometric humanist, so a fallback card is a visibly different card rather than a near miss, and a missing pin is obvious by eye.
+
+---
+
 ## [1.46.7] — 2026-09-20
 
 No schema change.

@@ -440,7 +440,7 @@ code {
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     font-size: .85em;
     background: #e9eaed;
-    border-radius: 3px;
+    border-radius: var(--radius);
     padding: .1em .35em;
 }
 

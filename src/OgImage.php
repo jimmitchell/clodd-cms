@@ -18,7 +18,7 @@ use RuntimeException;
  * social preview — usually the first thing anyone sees of a post — looks like
  * the page it opens.
  *
- * The type is the site's too, again: `theme.css` loads Inter, and the static
+ * The type is the site's too, again: `theme.css` loads DM Sans, and the static
  * cut of it is pinned in `fonts/og/` as og-regular/og-bold. That is what the
  * pin is for — GD needs a real file and cannot read the variable `.woff2` the
  * pages download, so the family has to arrive here as a second copy rather than
@@ -50,7 +50,7 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 13;
+    public const DESIGN_VERSION = 14;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
@@ -141,11 +141,11 @@ class OgImage
      * missing. Nothing here should ever be reached on a healthy checkout.
      *
      * The order is a preference, not a guess at what exists — several of these
-     * are usually installed together. None of them is Inter, though all are
-     * grotesques like it, so a fallback card is a near miss rather than a
-     * visibly different card — which makes a missing pin easier to overlook,
-     * not harder. The list runs from the most neutral outward — Nimbus Sans
-     * (Helvetica's letterforms), then Liberation Sans (Arial's: angled terminals on C and t,
+     * are usually installed together. None of them is DM Sans: no stock host
+     * carries a geometric humanist, so a fallback card is a visibly different
+     * card, not a near miss. What is left to choose between is grotesques, and
+     * the list runs from the most neutral outward — Nimbus Sans (Helvetica's
+     * letterforms), then Liberation Sans (Arial's: angled terminals on C and t,
      * a spurred G, a curled R leg), then DejaVu, wider and rounder still, as
      * the near-universal floor.
      *
@@ -188,7 +188,7 @@ class OgImage
 
     /**
      * The pinned face: `og-regular` and `og-bold` in the override directory,
-     * in either outline format. Inter arrives as TrueType; GD reads CFF
+     * in either outline format. DM Sans arrives as TrueType; GD reads CFF
      * (`.otf`) just as happily, and several of the free faces worth pinning
      * ship only as OTF, so refusing that extension would have meant converting
      * a font to satisfy a string literal.

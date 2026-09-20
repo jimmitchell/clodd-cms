@@ -1,20 +1,17 @@
 /* ── Clodd CMS — Public Theme ─────────────────────────────────────────────── */
 
-/* ── Inter — self-hosted variable font (rsms/inter, OFL license) ─────────────
+/* ── DM Sans — self-hosted variable font (Google Fonts, OFL license) ─────────
    Sets everything on the site: UI, prose, and headings, and the OG card the
    server draws is set in the static cut of the same family — a shared link and
    the page it opens are the one typeface.
 
-   Self-hosted rather than linked from a CDN: every CSP in the repo is
-   `font-src 'self'`, so the CDN would mean loosening the policy in three nginx
-   configs and putting a third-party request in front of first paint. The files
-   are built from the upstream Inter 4.1 variable fonts with the weight axis
-   clamped to 200–800, the optical-size axis pinned at 14 (the text cut), and
-   hinting stripped. The subset is Latin-1 + Latin Extended-A plus punctuation
-   and arrows, not the full latin-ext range DM Sans shipped: Inter's coverage
-   there is three times the size, and the wider cut came to 105 KB on the
-   preloaded critical path against 49 KB for this one. Every character outside
-   it in the published archive is an emoji, which no text face draws anyway.
+   Self-hosted rather than linked from fonts.googleapis.com: every CSP in the
+   repo is `font-src 'self'`, so the CDN would mean loosening the policy in
+   three nginx configs and putting a third-party request in front of first
+   paint. The files are built from the upstream OFL sources, subset to latin +
+   latin-ext, with the weight axis clamped to 200–800 and the optical-size axis
+   pinned at 14 — carrying opsz live cost 29 KB on the preloaded critical path
+   for an adjustment nothing on the page is large enough to show.
 
    Two things follow from the swap back off the system stack, and both are
    load-bearing:
@@ -32,16 +29,16 @@
      for 500 here and you will get 500 — so only ask deliberately. */
 
 @font-face {
-    font-family: 'Inter';
-    src: url('/fonts/InterVariable.woff2') format('woff2');
+    font-family: 'DM Sans';
+    src: url('/fonts/DMSans-Variable.woff2') format('woff2');
     font-weight: 200 800;
     font-style:  normal;
     font-display: swap;
 }
 
 @font-face {
-    font-family: 'Inter';
-    src: url('/fonts/InterVariable-Italic.woff2') format('woff2');
+    font-family: 'DM Sans';
+    src: url('/fonts/DMSans-Variable-Italic.woff2') format('woff2');
     font-weight: 200 800;
     font-style:  italic;
     font-display: swap;
@@ -77,17 +74,19 @@
     --color-rule:       color-mix(in srgb, var(--color-border) 60%, transparent);
     /* A neutral black shadow reads blue against warm paper. */
     --shadow-rgb:       60, 40, 20;
-    --max-content:      760px;
+    --max-content:      740px;
     --max-wide:         780px;
-    /* Corner radius for content surfaces — cards, images, embeds, pills. Small
-       chrome (icon buttons, the nav dropdown, search inputs) keeps its own
-       tighter radius; this is the one knob for everything that holds content. */
+    /* Corner radius for every rounded box on the page — cards, images, embeds,
+       pills, form controls, and, since 1.47.1, the small chrome that used to
+       hold out at 3px: the two header icon buttons and the nav dropdown. One
+       knob, one corner. The avatar is the only exception left, and the reason
+       is written above .site-header__avatar: a face is not a panel. */
     --radius:           6px;
 
     /* The type stacks, named once. Every rule below reaches for these rather
        than repeating the list — eight copies of the sans stack is eight places
        for it to drift. */
-    --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-sans: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
@@ -159,10 +158,11 @@ html { font-size: 18px; scroll-behavior: smooth; overflow-y: scroll; }
 
 
 /* 30px on the 18px root. Leading is set against the x-height rather than the
-   em, and Inter sets a tall one — .546em, taller than DM Sans's .504 and far
-   from Walsheim's .461, which is the face the short-lived 1.5556 was tuned
-   for. A taller x-height wants more leading, never less, so this holds. Keep
-   it a whole pixel at the root size: 1.6667 is 30/18. */
+   em, and DM Sans sets a tall one — .504em, within a hair of the system faces
+   it replaces and a world away from Walsheim's .461, which is the face the
+   short-lived 1.5556 was tuned for. Inter's .546 was taller again and the
+   leading held for it; coming back down does not want less. Keep it a whole
+   pixel at the root size: 1.6667 is 30/18. */
 body {
     font-family: var(--font-sans);
     line-height: 1.6667;
@@ -177,8 +177,8 @@ body {
 
 /* .site-main { flex: 1; width: 100%; } */
 
-/* Headings run tighter than body copy — Inter is spaced for text sizes and
-   sets loose above them. Uppercase micro-labels (.webmentions__title and friends) set their own
+/* Headings run tighter than body copy — DM Sans sets a little loose above body
+   size. Uppercase micro-labels (.webmentions__title and friends) set their own
    positive tracking and keep it, since class beats element. */
 h1, h2, h3, h4, h5, h6 { letter-spacing: -0.02em; }
 
@@ -289,7 +289,7 @@ audio { width: 100%; }
     list-style: none;
     background: var(--color-header-bg);
     border: 1px solid var(--color-border);
-    border-radius: 3px;
+    border-radius: var(--radius);
     min-width: 12rem;
     z-index: 100;
     opacity: 0;
@@ -334,7 +334,7 @@ audio { width: 100%; }
     display: flex;
     align-items: center;
     padding: .25rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     transition: color .15s;
     flex-shrink: 0;
     line-height: 0;
@@ -400,7 +400,7 @@ audio { width: 100%; }
     display: flex;
     align-items: center;
     padding: .25rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     transition: color .15s;
     flex-shrink: 0;
     line-height: 0;
@@ -2034,9 +2034,9 @@ audio { width: 100%; }
 }
 
 /* The field matches .search-page__form — the theme's one existing text input —
-   down to the 4px radius small chrome keeps instead of --radius. 1rem is not a
-   whim either: iOS zooms the viewport on focus for anything smaller, which would
-   throw the reader out of the page they are trying to respond to. */
+   down to the shared --radius. 1rem is not a whim either: iOS zooms the viewport
+   on focus for anything smaller, which would throw the reader out of the page
+   they are trying to respond to. */
 .wm-submit__input,
 .subscribe__input {
     flex: 1;
@@ -2114,7 +2114,7 @@ audio { width: 100%; }
 .subscribe .subscribe__label {
     max-width: 30rem;
     margin: 0 auto 1rem;
-    font-size: .8375rem;
+    font-size: .9375rem;
     line-height: 1.55;
 }
 
