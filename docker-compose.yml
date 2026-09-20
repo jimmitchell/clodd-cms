@@ -13,7 +13,17 @@ services:
   # Scheduled posts, the same job the prod crontab runs every minute. Shares
   # the php service's uid/gid deliberately: this writes HTML into the web root,
   # and files owned by anyone else make the next web-triggered rebuild fail.
+  #
+  # Behind a profile, so a plain `docker compose up` leaves it out. This is not
+  # tidiness: the local database is usually a copy of prod, which carries live
+  # Mastodon, Bluesky and Pixelfed tokens, and publish-scheduled.php builds *and
+  # syndicates* through PostPublisher. Started by accident against a prod copy
+  # with something sitting in the schedule, it posts to the real accounts from a
+  # laptop. Start it deliberately when testing the scheduler:
+  #
+  #     docker compose --profile scheduler up
   scheduler:
+    profiles: ["scheduler"]
     build:
       context: .
       dockerfile: Dockerfile

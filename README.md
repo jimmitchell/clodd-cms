@@ -81,6 +81,12 @@ Visit **http://localhost:8080/admin/** and log in.
 
 The setup script prompts for a username and password, writes both to `config.php`, and seeds the SQLite database. Generated HTML, uploaded media, and the database are written to the project directory (not inside the container), so they persist across restarts.
 
+The scheduler is left out of that `up` on purpose — it sits behind a Compose profile. `bin/publish-scheduled.php` builds *and* syndicates, so against a database copied from a live site it posts to the real accounts. Start it deliberately when that is what you are testing:
+
+```bash
+docker compose --profile scheduler up
+```
+
 ---
 
 ## Production Deployment

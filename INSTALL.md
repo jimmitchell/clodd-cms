@@ -382,6 +382,11 @@ docker compose exec php php bin/setup.php
 
 Visit `http://localhost:8080/admin/`.
 
+That starts PHP-FPM and Nginx only. The scheduler is behind a `scheduler` profile,
+because `bin/publish-scheduled.php` syndicates as well as builds — pointed at a
+database copied from a live site, it posts to the real accounts. Add
+`--profile scheduler` when you mean to exercise it.
+
 ---
 
 ## Updating
