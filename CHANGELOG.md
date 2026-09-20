@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.46.4] — 2026-09-20
+## [1.46.3] — 2026-09-20
 
 No schema change.
 
@@ -18,7 +18,7 @@ No schema change.
 
 ---
 
-## [1.46.3] — 2026-09-20
+## [1.46.2] — 2026-09-20
 
 No schema change.
 
