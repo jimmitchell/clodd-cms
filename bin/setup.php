@@ -8,7 +8,8 @@
  *   php bin/setup.php
  *
  * Prompts for an admin username and password, writes both into config.php,
- * then initializes the database schema.
+ * then initializes the database schema. Creates config.php first if it is not
+ * there, so a fresh clone can run this directly.
  */
 
 define('CMS_ROOT', dirname(__DIR__));
@@ -16,7 +17,66 @@ define('CMS_VERSION', trim(file_get_contents(CMS_ROOT . '/VERSION')));
 
 require CMS_ROOT . '/vendor/autoload.php';
 
-$config = require CMS_ROOT . '/config.php';
+// ── Create config.php if this is a fresh clone ────────────────────────────────
+
+// config.php is gitignored — it holds the admin bcrypt hash — so a clone does
+// not have one, and everything below rewrites the file rather than writing it
+// from nothing. Without this block `require` fatals on line one of a new
+// install, which is exactly the step INSTALL.md sends people to.
+//
+// The defaults are the shipped layout: output at the project root, because
+// nginx serves the root directly. 0640 matches what the rewrite below settles
+// on — readable by the web server's group, closed to everyone else.
+$configPath = CMS_ROOT . '/config.php';
+
+if (!file_exists($configPath)) {
+    $default = <<<'PHP'
+<?php
+
+/**
+ * Local configuration. Not tracked — it holds the admin password hash.
+ *
+ * Written by bin/setup.php; re-running that script rewrites the two admin
+ * values in place and leaves everything else here alone.
+ */
+
+return [
+    'admin' => [
+        'username'         => 'admin',
+        'password_hash'    => '',
+        'session_name'     => 'cms_session',
+        'session_lifetime' => 3600,
+    ],
+    'paths' => [
+        'data'      => __DIR__ . '/data',
+        'content'   => __DIR__ . '/content',
+        'output'    => __DIR__,
+        'templates' => __DIR__ . '/templates',
+    ],
+    'security' => [
+        'max_login_attempts' => 5,
+        'lockout_minutes'    => 15,
+    ],
+];
+
+PHP;
+
+    // 'x' rather than 'w': if two setups race, the loser must not clobber a
+    // config the winner has already put a hash into. The file carries no
+    // secret at this point — password_hash is empty until the rewrite below —
+    // so the chmod that follows is in good time.
+    $fh = @fopen($configPath, 'x');
+    if ($fh === false || @fwrite($fh, $default) === false) {
+        fwrite(STDERR, "Error: could not create {$configPath}.\n");
+        exit(1);
+    }
+    fclose($fh);
+    @chmod($configPath, 0640);
+
+    echo "Created config.php.\n";
+}
+
+$config = require $configPath;
 
 // ── Check autoloader ──────────────────────────────────────────────────────────
 
@@ -81,7 +141,6 @@ $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
 
 // ── Write username and hash into config.php ───────────────────────────────────
 
-$configPath    = CMS_ROOT . '/config.php';
 $configContent = file_get_contents($configPath);
 
 // Write username.

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.4] — 2026-09-20
+
+No schema change.
+
+### Fixed
+
+- **`bin/setup.php` now creates `config.php` instead of requiring one that is not there.** A fresh clone could not complete INSTALL.md step 3: the script `require`s `config.php` on line one, but that file is gitignored — it holds the admin bcrypt hash — and no template ships in the repo, so a new install fataled with *"Failed opening required 'config.php'"*. Everything below that line rewrites the file rather than writing it, which is why the gap went unnoticed: it only ever ran where a config already existed. The script now writes the shipped defaults first when the file is missing, with `fopen($path, 'x')` so a racing second setup cannot clobber a config the first already put a hash into, and at 0640 to match what the rewrite settles on. INSTALL.md's description of step 3 was already correct; the script has caught up with it.
+- **`composer.lock` matches `composer.json` again.** The version bumps earlier in 1.46.x moved `composer.json` without regenerating the lock, so its `content-hash` went stale and every `composer install` — including the one on prod — printed *"The lock file is not up to date."* Only the hash changed; no dependency moved.
+
+---
+
 ## [1.46.3] — 2026-09-20
 
 No schema change.
