@@ -62,4 +62,47 @@ final class MicropubAuthTest extends TestCase
         $this->assertFalse(MicropubAuth::legacyTokenMatches(MicropubAuth::hashLegacyToken('x'), ''));
         $this->assertFalse(MicropubAuth::legacyTokenMatches('', 'anything'));
     }
+
+    /**
+     * The two halves of a rejection must agree. `authenticate()` sends a
+     * WWW-Authenticate header *and* a JSON body, and for a year the header said
+     * `invalid_token` while the body said `unauthorized` — a response that
+     * contradicted itself, and that no client would ever report, because both
+     * carry 401 and a client reading either one alone sees something coherent.
+     *
+     * Asserted from the source because `error()` is `never` — it exits, so the
+     * branch cannot be reached from a test. Comments are stripped first, or the
+     * prose above the call would satisfy the assertion on its own.
+     */
+    public function testAnInvalidTokenIsRejectedAsInvalidTokenNotUnauthorized(): void
+    {
+        $code = self::sourceWithoutComments(__DIR__ . '/../src/MicropubAuth.php');
+
+        $this->assertMatchesRegularExpression(
+            '/error="invalid_token".*?self::error\(\s*\'invalid_token\'/s',
+            $code,
+            'a token that was supplied and did not verify is invalid_token (RFC 6750 §3.1), '
+            . 'and the body must not disagree with the WWW-Authenticate header above it'
+        );
+
+        // The other branch is the one 'unauthorized' is actually for: Micropub
+        // defines it for a request that carried no token at all.
+        $this->assertStringContainsString(
+            "self::error('unauthorized', 'Missing access token', 401)",
+            $code,
+            'a request with no token stays unauthorized'
+        );
+    }
+
+    private static function sourceWithoutComments(string $path): string
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents($path)) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+        return $code;
+    }
 }

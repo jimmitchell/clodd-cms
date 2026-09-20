@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.5] — 2026-09-20
+
+No schema change.
+
+### Fixed
+
+- **A Micropub request with an invalid token is refused as `invalid_token`, not `unauthorized`.** The rejection sent two things and they disagreed: the `WWW-Authenticate` header already carried `error="invalid_token"` while the JSON body said `"error":"unauthorized"`. RFC 6750 §3.1 reserves `invalid_token` for a token that was supplied and did not verify — expired, revoked, malformed — and Micropub's own `unauthorized` means none was sent at all, which is what the other branch still returns. Both carry 401, so a client reading either half alone saw something coherent and nobody reported it. `MicropubAuthTest` now asserts the two halves agree, from the source with comments stripped, because `MicropubAuth::error()` is `never` and the branch cannot be reached from a test.
+
+### Notes
+
+- **micropub.rocks test 802 fails here on purpose, and should keep failing.** Its harness sends the access token in the `Authorization` header *and* the form body on a request that exists to exercise the body method (micropub.rocks issues #103/#124). RFC 6750 §2 says a client "MUST NOT use more than one method to transmit the token", and names that case in `invalid_request` with "SHOULD respond with the HTTP 400" — which is what `MicropubAuth::extractBearerToken()` does, and what their own test 805 requires. Passing 802 would mean breaking the RFC. Verified again on 2026-09-20 against a local instance; the reasoning was already in the source at `src/MicropubAuth.php:90` and is repeated here because the next run of that suite will raise it again.
+
+---
+
 ## [1.46.4] — 2026-09-20
 
 No schema change.

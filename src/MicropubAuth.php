@@ -140,9 +140,16 @@ class MicropubAuth
             ];
         }
 
+        // 'invalid_token', not 'unauthorized': RFC 6750 §3.1 reserves that code
+        // for a token that was supplied and did not verify — expired, revoked,
+        // malformed — while Micropub's own 'unauthorized' means none was sent at
+        // all. The WWW-Authenticate header above has always said invalid_token,
+        // so until now the two halves of this response disagreed with each other.
+        // The status is 401 either way, so a client that reads only the code is
+        // unaffected.
         Auth::recordFailureIn($db, $ip, Auth::SCOPE_MICROPUB);
         header('WWW-Authenticate: Bearer realm="Micropub", error="invalid_token"');
-        self::error('unauthorized', 'Invalid access token', 401);
+        self::error('invalid_token', 'Invalid access token', 401);
     }
 
     /**
