@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.47.2] — 2026-09-20
+
+No schema change.
+
+### Changed
+
+- **The newsletter signup's label sets at `.8375rem` after all.** 1.47.0 put it back to `.9375rem` on the reasoning that the step down in 1.46.2 was owed to Inter's taller x-height, and that the reason left with the typeface. Seen on the page in DM Sans, the smaller size is still the right one: the label is the panel's secondary line and at `.9375rem` it competes with the control row it is meant to introduce. So the value stands on its own merit now rather than on a font metric. `--max-content` stays at the 740px 1.47.0 restored.
+
+---
+
 ## [1.47.1] — 2026-09-20
 
 No schema change.
