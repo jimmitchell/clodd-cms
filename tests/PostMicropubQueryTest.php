@@ -258,4 +258,55 @@ final class PostMicropubQueryTest extends TempSiteTestCase
             'contexts must be hydrated — the mf2 mapper reads them per item'
         );
     }
+
+    /**
+     * A titleless post must report no `name` property at all.
+     *
+     * `templates/post.php` omits `p-name` for a note, so emitting one from
+     * `q=source` made the two descriptions of the same post contradict each
+     * other — and the endpoint then refuses the value it just handed out, with
+     * `400 name cannot be empty`. The guard has to use the same `title !== ''`
+     * predicate as `Post::micropubType()`, or a post can be a note to one and
+     * an article to the other.
+     *
+     * Asserted from source: `mp_post_source_properties()` is a function inside
+     * micropub.php, and including that file executes the endpoint. Comments are
+     * stripped first, or the prose above the guard would satisfy it.
+     */
+    public function testATitlelessPostReportsNoNameProperty(): void
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents(__DIR__ . '/../micropub.php')) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $body = substr($code, (int) strpos($code, 'function mp_post_source_properties'));
+        $body = substr($body, 0, (int) strpos($body, "\nfunction "));
+
+        // The literal the function opens with — everything up to its first `];`.
+        $start   = (int) strpos($body, '$props = [');
+        $literal = substr($body, $start, (int) strpos($body, '];', $start) - $start);
+
+        $this->assertStringNotContainsString(
+            "'name'",
+            $literal,
+            'name must not be in the unconditional literal — a note would advertise an empty one'
+        );
+
+        $this->assertMatchesRegularExpression(
+            "/\\\$post->title\s*!==\s*''/",
+            $body,
+            "the guard must be title !== '', matching Post::micropubType()"
+        );
+
+        // The other half: the predicate this mirrors is still the one in Post.
+        $this->assertStringContainsString(
+            "return \$this->title !== '' ? 'article' : 'note';",
+            (string) file_get_contents(__DIR__ . '/../src/Post.php'),
+            'Post::micropubType() decides note vs article on the same test'
+        );
+    }
 }

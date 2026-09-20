@@ -56,6 +56,10 @@
 
   If this is revisited, note there is no good third option: Micropub defines no `not_found` code, so keeping 404 means keeping a mismatched pair, and the choice is genuinely between a self-consistent response and an informative one. Change all four sites together or the endpoint contradicts itself differently depending on the verb. A test asserting the specific expectation would be the thing that settles it — not another reading of the spec, which has already been done twice.
 
+- [ ] **Nested Microformats2 objects are accepted and silently discarded.** micropub.rocks test 204 sends an h-entry with a nested `location` h-card; we answer 201, store the entry, and drop the h-card without comment. `q=source` on the resulting post shows no trace of it. The test passes — it only checks the create succeeds — so this is invisible from the report.
+
+  Defensible as-is: there is no location field in this CMS, and a Micropub server is not obliged to retain properties it does not model. Worth revisiting only if location or venue support is ever wanted, at which point the nested-object parse is the thing to write first. Confirmed 2026-09-20 on the isolated test instance.
+
 ## Security
 
 - [x] **Atomic config.php writes** — `admin/account.php` writes password changes with a temp file + rename pattern; wrap with `flock()` to prevent race conditions during concurrent reads

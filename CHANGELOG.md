@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.46.6] — 2026-09-20
+
+No schema change.
+
+### Fixed
+
+- **`q=source` no longer reports an empty `name` on a titleless post.** `mp_post_source_properties()` set `'name' => [$post->title]` unconditionally, where every optional property beside it — `summary`, `published`, `photo` — is guarded, so a note came back as `name: [""]`. That contradicted the site's own output: `templates/post.php` omits `p-name` for a note, which is the documented rule. Worse, the endpoint then refuses the value it just handed out — sending that empty name back in an update answers `400 invalid_request, "name cannot be empty"` — so a client that faithfully round-trips what `q=source` told it cannot save. `obsidian-micropub` escapes only because it happens to guard on `fm.title.trim() !== ""` before sending `name`; with the property absent it deletes its own title instead, which is the behaviour it should have had all along. The guard uses the same `title !== ''` predicate as `Post::micropubType()`, so a post cannot be a note to one and an article to the other, and `PostMicropubQueryTest` asserts that pairing.
+
+  Found by running the micropub.rocks suite against a throwaway instance — its test 204 fixture is a titleless note, and the empty `name` only shows up when you read the source representation back.
+
+---
+
 ## [1.46.5] — 2026-09-20
 
 No schema change.

@@ -269,15 +269,26 @@ function mp_parse_context_values(array $properties): array
  * Returns an associative array of property → array-of-values, matching the
  * shape clients send on create. `category` is a flat list of category + tag
  * names. `published` is ISO 8601 in the site's configured timezone (or UTC).
+ *
+ * A titleless post reports **no `name` at all**, rather than an empty one.
+ * `templates/post.php` already omits `p-name` for a note, so sending one here
+ * made the two descriptions of the same post disagree — and a client that
+ * round-trips what it was told gets `400 name cannot be empty` back on save.
+ * obsidian-micropub survives that only because it happens to guard on
+ * `fm.title.trim() !== ""`; absent the property it deletes its own title
+ * instead, which is the behaviour we want.
  */
 function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteUrl): array
 {
     $props = [
-        'name'        => [$post->title],
         'content'     => [$post->content],
         'mp-slug'     => [$post->slug],
         'post-status' => [$post->status === 'published' ? 'published' : 'draft'],
     ];
+
+    if ($post->title !== '') {
+        $props = ['name' => [$post->title]] + $props;
+    }
 
     if ($post->excerpt !== null && $post->excerpt !== '') {
         $props['summary'] = [$post->excerpt];
