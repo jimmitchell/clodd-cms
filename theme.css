@@ -2121,7 +2121,7 @@ audio { width: 100%; }
 /* Width and centring only — the gap stays on the shared rule above, so the two
    text-and-send controls sit their buttons the same distance from the field. */
 .subscribe__row {
-    max-width: 30rem;
+    max-width: 32rem;
     margin: 0 auto;
 }
 
