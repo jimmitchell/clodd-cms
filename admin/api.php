@@ -600,7 +600,7 @@ const API_PUBLIC_SETTINGS = [
     'pixelfed_instance', 'pixelfed_url',
     'posts_per_page', 'reply_email', 'schema_version',
     'show_related_posts', 'site_description', 'site_title', 'site_url',
-    'timezone', 'tinylytics_code', 'tinylytics_kudos_emoji',
+    'timezone', 'tinylytics_code', 'tinylytics_events', 'tinylytics_kudos_emoji',
     'webmention_domain',
 ];
 

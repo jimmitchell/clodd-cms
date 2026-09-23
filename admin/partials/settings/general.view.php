@@ -10,6 +10,9 @@ use CMS\Helpers;
 $showRelatedPosts = $_SERVER['REQUEST_METHOD'] === 'POST'
     ? isset($_POST['show_related_posts'])
     : (($settings['show_related_posts'] ?? '0') === '1');
+$tinylyticsEvents = $_SERVER['REQUEST_METHOD'] === 'POST'
+    ? isset($_POST['tinylytics_events'])
+    : (($settings['tinylytics_events'] ?? '0') === '1');
 ?>
 <?php foreach ($errors as $e): ?>
     <p class="alert alert--error"><?= Helpers::e($e) ?></p>
@@ -364,6 +367,16 @@ $showRelatedPosts = $_SERVER['REQUEST_METHOD'] === 'POST'
             Emoji for the Kudos button shown below each post. When set, the tracking script
             is updated to enable Kudos and the button appears on post pages.
             Leave blank to disable.
+        </p>
+
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+            <input type="checkbox" name="tinylytics_events" value="1" <?= $tinylyticsEvents ? 'checked' : '' ?>>
+            Track Tinylytics events
+        </label>
+        <p class="form-hint">
+            Records clicks as events: outbound links and file downloads automatically, plus the
+            Email, Mastodon, Bluesky, Pixelfed and Webmention pills under a post and the newsletter
+            Subscribe button. Needs the site ID above.
         </p>
 
         <label for="ga_measurement_id">Google Analytics measurement ID</label>

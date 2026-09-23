@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.48.0] — 2026-09-23
+
+No schema change. The new setting is a row in `settings`, off until ticked.
+
+### Added
+
+- **Tinylytics event tracking, behind a checkbox in Settings → General → Analytics.** Ticking *Track Tinylytics events* adds `events&auto` to the embed script's query, alongside `kudos=` when that is set. `auto` counts outbound links as `link.outbound` (host as the value) and downloads as `file.download` (filename as the value) with no markup. On top of that, the site's own controls are tagged explicitly:
+
+  | Element | Event | Value |
+  |---|---|---|
+  | Email pill under a post | `reply.email` | — |
+  | Mastodon / Bluesky / Pixelfed pills | `syndication.open` | `mastodon` / `bluesky` / `pixelfed` |
+  | Webmention pill | `webmention.open` | — |
+  | Newsletter *Subscribe* button | `newsletter.subscribe` | — |
+
+  The syndication pills are outbound links, so `auto` would count them anyway, but only by host. Tinylytics leaves a tagged element to its attribute rather than counting it twice, so tagging them groups all three under one event. The attributes are always in the markup and do nothing unless the script was loaded with `events`. Tinylytics counts clicks and nothing else, so `newsletter.subscribe` counts presses of the button, not confirmed signups; EmailOctopus is where those are recorded.
+
+---
+
 ## [1.47.2] — 2026-09-20
 
 No schema change.

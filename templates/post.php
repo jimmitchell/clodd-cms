@@ -217,22 +217,25 @@ ob_start();
                 : 'Re: ' . $post->title;
         ?>
         <a href="mailto:<?= htmlspecialchars($replyEmail, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>?subject=<?= rawurlencode($emailSubject) ?>"
-           class="u-syndication">Email</a>
+           class="u-syndication" data-tinylytics-event="reply.email">Email</a>
         <?php endif; ?>
         <?php if ($post->mastodon_url): ?>
         <a href="<?= htmlspecialchars($post->mastodon_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
-           class="u-syndication" target="_blank" rel="noopener noreferrer">Mastodon</a>
+           class="u-syndication" target="_blank" rel="noopener noreferrer"
+           data-tinylytics-event="syndication.open" data-tinylytics-event-value="mastodon">Mastodon</a>
         <?php endif; ?>
         <?php if ($post->bluesky_url): ?>
         <a href="<?= htmlspecialchars($post->bluesky_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
-           class="u-syndication" target="_blank" rel="noopener noreferrer">Bluesky</a>
+           class="u-syndication" target="_blank" rel="noopener noreferrer"
+           data-tinylytics-event="syndication.open" data-tinylytics-event-value="bluesky">Bluesky</a>
         <?php endif; ?>
         <?php if ($post->pixelfed_url): ?>
         <a href="<?= htmlspecialchars($post->pixelfed_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
-           class="u-syndication" target="_blank" rel="noopener noreferrer">Pixelfed</a>
+           class="u-syndication" target="_blank" rel="noopener noreferrer"
+           data-tinylytics-event="syndication.open" data-tinylytics-event-value="pixelfed">Pixelfed</a>
         <?php endif; ?>
         <?php if ($showWebmention): ?>
-        <label class="wm-submit__toggle" for="wm-submit-toggle">Webmention</label>
+        <label class="wm-submit__toggle" for="wm-submit-toggle" data-tinylytics-event="webmention.open">Webmention</label>
         <?php endif; ?>
         <?php if ($showKudos): ?>
         <button class="tinylytics_kudos" data-path="<?= htmlspecialchars($kudosPath, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"></button>

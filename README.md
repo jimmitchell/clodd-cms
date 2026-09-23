@@ -154,7 +154,7 @@ Runtime settings are stored in the SQLite `settings` table and edited through **
 | Pixelfed | Profile URL, instance URL, access token |
 | Email reply | Reply-to email address for post footer pill |
 | IndieWeb | webmention.io domain |
-| Analytics | Tinylytics site ID, Tinylytics Kudos emoji, Google Analytics measurement ID |
+| Analytics | Tinylytics site ID, Tinylytics Kudos emoji, Tinylytics event tracking, Google Analytics measurement ID |
 | Custom CSS | Freeform CSS injected into every public page |
 
 ---

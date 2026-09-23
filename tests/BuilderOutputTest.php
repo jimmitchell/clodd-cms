@@ -338,6 +338,47 @@ PHP);
         );
     }
 
+    // ── Tinylytics events ─────────────────────────────────────────────────────
+
+    /**
+     * The events flags ride on the same script URL as kudos, and Tinylytics
+     * only reads them from there — a tagged element does nothing unless the
+     * script was asked for `events`.
+     */
+    public function testTinylyticsEventsAddFlagsBesideKudos(): void
+    {
+        $this->db->upsertSetting('tinylytics_code', 'abc123');
+        $this->db->upsertSetting('tinylytics_kudos_emoji', '👏');
+        $this->db->upsertSetting('tinylytics_events', '1');
+        $this->config['paths']['templates'] = dirname(__DIR__) . '/templates';
+        $builder = new Builder($this->config, $this->db);
+
+        $post = $this->makePublishedPost('events-on');
+        $post->mastodon_url = 'https://mastodon.example/@me/1';
+        $post->save();
+        $builder->buildPost($post);
+
+        $html = file_get_contents($builder->postOutputDir($post->published_at, $post->slug) . '/index.html');
+        $this->assertStringContainsString(
+            'https://tinylytics.app/embed/abc123.js?kudos=' . rawurlencode('👏') . '&amp;events&amp;auto"',
+            $html
+        );
+        $this->assertStringContainsString('data-tinylytics-event="syndication.open" data-tinylytics-event-value="mastodon"', $html);
+    }
+
+    public function testTinylyticsEventsAreOffUnlessEnabled(): void
+    {
+        $this->db->upsertSetting('tinylytics_code', 'abc123');
+        $this->config['paths']['templates'] = dirname(__DIR__) . '/templates';
+        $builder = new Builder($this->config, $this->db);
+
+        $post = $this->makePublishedPost('events-off');
+        $builder->buildPost($post);
+
+        $html = file_get_contents($builder->postOutputDir($post->published_at, $post->slug) . '/index.html');
+        $this->assertStringContainsString('https://tinylytics.app/embed/abc123.js" defer', $html);
+    }
+
     // ── Featured image → og:image ─────────────────────────────────────────────
 
     /**

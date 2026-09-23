@@ -44,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'github_url'           => rtrim(trim($_POST['github_url']           ?? ''), '/'),
         'tinylytics_code'        => trim($_POST['tinylytics_code']        ?? ''),
         'tinylytics_kudos_emoji' => trim($_POST['tinylytics_kudos_emoji'] ?? ''),
+        'tinylytics_events'      => isset($_POST['tinylytics_events']) ? '1' : '0',
         'ga_measurement_id'    => trim($_POST['ga_measurement_id']    ?? ''),
         'webmention_domain'        => trim($_POST['webmention_domain']        ?? ''),
         // Normalised on the way in so the stored value is already the list the

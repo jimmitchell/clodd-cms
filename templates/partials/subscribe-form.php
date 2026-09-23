@@ -27,7 +27,7 @@ use CMS\Helpers;
         <input class="subscribe__input" type="email" name="email" id="subscribe-email"
                aria-labelledby="subscribe-label"
                required placeholder="Enter your email…" autocomplete="email" spellcheck="false">
-        <button class="subscribe__send" type="submit">Subscribe</button>
+        <button class="subscribe__send" type="submit" data-tinylytics-event="newsletter.subscribe">Subscribe</button>
     </div>
     <?php /* The honeypot. Off-screen rather than display:none, which some bots
              know to skip; tabindex and autocomplete keep people and password
