@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.48.1] — 2026-09-27
+
+No schema change.
+
+### Changed
+
+- **The home page intro is a panel at every width again.** Phones had shown it unframed while the post cards below kept their borders, so it read as the one loose block on the page. The border, radius, tinted background and padding now apply everywhere, the gap under it is 1.5rem on phones as on desktop, and the social marks are 1rem apart at every width.
+
 ## [1.48.0] — 2026-09-23
 
 No schema change. The new setting is a row in `settings`, off until ticked.

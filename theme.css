@@ -854,8 +854,15 @@ audio { width: 100%; }
    feed would appear to shift as you paged. If that `<data>` ever stops being a
    grid item, this comes off with it — and see the `:has()` rule on `.site-main`,
    without which this margin collapses away and does nothing. */
+/* A panel at every width. It was unframed on phones for a while; the cards
+   below it keep their borders at every width, so a bare greeting read as the
+   one thing on the page that had come loose. */
 .home-intro {
-    margin: 1rem 0 2.5rem;
+    margin: 1rem 0 1.5rem;
+    padding: 1.15rem 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-code-bg);
 }
 
 .home-intro__text {
@@ -883,13 +890,13 @@ audio { width: 100%; }
    of marks under the greeting rather than a second sentence competing with the
    first. With the words gone the marks carry the whole job, so they are drawn a
    touch larger than the footer's and spaced further apart; the padding gives each
-   one a hit area taller than the glyph. They are one size at every width — at
-   1rem there is nothing left to tighten on desktop, so only the gap closes. */
+   one a hit area taller than the glyph. Inside the panel the row is a caption on
+   a block rather than a line adrift on the page, so the marks sit at 1rem apart. */
 .home-intro__social {
     margin-top: .8rem;
     display: flex;
     align-items: center;
-    gap: 1.15rem;
+    gap: 1rem;
 }
 
 .home-intro__social .social-link { padding: .3rem 0; }
@@ -911,23 +918,6 @@ audio { width: 100%; }
     clip-path: inset(50%);
     overflow: hidden;
     white-space: nowrap;
-}
-
-/* Desktop and up: the greeting becomes a panel. The social row tightens with it
-   — inside a frame the row is a caption on a block rather than a line adrift on
-   the page, so the marks can sit closer without losing their footing. */
-@media (min-width: 640px) {
-    .home-intro {
-        margin: 1rem 0 1.5rem;
-        padding: 1.15rem 1.25rem;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius);
-        background: var(--color-code-bg);
-    }
-
-    .home-intro__social {
-        gap: 1rem;
-    }
 }
 
 /* ── Post list / index ────────────────────────────────────────────────────── */
@@ -1541,7 +1531,6 @@ audio { width: 100%; }
     .post-card--note .post-card__inner { padding: 1rem 1.1rem; }
     .post-card--photo .post-card__inner { padding: .7rem 0 0; }
 
-    .home-intro { margin-bottom: 2rem; }
     .home-intro__text { font-size: 1.05rem; }
 
     /* A 3-up crop is unreadable at this width — stack every gallery in one column. */
