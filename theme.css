@@ -100,10 +100,10 @@
         --color-muted:      #A39A8E;
         --color-border:     #3A332C;
         --color-border-hover: #4D453C;
-        --color-bg:         #1A1715;
-        --color-surface:    #211D1A;
+        --color-bg:         #141110;
+        --color-surface:    #1D1916;
         --color-chrome-bg:  var(--color-bg);
-        --color-code-bg:    #2A2521;
+        --color-code-bg:    #25211D;
         --color-link:          #6FC0EA;
         --color-header-bg:     var(--color-chrome-bg);
         --color-chrome-border: rgba(255,255,255,0.07);
@@ -121,10 +121,10 @@
     --color-muted:         #A39A8E;
     --color-border:        #3A332C;
     --color-border-hover:  #4D453C;
-    --color-bg:            #1A1715;
-    --color-surface:       #211D1A;
+    --color-bg:            #141110;
+    --color-surface:       #1D1916;
     --color-chrome-bg:     var(--color-bg);
-    --color-code-bg:       #2A2521;
+    --color-code-bg:       #25211D;
     --color-link:          #6FC0EA;
     --color-header-bg:     var(--color-chrome-bg);
     --color-chrome-border: rgba(255,255,255,0.07);
@@ -1745,15 +1745,15 @@ audio { width: 100%; }
     color-scheme: dark;
 }
 
-/* In dark mode the page bg is #1A1715 — bump the code block to be clearly distinct */
+/* In dark mode the page bg is #141110 — bump the code block to be clearly distinct */
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .prose pre.syntax-hl { background: #26211D; }
+    :root:not([data-theme="light"]) .prose pre.syntax-hl { background: #201C18; }
 }
-[data-theme="dark"] .prose pre.syntax-hl { background: #26211D; }
+[data-theme="dark"] .prose pre.syntax-hl { background: #201C18; }
 
 /* Copy button adjustments for dark code blocks */
 .code-block--dark .code-copy          { color: #6c7986; }
-.code-block--dark .code-copy:hover    { color: #dfdfe0; border-color: #3a342e; background: #26211D; }
+.code-block--dark .code-copy:hover    { color: #dfdfe0; border-color: #3a342e; background: #201C18; }
 .code-block--dark .code-copy--copied,
 .code-block--dark .code-copy--copied:hover { color: #fff; background: #4C7A2E; border-color: #4C7A2E; opacity: 1; }
 

@@ -50,14 +50,14 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 14;
+    public const DESIGN_VERSION = 15;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
     private const PADDING = 80;
 
     // Colours (R, G, B), taken from the dark-mode block of theme.css.
-    private const BG_COLOR    = [26,  23,  21];   // #1A1715 --color-bg
+    private const BG_COLOR    = [20,  17,  16];   // #141110 --color-bg
     private const TITLE_COLOR = [237, 230, 220];  // #EDE6DC --color-text
     private const META_COLOR  = [163, 154, 142];  // #A39A8E --color-muted
 

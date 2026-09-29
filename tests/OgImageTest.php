@@ -71,7 +71,7 @@ final class OgImageTest extends TestCase
 
         foreach ([[2, 2], [1197, 2], [2, 627], [1197, 627]] as [$x, $y]) {
             $this->assertSame(
-                '#1A1715',
+                '#141110',
                 $this->pixelAt($path, $x, $y),
                 "The card ground at ($x, $y) is not the theme's dark --color-bg."
             );
@@ -98,7 +98,7 @@ final class OgImageTest extends TestCase
         // (88, 88) sits ~42px from the centre: outside the circle, but inside
         // both a bare square crop and the 14px-cornered rounded square this
         // replaced. Either regression paints it.
-        $this->assertSame('#1A1715', $this->pixelAt($path, 88, 88), 'The avatar corner is filled, so it was not cut back to a circle.');
+        $this->assertSame('#141110', $this->pixelAt($path, 88, 88), 'The avatar corner is filled, so it was not cut back to a circle.');
 
         // (142, 142) is ~35px out along the same diagonal — inside the circle
         // with room to spare, so a mask drawn too small shows up here.
@@ -174,7 +174,7 @@ final class OgImageTest extends TestCase
         try {
             for ($y = 158; $y < 180 && $intruder === null; $y++) {
                 for ($x = 80; $x < 1120; $x++) {
-                    if ((imagecolorat($image, $x, $y) & 0xFFFFFF) !== 0x1A1715) {
+                    if ((imagecolorat($image, $x, $y) & 0xFFFFFF) !== 0x141110) {
                         $intruder = "($x, $y)";
                         break;
                     }

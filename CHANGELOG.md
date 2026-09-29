@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.48.2] — 2026-09-29
+
+No schema change.
+
+### Changed
+
+- **Dark mode's backgrounds are 2% darker.** Each one drops two points of lightness with its hue and saturation kept: the page `#1A1715` → `#141110`, the card surface `#211D1A` → `#1D1916`, inline code `#2A2521` → `#25211D`, and highlighted code blocks with their copy button's hover `#26211D` → `#201C18`. Text, borders and links are unchanged.
+- **The OG card's ground follows to `#141110`**, since it is drawn in the dark `--color-bg` and a test pins the two together. `OgImage::DESIGN_VERSION` is 15, so the next build redraws every card.
+
 ## [1.48.1] — 2026-09-27
 
 No schema change.
