@@ -53,16 +53,16 @@
        light scrollbar under every dark-mode <pre>. */
     color-scheme: light;
 
-    --color-text:       #1E1B18;
-    --color-muted:      #736B62;
-    --color-border:     #D9CEBB;
-    --color-border-hover: #C8B9A0;
-    /* The page is warm paper and an article card is a white sheet resting on
+    --color-text:       #1C1C1C;
+    --color-muted:      #6B6B6B;
+    --color-border:     #D6D6D6;
+    --color-border-hover: #BDBDBD;
+    /* The page is a pale grey and an article card is a white sheet resting on
        it, so the two need separate tokens. */
-    --color-bg:         #F8F5F1;
+    --color-bg:         #F8F8F8;
     --color-surface:    #FFFFFF;
     --color-chrome-bg:  var(--color-bg);
-    --color-code-bg:    #F1EBE2;
+    --color-code-bg:    #EEEEEE;
     --color-link:       #0B5FA8;
     --color-header-bg:  var(--color-bg);
     --color-chrome-border: var(--color-border);
@@ -72,8 +72,9 @@
     /* Hairline above an article's footer meta; lighter than a card border so it
        reads as a division inside the card rather than another edge. */
     --color-rule:       color-mix(in srgb, var(--color-border) 60%, transparent);
-    /* A neutral black shadow reads blue against warm paper. */
-    --shadow-rgb:       60, 40, 20;
+    /* Pure black at these alphas lands heavier than the old warm shadow did;
+       a dark grey keeps the same weight. */
+    --shadow-rgb:       40, 40, 40;
     --max-content:      740px;
     --max-wide:         780px;
     /* Corner radius for every rounded box on the page — cards, images, embeds,
@@ -96,14 +97,14 @@
     :root:not([data-theme="light"]) {
         color-scheme: dark;
 
-        --color-text:       #EDE6DC;
-        --color-muted:      #A39A8E;
-        --color-border:     #3A332C;
-        --color-border-hover: #4D453C;
-        --color-bg:         #141110;
-        --color-surface:    #1D1916;
+        --color-text:       #E8E8E8;
+        --color-muted:      #9E9E9E;
+        --color-border:     #3D3D3D;
+        --color-border-hover: #505050;
+        --color-bg:         #1E1E1E;
+        --color-surface:    #272727;
         --color-chrome-bg:  var(--color-bg);
-        --color-code-bg:    #25211D;
+        --color-code-bg:    #2F2F2F;
         --color-link:          #6FC0EA;
         --color-header-bg:     var(--color-chrome-bg);
         --color-chrome-border: rgba(255,255,255,0.07);
@@ -117,14 +118,14 @@
 [data-theme="dark"] {
     color-scheme: dark;
 
-    --color-text:          #EDE6DC;
-    --color-muted:         #A39A8E;
-    --color-border:        #3A332C;
-    --color-border-hover:  #4D453C;
-    --color-bg:            #141110;
-    --color-surface:       #1D1916;
+    --color-text:          #E8E8E8;
+    --color-muted:         #9E9E9E;
+    --color-border:        #3D3D3D;
+    --color-border-hover:  #505050;
+    --color-bg:            #1E1E1E;
+    --color-surface:       #272727;
     --color-chrome-bg:     var(--color-bg);
-    --color-code-bg:       #25211D;
+    --color-code-bg:       #2F2F2F;
     --color-link:          #6FC0EA;
     --color-header-bg:     var(--color-chrome-bg);
     --color-chrome-border: rgba(255,255,255,0.07);
@@ -1738,22 +1739,22 @@ audio { width: 100%; }
 /* ── Syntax highlighting — xcode-dark theme ───────────────────────────────── */
 
 .prose pre.syntax-hl {
-    background: #221E1B;
+    background: #232323;
     color:      #dfdfe0;
     /* These blocks stay dark in light mode, so they need their own dark
        scrollbar rather than the one the page theme would give them. */
     color-scheme: dark;
 }
 
-/* In dark mode the page bg is #141110 — bump the code block to be clearly distinct */
+/* In dark mode the page bg is #1E1E1E — bump the code block to be clearly distinct */
 @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .prose pre.syntax-hl { background: #201C18; }
+    :root:not([data-theme="light"]) .prose pre.syntax-hl { background: #2B2B2B; }
 }
-[data-theme="dark"] .prose pre.syntax-hl { background: #201C18; }
+[data-theme="dark"] .prose pre.syntax-hl { background: #2B2B2B; }
 
 /* Copy button adjustments for dark code blocks */
 .code-block--dark .code-copy          { color: #6c7986; }
-.code-block--dark .code-copy:hover    { color: #dfdfe0; border-color: #3a342e; background: #201C18; }
+.code-block--dark .code-copy:hover    { color: #dfdfe0; border-color: #3D3D3D; background: #2B2B2B; }
 .code-block--dark .code-copy--copied,
 .code-block--dark .code-copy--copied:hover { color: #fff; background: #4C7A2E; border-color: #4C7A2E; opacity: 1; }
 
@@ -1813,8 +1814,8 @@ audio { width: 100%; }
     margin: 1.5em 0;
 }
 
-/* Diluting a cold hue into warm paper drains it, so these sit a little more
-   saturated than their fill percentage suggests. */
+/* Diluted into the page grey these would read washed out, so they sit a
+   little more saturated than their fill percentage suggests. */
 .notice {
     border-color: #2E72B0;
     background: color-mix(in srgb, #2E72B0 13%, var(--color-bg));
@@ -2514,7 +2515,7 @@ audio { width: 100%; }
     position: fixed;
     inset: 0;
     z-index: 1100;
-    background: rgba(20,15,12,.94);
+    background: rgba(20,20,20,.94);
     align-items: center;
     justify-content: center;
     padding: 1.5rem 4rem;

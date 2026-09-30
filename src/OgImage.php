@@ -50,16 +50,16 @@ class OgImage
      * Stamped into the Builder's OG hash so a design change invalidates the
      * images already written. Bump it whenever the drawing below changes.
      */
-    public const DESIGN_VERSION = 15;
+    public const DESIGN_VERSION = 16;
 
     private const WIDTH   = 1200;
     private const HEIGHT  = 630;
     private const PADDING = 80;
 
     // Colours (R, G, B), taken from the dark-mode block of theme.css.
-    private const BG_COLOR    = [20,  17,  16];   // #141110 --color-bg
-    private const TITLE_COLOR = [237, 230, 220];  // #EDE6DC --color-text
-    private const META_COLOR  = [163, 154, 142];  // #A39A8E --color-muted
+    private const BG_COLOR    = [30,  30,  30];   // #1E1E1E --color-bg
+    private const TITLE_COLOR = [232, 232, 232];  // #E8E8E8 --color-text
+    private const META_COLOR  = [158, 158, 158];  // #9E9E9E --color-muted
 
     // Type scale. The title carries the card — a preview is read at thumbnail
     // size in a timeline, where it is the only line that survives — but the site

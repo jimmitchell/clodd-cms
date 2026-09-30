@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.49.0] — 2026-09-29
+
+No schema change.
+
+### Changed
+
+- **The colour scheme is neutral grey instead of warm.** Light mode's page is `#F8F8F8` and dark mode's is `#1E1E1E`; every related token moved to a matching grey. Light: text `#1C1C1C`, muted `#6B6B6B`, border `#D6D6D6` (hover `#BDBDBD`), inline code `#EEEEEE`. Dark: text `#E8E8E8`, muted `#9E9E9E`, border `#3D3D3D` (hover `#505050`), card surface `#272727`, inline code `#2F2F2F`. Highlighted code blocks are `#232323` in light mode and `#2B2B2B` in dark, the gallery lightbox scrim is neutral, and the card shadow is a dark grey rather than brown. Links, callouts and syntax colours are unchanged.
+- **The OG card follows the dark tokens** — ground `#1E1E1E`, title `#E8E8E8`, meta `#9E9E9E`. `OgImage::DESIGN_VERSION` is 16, so the next build redraws every card.
+
 ## [1.48.2] — 2026-09-29
 
 No schema change.
