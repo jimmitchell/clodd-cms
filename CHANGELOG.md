@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.50.0] — 2026-09-30
+
+No schema change.
+
+### Changed
+
+- **The site is set in Inter again**, reversing 1.47.0. The two variable `.woff2` files come back to `fonts/` byte-for-byte as 1.46.0 shipped them — Inter 4.1, weight axis 200–800, optical size pinned at the text cut, Latin-1 + Latin Extended-A — so a reader who cached `InterVariable.woff2` during its first day has the right file under the right name. `--font-sans`, both `@font-face` rules, the `templates/base.php` preload and `fonts/OFL.txt` all name Inter, and the DM Sans files are gone.
+
+  The leading and type scale do not move: Inter's taller x-height (.546em against .504) wants no less leading. The measure (740px) and the newsletter label (`.8375rem`) are left where 1.47.x put them.
+
+- **The OG card is set in Inter too**, from the static cut restored at `fonts/og/og-regular.ttf` and `og-bold.ttf`. `OgImage::DESIGN_VERSION` is **17**, so the next full build redraws every card.
+
 ## [1.49.0] — 2026-09-29
 
 No schema change.
