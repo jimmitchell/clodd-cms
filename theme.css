@@ -882,12 +882,14 @@ audio { width: 100%; }
    of marks under the greeting rather than a second sentence competing with the
    first. With the words gone the marks carry the whole job, so they are drawn a
    touch larger than the footer's and spaced further apart; the padding gives each
-   one a hit area taller than the glyph. */
+   one a hit area taller than the glyph. The row is centred under the greeting,
+   with 2rem between marks. */
 .home-intro__social {
     margin-top: .8rem;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    justify-content: center;
+    gap: 2rem;
 }
 
 .home-intro__social .social-link { padding: .3rem 0; }
