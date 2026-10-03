@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.52.0] — 2026-10-03
+
+No schema change.
+
+### Changed
+
+- **The site is set in DM Sans again**, reversing 1.50.0. The two variable `.woff2` files come back to `fonts/` byte-for-byte as 1.47.x shipped them, under the same `DMSans-Variable.woff2` names, and the Inter files are gone. `--font-sans`, both `@font-face` rules, the `templates/base.php` preload, `fonts/OFL.txt` and the docs all name DM Sans. The leading, type scale, measure and newsletter label stay where they are.
+- **The OG card is set in DM Sans too**, from the static cut restored at `fonts/og/og-regular.ttf` and `og-bold.ttf`. `OgImage::DESIGN_VERSION` is **18** — moved forward rather than back to 16 — so the next full build redraws every card.
+
 ## [1.51.1] — 2026-10-03
 
 No schema change.
