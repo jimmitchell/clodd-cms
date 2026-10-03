@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.50.1] — 2026-10-03
+
+No schema change.
+
+### Changed
+
+- **The home intro is no longer a panel.** `.home-intro` loses its padding, border, border radius and background at every width, so the greeting and its social marks sit directly on the page above the feed. Its margins are unchanged, so page one's first card still lines up with page two's.
+
 ## [1.50.0] — 2026-09-30
 
 No schema change.

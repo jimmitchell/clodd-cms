@@ -837,14 +837,10 @@ audio { width: 100%; }
 /* ── Home intro (representative h-card) ───────────────────────────────────────
    A greeting, set in the reading face because it is a sentence, not chrome.
 
-   Its frame is width-dependent, and that is the whole point of this section.
-   On a wide screen the feed below is two columns of cards, so an unframed
-   sentence floating above the grid reads as orphaned page furniture; the panel
-   at the foot of this block gives it a body of its own. On a phone the feed is
-   a single column and the intro is already the first thing on screen with
-   nothing beside it to be confused with — a frame there costs a gutter of
-   reading width and buys nothing. So the frame is opt-in at ≥640px rather than
-   opt-out below it: the narrow layout is the base, the panel is the addition. */
+   Unframed at every width — no padding, border, radius or background. It has
+   been a panel (1.48.1 framed it on phones too); 1.50.1 takes the frame off
+   everywhere, so the intro reads as a line of text above the feed rather than
+   one more card in it. */
 
 /* No rule under the greeting — whitespace does the separating. A line here reads
    as a masthead and makes the intro feel like site furniture rather than a
@@ -857,15 +853,8 @@ audio { width: 100%; }
    feed would appear to shift as you paged. If that `<data>` ever stops being a
    grid item, this comes off with it — and see the `:has()` rule on `.site-main`,
    without which this margin collapses away and does nothing. */
-/* A panel at every width. It was unframed on phones for a while; the cards
-   below it keep their borders at every width, so a bare greeting read as the
-   one thing on the page that had come loose. */
 .home-intro {
     margin: 1rem 0 1.5rem;
-    padding: 1.15rem 1.25rem;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    background: var(--color-code-bg);
 }
 
 .home-intro__text {
@@ -893,8 +882,7 @@ audio { width: 100%; }
    of marks under the greeting rather than a second sentence competing with the
    first. With the words gone the marks carry the whole job, so they are drawn a
    touch larger than the footer's and spaced further apart; the padding gives each
-   one a hit area taller than the glyph. Inside the panel the row is a caption on
-   a block rather than a line adrift on the page, so the marks sit at 1rem apart. */
+   one a hit area taller than the glyph. */
 .home-intro__social {
     margin-top: .8rem;
     display: flex;
