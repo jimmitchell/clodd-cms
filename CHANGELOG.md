@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.52.1] — 2026-10-03
+
+No schema change.
+
+### Changed
+
+- **The home intro's greeting is centred**, matching the row of social marks beneath it since 1.51.1.
+
 ## [1.52.0] — 2026-10-03
 
 No schema change.

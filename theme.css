@@ -861,6 +861,7 @@ audio { width: 100%; }
     /* line-height: 1.55; */
     text-wrap: pretty;
     color: var(--color-text);
+    text-align: center;
 }
 
 .home-intro__text .p-name {
