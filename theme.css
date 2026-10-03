@@ -1109,39 +1109,20 @@ audio { width: 100%; }
 .post-card--photo .post-card__date a:hover { text-decoration: underline; }
 
 /* ── Photo post ───────────────────────────────────────────────────────────────
-   A photo post has no card at all. A border around a photograph is a second
-   frame competing with the one the image already has, and the caption is not a
-   summary of something else — it belongs to the picture. Dropping the frame also
-   makes photo posts the one kind that breaks the card rhythm of the feed, which
-   is a stronger and more honest signal than any amount of restyling inside a box.
-   The gallery carries the radius now that there is no card to clip against. */
+   A photo post is a card like the others: the gallery bleeds to the frame's top
+   and sides, and the caption and date sit in the padded block beneath it. It was
+   frameless until 1.51.0, and a long caption left loose on the page read as
+   detached from both its picture and the feed. The card's `overflow: hidden`
+   clips the gallery to the frame's radius, so the gallery carries none itself. */
 
-.post-card--photo {
-    border: none;
-    border-radius: 0;
-    background: none;
-    overflow: visible;
-    /* Frameless items need their own air; the list gap alone lets them crowd
-       the bordered cards on either side. */
-    margin: 1rem 0;
-}
-
-.post-card--photo:hover {
-    box-shadow: none;
-    border-color: transparent;
-}
-
-/* Caption sits under the image and flush to its edges — no gutters to align to. */
 .post-card--photo .post-card__inner {
-    padding: .8rem 0 0;
+    padding: 1rem 1.25rem 1.15rem;
     gap: .3rem;
 }
 
 .post-card__gallery {
     display: grid;
     gap: 2px;
-    border-radius: var(--radius);
-    overflow: hidden;
 }
 
 .post-card__gallery[data-count="2"],
@@ -1188,9 +1169,10 @@ audio { width: 100%; }
 }
 
 /* A photo post can carry its picture two ways: attached u-photo rows, which
-   become the gallery above, or an image written inline in the body. Match them —
-   same full width, same radius, same absence of frame — so the two authoring
-   routes produce one look. */
+   become the gallery above, or an image written inline in the body. Match them
+   as closely as the frame allows — full width of the caption block, no shadow —
+   so the two authoring routes produce one look. An inline image sits inside the
+   caption's padding rather than bleeding to the frame, so it keeps its own radius. */
 .post-card--photo .prose img:not(.gallery img) {
     width: 100%;
     max-width: 100%;
@@ -1520,7 +1502,7 @@ audio { width: 100%; }
        rather than the absolute values. */
     .post-card__inner { padding: 1.25rem; }
     .post-card--note .post-card__inner { padding: 1rem 1.1rem; }
-    .post-card--photo .post-card__inner { padding: .7rem 0 0; }
+    .post-card--photo .post-card__inner { padding: .9rem 1.1rem 1rem; }
 
     .home-intro__text { font-size: 1.05rem; }
 

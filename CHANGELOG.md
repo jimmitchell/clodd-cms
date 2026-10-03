@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.51.0] — 2026-10-03
+
+No schema change.
+
+### Changed
+
+- **Photo posts are cards again.** In the feed a photo post now has the same border, radius, surface and hover lift as an article, with the gallery running to the frame's top and sides and the caption and date in a padded block beneath it. The order inside is unchanged — photos, caption, date. Frameless, a long caption read as loose on the page, detached from both its picture and the cards around it. The gallery no longer carries its own radius; the card clips it.
+
 ## [1.50.1] — 2026-10-03
 
 No schema change.
