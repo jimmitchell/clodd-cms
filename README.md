@@ -537,7 +537,7 @@ Omitting `url` from `q=source` returns a list of posts — the [Query for Post L
 |-----------|--------|
 | `limit` | Page size. Defaults to `20`, capped at `100`. A missing or unparseable value falls back to the default. |
 | `offset` | Rows to skip. Usable on its own, since a default `limit` always applies. |
-| `post-type` | Post Type Discovery filter: `note`, `article`, `photo`, `reply`, `repost`, `like`, `bookmark` — the same list `q=config` advertises under `post-types`. An interaction wins over `article`/`note`, so a titled reply filters as `reply`. |
+| `post-type` | Post Type Discovery filter: `note`, `article`, `photo`, `reply`, `rsvp`, `repost`, `like`, `bookmark` — the same list `q=config` advertises under `post-types`. An interaction wins over `article`/`note`, so a titled reply filters as `reply`; an `rsvp` (an `in-reply-to` carrying an `rsvp` value) outranks `reply`. |
 | `post-status` | `published`, or `draft` (which also covers scheduled posts, matching the `post-status` each item reports). |
 | `properties[]` | Applied per item. Unlike the single-post response, list items keep their `type` wrapper — a list of bare property bags is not parseable mf2. |
 

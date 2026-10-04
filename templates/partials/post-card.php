@@ -79,7 +79,7 @@ $cardClass = 'post-card h-entry post-card--'
         <?php endif; ?>
 
         <?php if (!empty($post->contexts)): ?>
-        <div class="post-card__contexts"><?= Post::contextsHtml($post->contexts) ?></div>
+        <div class="post-card__contexts"><?= Post::contextsHtml($post->contexts, $post->rsvp) ?></div>
         <?php endif; ?>
 
         <?php if ($post->isAside() && !empty($post->photos)): ?>

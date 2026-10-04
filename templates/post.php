@@ -124,7 +124,7 @@ ob_start();
     <?php endif; ?>
 
     <?php if (!empty($post->contexts)): ?>
-    <div class="post__contexts"><?= CMS\Post::contextsHtml($post->contexts) ?></div>
+    <div class="post__contexts"><?= CMS\Post::contextsHtml($post->contexts, $post->rsvp) ?></div>
     <?php endif; ?>
     <?php if (!empty($post->photos)): ?>
     <?php /* Contract: data-gallery-item is what theme.js binds the lightbox to.

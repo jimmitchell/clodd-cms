@@ -44,6 +44,12 @@ class Post
     /** The picture that leads a titled post — see effectiveFeaturedImage(). */
     public ?string $featured_image_url = null;
     public string  $featured_image_alt = '';
+    /**
+     * The answer to the event this post replies to — one of RSVP_VALUES, or
+     * null on anything that is not an RSVP. The event is the in-reply-to
+     * context; Micropub refuses an rsvp without one.
+     */
+    public ?string $rsvp = null;
 
     /** @var array<array<string,mixed>>  [['id'=>int,'name'=>string,'slug'=>string,'description'=>string], ...] */
     public array $categories = [];
@@ -114,7 +120,7 @@ class Post
      * The Post Type Discovery names this server can list and filter by, in the
      * order q=config advertises them.
      */
-    public const MICROPUB_TYPES = ['note', 'article', 'photo', 'reply', 'repost', 'like', 'bookmark'];
+    public const MICROPUB_TYPES = ['note', 'article', 'photo', 'reply', 'rsvp', 'repost', 'like', 'bookmark'];
 
     /** Micropub post-status values a client may send or receive. */
     public const MICROPUB_STATUSES = ['published', 'draft'];
@@ -123,7 +129,9 @@ class Post
      * The Post Type Discovery name for this post.
      *
      * PTD precedence: an interaction wins over article/note, so a titled reply
-     * is a `reply`. Reads the hydrated contexts, so it costs no query.
+     * is a `reply`. An RSVP outranks everything, as PTD has it — it is a reply
+     * that also carries an answer. Reads the hydrated contexts, so it costs no
+     * query.
      *
      * One deviation from strict PTD: a *titled* post carrying photos is
      * `article` here rather than `photo`, because `post_kind` is what the site
@@ -136,6 +144,10 @@ class Post
      */
     public function micropubType(): string
     {
+        if ($this->rsvp !== null) {
+            return 'rsvp';
+        }
+
         $kinds = array_map(fn($c) => (string) ($c['kind'] ?? ''), $this->contexts);
 
         foreach (['in-reply-to' => 'reply', 'repost-of' => 'repost', 'like-of' => 'like', 'bookmark-of' => 'bookmark'] as $kind => $type) {
@@ -193,9 +205,11 @@ class Post
         $anyCtx = "EXISTS (SELECT 1 FROM post_contexts pc WHERE pc.post_id = p.id)";
 
         // Each interaction excludes the ones above it, matching the ladder's
-        // first-match-wins order.
+        // first-match-wins order. Only `reply` needs to exclude `rsvp`: an RSVP
+        // always has an in-reply-to, which every rung below reply excludes.
         return match ($type) {
-            'reply'    => $has('in-reply-to'),
+            'rsvp'     => 'p.rsvp IS NOT NULL',
+            'reply'    => 'p.rsvp IS NULL AND ' . $has('in-reply-to'),
             'repost'   => 'NOT ' . $has('in-reply-to') . ' AND ' . $has('repost-of'),
             'like'     => 'NOT ' . $has('in-reply-to') . ' AND NOT ' . $has('repost-of') . ' AND ' . $has('like-of'),
             'bookmark' => 'NOT ' . $has('in-reply-to') . ' AND NOT ' . $has('repost-of')
@@ -464,6 +478,7 @@ class Post
             'post_kind'     => $this->post_kind,
             'featured_image_url' => $this->featured_image_url,
             'featured_image_alt' => $this->featured_image_alt,
+            'rsvp'          => $this->rsvp,
             'updated_at'    => date('Y-m-d H:i:s'),
         ];
 
@@ -940,6 +955,22 @@ class Post
         return $html;
     }
 
+    /** The values the Micropub `rsvp` property may take. */
+    public const RSVP_VALUES = ['yes', 'no', 'maybe', 'interested'];
+
+    /**
+     * Normalise an rsvp value, or null if it is not one of RSVP_VALUES.
+     * Micropub's values are lowercase; a client sending "Yes" meant yes.
+     */
+    public static function rsvpValue(mixed $value): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+        $value = strtolower(trim($value));
+        return in_array($value, self::RSVP_VALUES, true) ? $value : null;
+    }
+
     /** Micropub context kinds in display order (strongest interaction first). */
     public const CONTEXT_KINDS = ['repost-of', 'like-of', 'in-reply-to', 'bookmark-of'];
 
@@ -1039,6 +1070,20 @@ class Post
     ];
 
     /**
+     * What an RSVP's in-reply-to line says instead of "In reply to", by rsvp
+     * value. Characters, not emoji, for the reason CONTEXT_ICONS gives: ✓ ✗ ☆
+     * have no emoji presentation, so they arrive in the line's own colour and
+     * weight. The class stays u-in-reply-to — an RSVP is a reply to the event,
+     * and that is what sends the event its webmention.
+     */
+    private const RSVP_LABELS = [
+        'yes'        => ['✓', 'Going to'],
+        'no'         => ['✗', 'Not going to'],
+        'maybe'      => ['?', 'Maybe going to'],
+        'interested' => ['☆', 'Interested in'],
+    ];
+
+    /**
      * Context symbols that are drawn rather than typed, as inline SVG.
      *
      * ♺, ♥ and ↩ are characters: the reader's own font draws them, at the muted
@@ -1078,15 +1123,22 @@ class Post
      * Render context lines ("↩ In reply to <a>…</a>") with mf2 u-* classes.
      * Shared by the feed generators and templates.
      *
+     * Pass the post's rsvp and its in-reply-to line becomes the answer ("✓ Going
+     * to <a>…</a>"), with the value in a `<data class="p-rsvp">` so a parser
+     * reads `yes` rather than the words.
+     *
      * @param array<array<string,string>> $contexts
      */
-    public static function contextsHtml(array $contexts): string
+    public static function contextsHtml(array $contexts, ?string $rsvp = null): string
     {
         $html = '';
-        foreach (self::sortedContexts($contexts) as [$symbol, $verb, $class, $url, $kind]) {
+        foreach (self::sortedContexts($contexts, $rsvp) as [$symbol, $verb, $class, $url, $kind, $rsvpValue]) {
             $text = preg_replace('#^https?://#', '', $url);
             if (mb_strlen($text) > 60) {
                 $text = mb_substr($text, 0, 57) . '…';
+            }
+            if ($rsvpValue !== null) {
+                $verb = '<data class="p-rsvp" value="' . $rsvpValue . '">' . $verb . '</data>';
             }
             $html .= '<p class="post__context">' . self::symbolHtml($kind, $symbol) . ' ' . $verb
                 . ' <a class="' . $class . '" href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8')
@@ -1105,10 +1157,10 @@ class Post
      *
      * @param array<array<string,string>> $contexts
      */
-    public static function contextsText(array $contexts): string
+    public static function contextsText(array $contexts, ?string $rsvp = null): string
     {
         $lines = [];
-        foreach (self::sortedContexts($contexts) as [$symbol, $verb, , $url]) {
+        foreach (self::sortedContexts($contexts, $rsvp) as [$symbol, $verb, , $url]) {
             $lines[] = $symbol . ' ' . $verb . ' ' . $url;
         }
         return implode("\n", $lines);
@@ -1118,11 +1170,17 @@ class Post
      * Contexts worth rendering, in display order (repost > like > reply >
      * bookmark), each resolved to the symbol, verb, class and URL to show.
      *
+     * An rsvp relabels the first in-reply-to only, and is returned beside it so
+     * the HTML can mark it up. An RSVP answers one event; a second reply target
+     * stays an ordinary reply rather than claiming the same answer twice.
+     *
      * @param  array<array<string,string>> $contexts
-     * @return array<array{0:string,1:string,2:string,3:string,4:string}>
+     * @return array<array{0:string,1:string,2:string,3:string,4:string,5:?string}>
      */
-    private static function sortedContexts(array $contexts): array
+    private static function sortedContexts(array $contexts, ?string $rsvp = null): array
     {
+        $rsvp = self::rsvpValue($rsvp);
+
         usort($contexts, fn($a, $b) =>
             array_search($a['kind'] ?? '', self::CONTEXT_KINDS, true)
             <=> array_search($b['kind'] ?? '', self::CONTEXT_KINDS, true));
@@ -1135,7 +1193,12 @@ class Post
                 continue;
             }
             [$symbol, $verb, $class] = self::CONTEXT_LABELS[$kind];
-            $resolved[] = [$symbol, $verb, $class, $url, $kind];
+            $answer = null;
+            if ($kind === 'in-reply-to' && $rsvp !== null) {
+                [$symbol, $verb] = self::RSVP_LABELS[$rsvp];
+                [$answer, $rsvp] = [$rsvp, null];
+            }
+            $resolved[] = [$symbol, $verb, $class, $url, $kind, $answer];
         }
         return $resolved;
     }
@@ -1909,6 +1972,7 @@ class Post
         $post->deleted_at          = $row['deleted_at']          ?? null;
         $post->featured_image_url  = $row['featured_image_url']  ?? null;
         $post->featured_image_alt  = (string) ($row['featured_image_alt'] ?? '');
+        $post->rsvp                = self::rsvpValue($row['rsvp'] ?? null);
 
         return $post;
     }

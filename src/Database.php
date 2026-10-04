@@ -42,7 +42,7 @@ class Database
     // maintain on every analytics beacon write. No index removes the need to
     // aggregate a third of the table; only pre-aggregation would, and that is
     // not worth building for a dashboard nobody loads in a loop.
-    private const SCHEMA_VERSION = 32;
+    private const SCHEMA_VERSION = 33;
 
     public function __construct(private string $dbPath)
     {
@@ -883,6 +883,19 @@ class Database
                 PRIMARY KEY (post_id, contact_id)
             )
         SQL);
+    }
+
+    private function applySchemaV33(): void
+    {
+        // posts.rsvp: the Micropub `rsvp` value — the answer to the event this
+        // post replies to. The event itself is the post's in-reply-to row in
+        // post_contexts, so this is the one thing an RSVP adds over a reply.
+        // NULL on everything that is not an RSVP. The CHECK keeps the column to
+        // the four values the spec defines, so a renderer can trust it.
+        $this->pdo->exec(
+            "ALTER TABLE posts ADD COLUMN rsvp TEXT"
+            . " CHECK (rsvp IS NULL OR rsvp IN ('yes', 'no', 'maybe', 'interested'))"
+        );
     }
 
     /** Insert or update a single settings row. */

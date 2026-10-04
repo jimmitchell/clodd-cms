@@ -155,10 +155,11 @@ function mp_syndication_targets(\CMS\Database $db): array
  *
  * Types are Post Type Discovery names, listed most-used first (clients render
  * them in order). Only the ones this server stores end-to-end appear: `article`
- * and `note` are the name/no-name split, `photo` is the photo property, and the
- * four interaction types are the CONTEXT_KINDS. Deliberately absent are video,
- * audio, rsvp, and checkin — their properties are currently dropped on create,
- * so advertising them would invite posts that lose their point.
+ * and `note` are the name/no-name split, `photo` is the photo property, the
+ * four interaction types are the CONTEXT_KINDS, and `rsvp` is an in-reply-to
+ * plus posts.rsvp. Deliberately absent are video, audio and checkin — their
+ * properties are currently dropped on create, so advertising them would invite
+ * posts that lose their point.
  *
  * @return array<array<string,string>>
  */
@@ -169,6 +170,7 @@ function mp_post_types(): array
         ['type' => 'article',  'name' => 'Article'],
         ['type' => 'photo',    'name' => 'Photo'],
         ['type' => 'reply',    'name' => 'Reply'],
+        ['type' => 'rsvp',     'name' => 'RSVP'],
         ['type' => 'repost',   'name' => 'Repost'],
         ['type' => 'like',     'name' => 'Like'],
         ['type' => 'bookmark', 'name' => 'Bookmark'],
@@ -261,6 +263,44 @@ function mp_parse_context_values(array $properties): array
     return $rows;
 }
 
+/**
+ * The rsvp value from a Micropub property list, or null when there is none.
+ * A value outside Post::RSVP_VALUES is a 400 rather than a silent drop: the
+ * answer is the point of an RSVP, and storing the reply without it would leave
+ * a post that says something other than what was sent.
+ */
+function mp_parse_rsvp(array $vals): ?string
+{
+    $raw = $vals[0] ?? null;
+    if ($raw === null || $raw === '') {
+        return null;
+    }
+    $rsvp = \CMS\Post::rsvpValue($raw);
+    if ($rsvp === null) {
+        mp_error('invalid_request', 'rsvp must be one of: ' . implode(', ', \CMS\Post::RSVP_VALUES));
+    }
+    return $rsvp;
+}
+
+/**
+ * Refuse an rsvp with no in-reply-to. The event is what the answer is to — an
+ * RSVP without one renders as nothing, while PTD still calls the post an rsvp.
+ *
+ * @param array<array<string,string>> $contexts
+ */
+function mp_require_rsvp_target(?string $rsvp, array $contexts): void
+{
+    if ($rsvp === null) {
+        return;
+    }
+    foreach ($contexts as $context) {
+        if (($context['kind'] ?? '') === 'in-reply-to') {
+            return;
+        }
+    }
+    mp_error('invalid_request', 'rsvp requires in-reply-to naming the event');
+}
+
 // ── Source representation (used by GET ?q=source) ───────────────────────────
 
 /**
@@ -343,6 +383,10 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
         if ($urls !== []) {
             $props[$kind] = $urls;
         }
+    }
+
+    if ($post->rsvp !== null) {
+        $props['rsvp'] = [$post->rsvp];
     }
 
     $allTerms = $post->micropubTermNames();
@@ -810,6 +854,12 @@ if ($action === 'update') {
                 $touchedContexts = true;
                 break;
 
+            // No touched flag: like featured, this lives on the post row. An
+            // empty value list clears it.
+            case 'rsvp':
+                $post->rsvp = mp_parse_rsvp($vals);
+                break;
+
             case 'published':
                 $newTs = is_string($vals[0] ?? null) ? strtotime($vals[0]) : false;
                 if ($newTs === false) {
@@ -853,6 +903,9 @@ if ($action === 'update') {
         } elseif ($prop === 'summary') {
             $first = is_string($vals[0] ?? null) ? trim($vals[0]) : '';
             if ($first !== '') $post->excerpt = $first;
+        } elseif ($prop === 'rsvp') {
+            // Single-valued, so add ≈ replace, as with summary.
+            $post->rsvp = mp_parse_rsvp($vals) ?? $post->rsvp;
         } elseif ($prop === 'photo') {
             $newPhotos     = array_merge($newPhotos, mp_parse_photo_values($vals, $updSiteUrl));
             $touchedPhotos = true;
@@ -909,6 +962,9 @@ if ($action === 'update') {
             }
         } elseif ($prop === 'summary') {
             $post->excerpt = null;
+        } elseif ($prop === 'rsvp') {
+            // Back to a plain reply; the in-reply-to stays.
+            $post->rsvp = null;
         } elseif (in_array($prop, \CMS\Post::CONTEXT_KINDS, true)) {
             // delete: [in-reply-to] (empty $vals) → clear that kind
             // delete: {like-of: [urls]}           → remove matching urls
@@ -924,6 +980,11 @@ if ($action === 'update') {
             $touchedContexts = true;
         }
     }
+
+    // Checked against the result of all three op lists, so deleting the
+    // in-reply-to of an RSVP is refused unless the same request deletes the
+    // rsvp too.
+    mp_require_rsvp_target($post->rsvp, $newContexts);
 
     if (!$post->save()) {
         mp_error('server_error', 'failed to save update', 500);
@@ -1038,6 +1099,11 @@ $featuredRow = isset($properties['featured']) && is_array($properties['featured'
 
 $contextRows = mp_parse_context_values($properties);
 
+$rsvp = isset($properties['rsvp']) && is_array($properties['rsvp'])
+    ? mp_parse_rsvp($properties['rsvp'])
+    : null;
+mp_require_rsvp_target($rsvp, $contextRows);
+
 if ($content === '' && $photoRows === [] && $contextRows === []) {
     mp_error('invalid_request', 'content, photo, or a context property (in-reply-to, like-of, repost-of, bookmark-of) is required');
 }
@@ -1111,6 +1177,7 @@ $post->content      = $content;
 $post->excerpt      = $summary !== '' ? $summary : null;
 $post->status       = $status;
 $post->published_at = $publishedAt;
+$post->rsvp         = $rsvp;
 if ($featuredRow !== null) {
     $post->featured_image_url = $featuredRow['url'];
     $post->featured_image_alt = (string) $featuredRow['alt'];

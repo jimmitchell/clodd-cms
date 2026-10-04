@@ -873,6 +873,94 @@ PHP);
     }
 
 
+    // ── RSVP ──────────────────────────────────────────────────────────────────
+
+    /**
+     * An RSVP's reply line says the answer, and still names the event as
+     * u-in-reply-to — that class is what sends the event its webmention. The
+     * value sits in a <data> element so an mf2 parser reads `yes`, not the words.
+     */
+    public function testAnRsvpRelabelsItsReplyLineAndKeepsTheReplyClass(): void
+    {
+        $html = Post::contextsHtml([['kind' => 'in-reply-to', 'url' => 'https://example.com/party']], 'yes');
+
+        $this->assertStringContainsString('<data class="p-rsvp" value="yes">Going to</data>', $html);
+        $this->assertStringContainsString('class="u-in-reply-to" href="https://example.com/party"', $html);
+        $this->assertStringNotContainsString('In reply to', $html);
+
+        $this->assertSame(
+            '✓ Going to https://example.com/party',
+            Post::contextsText([['kind' => 'in-reply-to', 'url' => 'https://example.com/party']], 'yes')
+        );
+    }
+
+    /** One answer, one event: a second reply target stays an ordinary reply. */
+    public function testAnRsvpRelabelsOnlyTheFirstReplyTarget(): void
+    {
+        $html = Post::contextsHtml([
+            ['kind' => 'in-reply-to', 'url' => 'https://example.com/party'],
+            ['kind' => 'in-reply-to', 'url' => 'https://example.com/thread'],
+        ], 'maybe');
+
+        $this->assertSame(1, substr_count($html, 'p-rsvp'));
+        $this->assertStringContainsString('Maybe going to</data>', $html);
+        $this->assertStringContainsString('In reply to <a class="u-in-reply-to" href="https://example.com/thread"', $html);
+    }
+
+    /** Every value has its words, and anything else renders as a plain reply. */
+    public function testEachRsvpValueHasItsOwnLabel(): void
+    {
+        $reply = [['kind' => 'in-reply-to', 'url' => 'https://example.com/party']];
+
+        $this->assertSame('✗ Not going to https://example.com/party', Post::contextsText($reply, 'no'));
+        $this->assertSame('? Maybe going to https://example.com/party', Post::contextsText($reply, 'maybe'));
+        $this->assertSame('☆ Interested in https://example.com/party', Post::contextsText($reply, 'interested'));
+        $this->assertSame('↩ In reply to https://example.com/party', Post::contextsText($reply, 'perhaps'));
+        $this->assertSame('↩ In reply to https://example.com/party', Post::contextsText($reply));
+    }
+
+    /** The page renders it, end to end, from what save() stored. */
+    public function testAnRsvpPostIsBuiltWithItsAnswer(): void
+    {
+        $this->writeTemplate('post.php', '<?= CMS\Post::contextsHtml($post->contexts, $post->rsvp) ?>');
+
+        $post = $this->makePublishedPost('going');
+        $post->rsvp = 'interested';
+        $post->save();
+        $post->saveContexts([['kind' => 'in-reply-to', 'url' => 'https://example.com/party']]);
+
+        $post = Post::findById($this->db, (int) $post->id);
+        $this->builder->buildPost($post);
+
+        $dir = $this->builder->postOutputDir($post->published_at, $post->slug);
+        $this->assertStringContainsString(
+            '<data class="p-rsvp" value="interested">Interested in</data>',
+            (string) file_get_contents($dir . '/index.html')
+        );
+    }
+
+    /**
+     * The real templates pass the rsvp, and so does every feed. Asserted from
+     * source because a missing argument is silent: the line just reads "In reply
+     * to" and nothing fails.
+     */
+    public function testEveryContextRendererIsHandedTheRsvp(): void
+    {
+        $root  = dirname(__DIR__);
+        $files = ['templates/post.php', 'templates/partials/post-card.php', 'src/Feed.php',
+                  'src/JsonFeed.php', 'src/RssFeed.php', 'src/Syndication.php'];
+
+        foreach ($files as $file) {
+            $code = (string) file_get_contents($root . '/' . $file);
+            preg_match_all('/Post::contexts(?:Html|Text)\(([^;]*)\)/', $code, $m);
+            $this->assertNotEmpty($m[1], "$file no longer renders contexts — update this test");
+            foreach ($m[1] as $args) {
+                $this->assertStringContainsString('rsvp', $args, "$file renders contexts without the rsvp");
+            }
+        }
+    }
+
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Put a file in the media directory so localPath() can resolve it. */

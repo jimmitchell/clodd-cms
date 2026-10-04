@@ -298,7 +298,7 @@ final class Syndication
         // Syndication runs from the admin, the API, Micropub, XML-RPC and the
         // scheduler, and not all of them arrive with contexts on the object.
         $post->loadContexts();
-        $context = Post::contextsText($post->contexts);
+        $context = Post::contextsText($post->contexts, $post->rsvp);
 
         $ogImage = null;
 

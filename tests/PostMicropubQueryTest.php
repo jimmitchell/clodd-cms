@@ -27,7 +27,8 @@ final class PostMicropubQueryTest extends TempSiteTestCase
         ?string $publishedAt = '2026-08-01 12:00:00',
         string $postKind = 'standard',
         array $contexts = [],
-        ?string $createdAt = null
+        ?string $createdAt = null,
+        ?string $rsvp = null
     ): Post {
         $post               = new Post($this->db);
         $post->title        = $title;
@@ -36,6 +37,7 @@ final class PostMicropubQueryTest extends TempSiteTestCase
         $post->status       = $status;
         $post->published_at = $publishedAt;
         $post->post_kind    = $postKind;
+        $post->rsvp         = $rsvp;
         $post->save();
 
         if ($contexts !== []) {
@@ -58,6 +60,9 @@ final class PostMicropubQueryTest extends TempSiteTestCase
             'reply'    => $this->makePost('a-reply', '', 'published', '2026-08-01 04:00:00', 'aside', [
                 ['kind' => 'in-reply-to', 'url' => 'https://example.com/thought'],
             ]),
+            'rsvp'     => $this->makePost('an-rsvp', '', 'published', '2026-08-01 03:30:00', 'aside', [
+                ['kind' => 'in-reply-to', 'url' => 'https://example.com/party'],
+            ], null, 'yes'),
             'repost'   => $this->makePost('a-repost', '', 'published', '2026-08-01 03:00:00', 'aside', [
                 ['kind' => 'repost-of', 'url' => 'https://example.com/post'],
             ]),
@@ -107,6 +112,34 @@ final class PostMicropubQueryTest extends TempSiteTestCase
         $this->assertSame('reply', $post->micropubType());
     }
 
+    public function testRsvpBeatsReply(): void
+    {
+        $post = $this->makePost('titled-rsvp', 'A Titled RSVP', 'published', '2026-08-01 12:00:00', 'standard', [
+            ['kind' => 'in-reply-to', 'url' => 'https://example.com/party'],
+        ], null, 'maybe');
+
+        $this->assertSame('rsvp', $post->micropubType(), 'PTD puts rsvp above reply');
+        $this->assertSame('maybe', $post->rsvp, 'the value survives a save and a fresh read');
+    }
+
+    /** The column holds the four spec values and nothing else, whatever writes it. */
+    public function testTheRsvpColumnRefusesOtherValues(): void
+    {
+        $post = $this->makePost('not-an-rsvp');
+
+        $this->expectException(\PDOException::class);
+        $this->db->update('posts', ['rsvp' => 'perhaps'], 'id = :id', ['id' => $post->id]);
+    }
+
+    public function testRsvpValueNormalisesCaseAndRefusesTheRest(): void
+    {
+        $this->assertSame('yes', Post::rsvpValue(' Yes '));
+        $this->assertSame('interested', Post::rsvpValue('INTERESTED'));
+        $this->assertNull(Post::rsvpValue('perhaps'));
+        $this->assertNull(Post::rsvpValue(['yes']));
+        $this->assertNull(Post::rsvpValue(null));
+    }
+
     // ── findForMicropub(): the SQL agrees with the PHP ────────────────────────
 
     public function testTypeFilterMatchesMicropubType(): void
@@ -121,9 +154,13 @@ final class PostMicropubQueryTest extends TempSiteTestCase
             ['kind' => 'bookmark-of', 'url' => 'https://example.com/read-later'],
         ]);
         $this->makePost('titled-photo', 'A Titled Photo', 'published', '2026-08-01 10:00:00', 'standard');
+        $this->makePost('titled-rsvp', 'A Titled RSVP', 'published', '2026-08-01 09:00:00', 'standard', [
+            ['kind' => 'like-of',     'url' => 'https://example.com/nice'],
+            ['kind' => 'in-reply-to', 'url' => 'https://example.com/party'],
+        ], null, 'no');
 
         $all = Post::findForMicropub($this->db, null, null, 100, 0);
-        $this->assertCount(10, $all);
+        $this->assertCount(12, $all);
 
         foreach (Post::MICROPUB_TYPES as $type) {
             $expected = array_map(
@@ -382,6 +419,36 @@ final class PostMicropubQueryTest extends TempSiteTestCase
             "return \$this->title !== '' ? 'article' : 'note';",
             (string) file_get_contents(__DIR__ . '/../src/Post.php'),
             'Post::micropubType() decides note vs article on the same test'
+        );
+    }
+
+    /**
+     * micropub.php carries the rsvp through every path a client can see it by:
+     * q=source reports it, q=config advertises it, and both create and update
+     * refuse an answer with no event. Source-level for the reason above.
+     */
+    public function testMicropubCarriesTheRsvpEndToEnd(): void
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents(__DIR__ . '/../micropub.php')) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $source = substr($code, (int) strpos($code, 'function mp_post_source_properties'));
+        $source = substr($source, 0, (int) strpos($source, "\nfunction "));
+        $this->assertStringContainsString("\$props['rsvp']", $source, 'q=source must report rsvp, or a round-trip strips it');
+
+        $types = substr($code, (int) strpos($code, 'function mp_post_types'));
+        $types = substr($types, 0, (int) strpos($types, "\nfunction "));
+        $this->assertStringContainsString("'type' => 'rsvp'", $types);
+
+        $this->assertSame(
+            3,
+            substr_count($code, 'mp_require_rsvp_target('),
+            'the definition plus one call each on create and update'
         );
     }
 }

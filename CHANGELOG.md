@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.53.0] — 2026-10-04
+
+**Schema v33.** Adds `posts.rsvp`, nullable, limited by a CHECK to `yes`, `no`, `maybe` and `interested`. Every existing post reads NULL, which is "not an RSVP".
+
+### Added
+
+- **Micropub `rsvp` posts.** An RSVP is a reply to an event plus an answer, so the event is stored as the post's `in-reply-to`, exactly as a reply's target is, and the answer goes in the new column. Create reads `rsvp` (case-insensitive) and refuses a value outside the four, or an `rsvp` with no `in-reply-to`, with a 400. Dropping the answer would leave a post saying something other than what was sent. Update supports `replace`, `add` (single-valued, so the same as replace) and `delete`, which turns the post back into a plain reply. An update that would leave an answer with no event is refused too. `q=source` reports the value back, `post-type=rsvp` filters the post list, and `q=config` now advertises `rsvp`.
+- **Post Type Discovery puts `rsvp` above `reply`**, in both `Post::micropubType()` and `Post::micropubTypePredicate()`. `PostMicropubQueryTest` seeds an RSVP among the one-of-each fixtures, plus a titled RSVP that also carries a like, so the PHP and SQL ladders are checked against each other for the new rung.
+- **The reply line says the answer.** "✓ Going to", "✗ Not going to", "? Maybe going to" or "☆ Interested in", replacing "↩ In reply to", on the page, the list card, all three feeds and the Mastodon/Bluesky text. The words sit in `<data class="p-rsvp" value="…">`, so an mf2 parser reads `yes` rather than the label. The link keeps `u-in-reply-to`, which is what sends the event its webmention. Only the first reply target is relabelled: an RSVP answers one event. The symbols are characters with no emoji presentation, for the same reason the bookmark is drawn rather than typed.
+
 ## [1.52.2] — 2026-10-03
 
 No schema change.

@@ -40,7 +40,7 @@ class RssFeed
 
         $posts = $this->db->select(
             "SELECT id, title, slug, content, excerpt, published_at, updated_at, post_kind,
-                    featured_image_url, featured_image_alt
+                    featured_image_url, featured_image_alt, rsvp
                FROM posts
               WHERE status = 'published'
                 AND deleted_at IS NULL
@@ -65,7 +65,7 @@ class RssFeed
         foreach ($posts as $post) {
             $tz      = $this->settings['timezone'] ?? '';
             $postUrl = $siteUrl . '/' . Post::datePath($post['published_at'], $post['slug'], $tz) . '/';
-            $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [])
+            $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [], $post['rsvp'] ?? null)
                      . Post::storedFeaturedHtml($post['featured_image_url'] ?? null, (string) ($post['featured_image_alt'] ?? ''), $siteUrl)
                      . Post::photosHtml($photosById[(int) $post['id']] ?? [], $siteUrl)
                      . $this->converter->convert(Post::contentForRender((string) $post['content'], $post['featured_image_url'] ?? null))->getContent()
@@ -111,7 +111,7 @@ class RssFeed
 
         foreach ($posts as $post) {
             $postUrl = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
-            $html    = Post::contextsHtml($post->contexts)
+            $html    = Post::contextsHtml($post->contexts, $post->rsvp)
                      . Post::storedFeaturedHtml($post->featured_image_url, $post->featured_image_alt, $siteUrl)
                      . Post::photosHtml($post->photos, $siteUrl)
                      . $this->converter->convert($post->renderableContent())->getContent()
