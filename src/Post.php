@@ -467,6 +467,11 @@ class Post
             'updated_at'    => date('Y-m-d H:i:s'),
         ];
 
+        // On the object as well as the row: the build that follows a save
+        // renders from this object, and a stale value put the previous edit's
+        // time in the page's dateModified.
+        $this->updated_at = $data['updated_at'];
+
         if ($this->id === null) {
             $this->id = $this->db->insert('posts', $data);
             return $this->id > 0;

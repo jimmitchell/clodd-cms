@@ -260,6 +260,37 @@ final class BuilderOutputTest extends TempSiteTestCase
         $this->assertFileExists($dir . '/index.html', 'a missing file must be rebuilt');
     }
 
+    // ── The modified date ─────────────────────────────────────────────────────
+
+    /**
+     * Every save path builds from the object it just saved, not a fresh read,
+     * so save() has to leave the new updated_at on the object. It used to write
+     * it only to the row, and each edit's page carried the previous edit's time
+     * as its dateModified.
+     */
+    public function testAnEditedPostIsBuiltWithTheTimeOfThatEdit(): void
+    {
+        $this->writeTemplate('post.php', '<time><?= $post->updated_at ?></time>');
+
+        $post = $this->makePublishedPost('edited');
+        $this->db->update('posts', ['updated_at' => '2026-01-01 00:00:00'], 'id = :id', ['id' => $post->id]);
+
+        $post = Post::findById($this->db, (int) $post->id);
+        $post->content = 'edited';
+        $post->save();
+        $this->builder->buildPost($post);
+
+        $stored = $this->db->selectOne('SELECT updated_at FROM posts WHERE id = ?', [$post->id])['updated_at'];
+        $this->assertNotSame('2026-01-01 00:00:00', $stored, 'precondition: the save moved the row');
+
+        $dir = $this->builder->postOutputDir($post->published_at, $post->slug);
+        $this->assertStringContainsString(
+            '<time>' . $stored . '</time>',
+            (string) file_get_contents($dir . '/index.html'),
+            'the page must carry the time of the edit that built it'
+        );
+    }
+
     public function testRePublishingAnUnchangedPageWritesTheFileBackOut(): void
     {
         $this->writeTemplate('page.php', '<h1><?= $page->title ?></h1>');

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.52.2] — 2026-10-03
+
+No schema change.
+
+### Fixed
+
+- **A post's `dateModified` was always one edit behind.** `Post::save()` wrote the new `updated_at` to the row but left the old one on the object, and every save path — the admin editor, Micropub, XML-RPC — builds the page from that object rather than a fresh read. So the JSON-LD on each edited post carried the time of the edit *before*: a Micropub edit on 2026-10-03 published a page saying it was last modified 2026-10-02. `save()` now sets `updated_at` on the object too. A full rebuild reads every post from the database, so it corrects the pages already out there.
+
 ## [1.52.1] — 2026-10-03
 
 No schema change.
