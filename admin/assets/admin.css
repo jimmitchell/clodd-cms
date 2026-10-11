@@ -399,6 +399,9 @@ label {
 }
 
 label:first-child { margin-top: 0; }
+/* The post editor's target field sits above Title and is hidden for most
+   types; when it is, Title is the first thing in the column again. */
+.editor-main > [hidden]:first-child + label { margin-top: 0; }
 
 input[type="text"],
 input[type="password"],
@@ -646,6 +649,11 @@ code {
 .badge--error     { background: #fee2e2; color: #991b1b; }
 .badge--kind-aside { background: #ede9fe; color: #5b21b6; margin-right: .4em; }
 .badge--kind-photo { background: #cffafe; color: #155e75; margin-right: .4em; }
+.badge--kind-reply    { background: #dbeafe; color: #1e40af; margin-right: .4em; }
+.badge--kind-like     { background: #fce7f3; color: #9d174d; margin-right: .4em; }
+.badge--kind-repost   { background: #ffedd5; color: #9a3412; margin-right: .4em; }
+.badge--kind-bookmark { background: #e0e7ff; color: #3730a3; margin-right: .4em; }
+.badge--kind-rsvp     { background: #ccfbf1; color: #115e59; margin-right: .4em; }
 
 /* The one badge that asks for something rather than reporting a state, so it is
    the only outlined one: the ring is what separates "look at this" from the
@@ -697,6 +705,15 @@ code {
     background: var(--color-bg);
     color: var(--color-text);
     width: 220px;
+}
+
+/* Sits beside the search box, so it takes the box's size, not a form field's. */
+.search-form .type-filter {
+    width: auto;
+    padding: .35rem .6rem;
+    font-size: .875rem;
+    background: var(--color-bg);
+    margin-right: .25rem;
 }
 
 .search-input:focus {

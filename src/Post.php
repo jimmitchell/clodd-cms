@@ -971,6 +971,79 @@ class Post
         return in_array($value, self::RSVP_VALUES, true) ? $value : null;
     }
 
+    /**
+     * The types the admin editor offers, in OutPost's order, keyed by the Post
+     * Type Discovery name micropubType() reports.
+     */
+    public const EDITOR_TYPES = [
+        'article'  => 'Article',
+        'note'     => 'Note',
+        'photo'    => 'Photo',
+        'reply'    => 'Reply',
+        'like'     => 'Like',
+        'repost'   => 'Repost',
+        'bookmark' => 'Bookmark',
+        'rsvp'     => 'RSVP',
+    ];
+
+    /** The context row each interaction type is made of. An RSVP is a reply. */
+    public const TYPE_CONTEXT_KIND = [
+        'reply'    => 'in-reply-to',
+        'rsvp'     => 'in-reply-to',
+        'like'     => 'like-of',
+        'repost'   => 'repost-of',
+        'bookmark' => 'bookmark-of',
+    ];
+
+    /** True for the types that answer another URL — the ones with a target. */
+    public static function isInteractionType(string $type): bool
+    {
+        return isset(self::TYPE_CONTEXT_KIND[$type]);
+    }
+
+    /**
+     * The `post_kind` an editor type is stored as.
+     *
+     * The inverse of editorType() — change one and you must change the other,
+     * or a post saved as a Reply reopens as something else. PostEditorTypeTest
+     * round-trips every type through both, and checks micropubType() agrees
+     * wherever PTD can tell.
+     *
+     * An interaction follows the rule micropub.php applies: titled is
+     * `standard`, titleless is a note. Its type comes from its context row, so
+     * the kind only decides how it renders.
+     */
+    public static function postKindForType(string $type, string $title): string
+    {
+        return match ($type) {
+            'note'  => 'aside',
+            'photo' => 'photo',
+            default => self::isInteractionType($type) && trim($title) === '' ? 'aside' : 'standard',
+        };
+    }
+
+    /**
+     * The editor type this post was saved as — postKindForType() run backwards.
+     *
+     * Not micropubType(), which is Post Type Discovery and calls any titled
+     * post without photos an article. The editor lets a note carry a title, so
+     * reading PTD back would reopen a titled note as an Article and save it as
+     * `standard`. Interactions agree with PTD; the rest read the stored kind.
+     */
+    public function editorType(): string
+    {
+        $type = $this->micropubType();
+        if (self::isInteractionType($type)) {
+            return $type;
+        }
+
+        return match ($this->post_kind) {
+            'aside' => 'note',
+            'photo' => 'photo',
+            default => 'article',
+        };
+    }
+
     /** Micropub context kinds in display order (strongest interaction first). */
     public const CONTEXT_KINDS = ['repost-of', 'like-of', 'in-reply-to', 'bookmark-of'];
 

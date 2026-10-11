@@ -13,6 +13,12 @@ $isNew   = true;
 $errors  = [];
 $flash   = '';
 
+// The type controls as submitted, set by a POST; null/empty on a plain load.
+$postType          = null;
+$interactionLocked = false;
+$targetUrl         = '';
+$rsvpValue         = null;
+
 // Mastodon config — loaded once, used in POST handler and template.
 $mastodonInstance = $db->getSetting('mastodon_instance');
 $mastodonToken    = $db->getSetting('mastodon_token');
@@ -72,9 +78,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $post = new Post($db);
     }
 
-    $submittedKind   = (string) ($_POST['post_kind'] ?? 'standard');
-    $post->post_kind = in_array($submittedKind, ['aside', 'photo'], true) ? $submittedKind : 'standard';
+    // The type is what the editor picks; post_kind, the context row and the
+    // rsvp are how it is stored (Post::postKindForType() is the mapping).
+    //
+    // Once a post is public, being an interaction is fixed: its copies and the
+    // webmention to its target are already out, and both say what it answers.
+    // A published reply stays a reply with the same target, and a published
+    // article cannot become one. Unpublishing removes the copies and lifts this.
+    $storedType  = $post->editorType();
+    $typeLocked  = $before['wasPublished'];
+    $postType    = (string) ($_POST['post_type'] ?? 'article');
+    if (!isset(Post::EDITOR_TYPES[$postType])) {
+        $postType = 'article';
+    }
+    if ($typeLocked && (Post::isInteractionType($storedType) || Post::isInteractionType($postType))) {
+        $postType = $storedType;
+    }
+    $interactionLocked = $typeLocked && Post::isInteractionType($storedType);
+
+    $targetUrl = trim((string) ($_POST['target_url'] ?? ''));
+    $rsvpValue = Post::rsvpValue($_POST['rsvp'] ?? null);
+
     $post->title     = trim($_POST['title']   ?? '');
+    $post->post_kind = Post::postKindForType($postType, $post->title);
     $post->slug      = trim($_POST['slug']    ?? '');
     $post->content   = $_POST['content'] ?? '';
     $post->excerpt   = trim($_POST['excerpt'] ?? '') ?: null;
@@ -120,6 +146,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validation.
     if ($post->title === '' && !$post->isNote()) {
         $errors[] = 'Title is required.';
+    }
+
+    // An interaction is its target, so one without a usable target is refused,
+    // as micropub.php refuses an rsvp without its event. Absolute http(s)
+    // only: the target is someone else's page, and the webmention to it is
+    // sent to whatever is stored here.
+    if (!$interactionLocked && Post::isInteractionType($postType)) {
+        if (!preg_match('#^https?://#i', Helpers::safeUrl($targetUrl))) {
+            $errors[] = 'A ' . strtolower(Post::EDITOR_TYPES[$postType]) . ' needs the full web address (https://…) of what it answers.';
+        }
+        if ($postType === 'rsvp' && $rsvpValue === null) {
+            $errors[] = 'Choose an RSVP answer.';
+        }
+    }
+    if (!$interactionLocked) {
+        $post->rsvp = $postType === 'rsvp' ? $rsvpValue : null;
     }
     // A note may end up with an empty slug — that's the id fallback. Every other
     // case needs a real one, including a typed slug that slugified to nothing.
@@ -183,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // The newsletter checkbox is only on the form for a titled post that has
         // not been emailed yet, so read it only then — same reasoning as Pixelfed.
-        if ($hasNewsletter && !$post->isNote() && $post->newsletter_at === null) {
+        if ($hasNewsletter && $postType === 'article' && $post->newsletter_at === null) {
             $post->newsletter_skip = empty($_POST['send_to_newsletter']) ? 1 : 0;
         }
 
@@ -219,6 +261,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($post->slug === '' && $post->id !== null) {
             $post->slug = (string) $post->id;
             $post->save();
+        }
+
+        // The target is a context row, which needs the id save() just gave a
+        // new post. A non-interaction saves no rows, so switching a draft reply
+        // back to a note drops its target.
+        if (!$interactionLocked) {
+            $post->saveContexts(Post::isInteractionType($postType)
+                ? [['kind' => Post::TYPE_CONTEXT_KIND[$postType], 'url' => $targetUrl]]
+                : []);
         }
 
         // Save category and tag associations.
@@ -350,6 +401,19 @@ if ($post === null) {
     $post = new Post($db);
 }
 
+// What the type controls show. A save that failed validation shows what was
+// submitted, since none of it reached the database; otherwise the stored post.
+// A new post starts as an article, as the old kind select did.
+$formIsRetry = $postType !== null && !$interactionLocked;
+$formType    = $formIsRetry ? $postType : ($post->id === null ? 'article' : $post->editorType());
+$formTarget  = $formIsRetry ? $targetUrl : (string) ($post->contexts[0]['url'] ?? '');
+$formRsvp    = $formIsRetry ? $rsvpValue : $post->rsvp;
+$formPublished       = $post->status === 'published' && $post->deleted_at === null;
+$formInteractionLock = $formPublished && Post::isInteractionType($formType);
+$formTypes = $formPublished && !$formInteractionLock
+    ? array_intersect_key(Post::EDITOR_TYPES, array_flip(['article', 'note', 'photo']))
+    : Post::EDITOR_TYPES;
+
 // Load media for sidebar insert panel.
 $mediaItems = $db->select(
     "SELECT id, filename, mime_type, original_name
@@ -412,7 +476,31 @@ require __DIR__ . '/partials/head.php';
 
             <!-- Left: main content -->
             <div class="editor-main">
-                <label for="title">Title <span data-kind-only="aside photo" hidden style="font-weight:400;color:var(--color-muted)">(optional for notes)</span></label>
+                <div data-type-only="reply like repost bookmark rsvp"<?= Post::isInteractionType($formType) ? '' : ' hidden' ?>>
+                    <label for="target_url" style="margin-top:0">
+                        <span data-type-only="reply"<?= $formType === 'reply' ? '' : ' hidden' ?>>In reply to</span>
+                        <span data-type-only="like"<?= $formType === 'like' ? '' : ' hidden' ?>>Liked URL</span>
+                        <span data-type-only="repost"<?= $formType === 'repost' ? '' : ' hidden' ?>>Reposted URL</span>
+                        <span data-type-only="bookmark"<?= $formType === 'bookmark' ? '' : ' hidden' ?>>Bookmarked URL</span>
+                        <span data-type-only="rsvp"<?= $formType === 'rsvp' ? '' : ' hidden' ?>>Event URL</span>
+                    </label>
+                    <input type="url" id="target_url" name="target_url"
+                           value="<?= Helpers::e($formTarget) ?>"
+                           placeholder="https://"
+                           <?= $formInteractionLock ? 'readonly aria-describedby="type-hint"' : '' ?>>
+
+                    <div data-type-only="rsvp"<?= $formType === 'rsvp' ? '' : ' hidden' ?>>
+                        <label for="rsvp">RSVP</label>
+                        <select id="rsvp" name="rsvp"<?= $formInteractionLock ? ' disabled' : '' ?>>
+                            <option value=""<?= $formRsvp === null ? ' selected' : '' ?>>Choose an answer</option>
+                            <?php foreach (['yes' => 'Going', 'no' => 'Not going', 'maybe' => 'Maybe', 'interested' => 'Interested'] as $value => $label): ?>
+                            <option value="<?= $value ?>"<?= $formRsvp === $value ? ' selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
+                <label for="title">Title <span data-type-only="note photo reply like repost bookmark rsvp"<?= $formType === 'article' ? ' hidden' : '' ?> style="font-weight:400;color:var(--color-muted)">(optional)</span></label>
                 <input type="text" id="title" name="title"
                        value="<?= Helpers::e($post->title) ?>"
                        placeholder="Post title"
@@ -438,6 +526,9 @@ require __DIR__ . '/partials/head.php';
                 <p class="form-hint" id="slug-hint" data-kind-only="standard"<?= $post->isNote() ? ' hidden' : '' ?>>Leave blank to auto-generate from title. Only lowercase letters, numbers, and hyphens.</p>
                 <p class="form-hint" data-kind-only="aside photo"<?= $post->isNote() ? '' : ' hidden' ?>>Leave blank to auto-generate from the first few words of the note.</p>
 
+                <?php /* Likes and reposts have no body, as in OutPost. Hidden is not
+                       cleared: the fields still submit, so an existing body is kept. */ ?>
+                <div data-type-only="article note photo reply bookmark rsvp"<?= in_array($formType, ['like', 'repost'], true) ? ' hidden' : '' ?>>
                 <label for="content" style="margin-top:1.25rem">Content</label>
                 <textarea id="content" name="content"><?= Helpers::e($post->content) ?></textarea>
 
@@ -452,6 +543,7 @@ require __DIR__ . '/partials/head.php';
                           aria-describedby="excerpt-hint"><?= Helpers::e($post->excerpt ?? '') ?></textarea>
                 <p class="form-hint" id="excerpt-hint" data-kind-only="standard aside"<?= $post->isPhoto() ? ' hidden' : '' ?>>Shown on the post index. Leave blank to use the start of the post content.</p>
                 <p class="form-hint" data-kind-only="photo"<?= $post->isPhoto() ? '' : ' hidden' ?>>The caption for this photo. Shown under the picture on the post page and in feeds, and syndicated to Mastodon and Bluesky. Not shown on the home page.</p>
+                </div>
             </div>
 
             <!-- Right: sidebar -->
@@ -465,13 +557,19 @@ require __DIR__ . '/partials/head.php';
                         <span class="badge badge--<?= Helpers::e($post->status) ?>"><?= Helpers::e($post->status) ?></span>
                     </div>
 
-                    <label for="post_kind" style="margin-top:0">Post kind</label>
-                    <select id="post_kind" name="post_kind" aria-describedby="post-kind-hint">
-                        <option value="standard"<?= $post->isNote() ? '' : ' selected' ?>>Standard</option>
-                        <option value="aside"<?= $post->isAside() ? ' selected' : '' ?>>Aside (note)</option>
-                        <option value="photo"<?= $post->isPhoto() ? ' selected' : '' ?>>Photo</option>
+                    <label for="post_type" style="margin-top:0">Type</label>
+                    <select id="post_type" name="post_type" aria-describedby="type-hint"<?= $formInteractionLock ? ' disabled' : '' ?>>
+                        <?php foreach ($formTypes as $value => $label): ?>
+                        <option value="<?= $value ?>"<?= $formType === $value ? ' selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
                     </select>
-                    <p class="form-hint" id="post-kind-hint">Asides and photo posts are titleless notes shown in full on the home page. A photo post leads with its image.</p>
+                    <?php if ($formInteractionLock): ?>
+                    <p class="form-hint" id="type-hint">A published <?= Helpers::e(strtolower(Post::EDITOR_TYPES[$formType])) ?> keeps its type and target. Unpublish it to change them.</p>
+                    <?php elseif ($formPublished): ?>
+                    <p class="form-hint" id="type-hint">A published post can't become a reply, like, repost, bookmark or RSVP. Unpublish it first.</p>
+                    <?php else: ?>
+                    <p class="form-hint" id="type-hint">Notes, photos and untitled responses are shown in full on the home page. A photo post leads with its image.</p>
+                    <?php endif; ?>
 
                     <?php if ($hasMastodon && $post->tooted_at === null): ?>
                     <?php $mastodonDisabled = $post->status === 'published'; ?>
@@ -572,12 +670,12 @@ require __DIR__ . '/partials/head.php';
                     <?php endif; ?>
 
                     <?php if ($hasNewsletter && $post->newsletter_at === null): ?>
-                    <!-- Articles only; follows the Post kind select like the
+                    <!-- Articles only; follows the Type select like the
                          featured-image panel. bin/send-newsletter.php sends it
                          about ten minutes after publish, so unticking during
                          that window still stops it. -->
                     <?php $newsletterSent = $post->id !== null ? \CMS\Newsletter::deliveryCount($db, $post->id) : 0; ?>
-                    <div id="newsletter-block" <?= $post->isNote() ? 'hidden' : '' ?>>
+                    <div id="newsletter-block" <?= $formType === 'article' ? '' : 'hidden' ?>>
                         <label for="send_to_newsletter" style="display:flex;gap:.5rem;align-items:center;font-size:.875rem;font-weight:400;margin-bottom:.75rem">
                             <input type="checkbox" id="send_to_newsletter" name="send_to_newsletter" value="1"
                                    <?= $post->newsletter_skip === 0 ? 'checked' : '' ?>>
@@ -759,26 +857,6 @@ require __DIR__ . '/partials/head.php';
 
 <script>
 window._existingTags = <?= json_encode(array_values(array_map(fn($t) => ['name' => $t['name']], $allTags)), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
-
-// Pixelfed only takes photo posts, so its checkbox follows the kind select.
-// The server decides too — an unchecked box on a post saved as an article is
-// never read — so this is presentation, not enforcement.
-// A featured image belongs to a titled post, so its panel follows the kind
-// select the other way round, and so does the newsletter checkbox. Same rule: the server clears the columns for a
-// note regardless (Post::save()), so this is presentation, not enforcement.
-(function () {
-    var kind     = document.getElementById('post_kind');
-    var pixelfed = document.getElementById('pixelfed-block');
-    var featured = document.getElementById('featured-block');
-    var newsletter = document.getElementById('newsletter-block');
-    if (!kind) return;
-
-    kind.addEventListener('change', function () {
-        if (pixelfed) pixelfed.hidden = kind.value !== 'photo';
-        if (featured) featured.hidden = kind.value !== 'standard';
-        if (newsletter) newsletter.hidden = kind.value !== 'standard';
-    });
-})();
 </script>
 <script src="/admin/assets/easymde.min.js"></script>
 <script src="/admin/assets/admin.js?v=<?= rawurlencode(CMS_VERSION) ?>"></script>

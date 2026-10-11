@@ -32,6 +32,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resto
 
 $statusFilter = $_GET['status'] ?? 'all';
 $search       = trim($_GET['q'] ?? '');
+$typeFilter   = (string) ($_GET['type'] ?? '');
+if (!isset(Post::EDITOR_TYPES[$typeFilter])) {
+    $typeFilter = '';
+}
 $posts        = $statusFilter === 'deleted'
     ? Post::findDeleted($db)
     : Post::findAll($db, $statusFilter === 'all' ? null : $statusFilter);
@@ -39,6 +43,12 @@ $posts        = $statusFilter === 'deleted'
 // Apply title search filter.
 if ($search !== '') {
     $posts = array_values(array_filter($posts, fn($p) => stripos($p->title, $search) !== false));
+}
+
+// Type filter. In PHP, like the search above: editorType() reads the
+// contexts findAll() already hydrated, so this is the editor's own answer.
+if ($typeFilter !== '') {
+    $posts = array_values(array_filter($posts, fn($p) => $p->editorType() === $typeFilter));
 }
 
 // When showing all statuses, float drafts to the top.
@@ -80,6 +90,7 @@ $posts      = array_slice($posts, ($page - 1) * $perPage, $perPage);
 $_paginationBase = '/admin/posts.php?' . http_build_query(array_filter([
     'status' => $statusFilter !== 'all' ? $statusFilter : '',
     'q'      => $search,
+    'type'   => $typeFilter,
 ], fn($v) => $v !== ''));
 $_paginationBase .= $_paginationBase !== '/admin/posts.php?' ? '&' : '';
 
@@ -122,7 +133,10 @@ require __DIR__ . '/partials/head.php';
                 $tabs['deleted'] = 'Deleted (' . $deletedCount . ')';
             }
             foreach ($tabs as $key => $label):
-                $tabHref = '/admin/posts.php?status=' . $key . ($search !== '' ? '&q=' . urlencode($search) : '');
+                $tabHref = '/admin/posts.php?' . http_build_query(array_filter(
+                    ['status' => $key, 'q' => $search, 'type' => $typeFilter],
+                    fn($v) => $v !== ''
+                ));
             ?>
             <a href="<?= Helpers::e($tabHref) ?>"
                class="<?= $statusFilter === $key ? 'active' : '' ?>">
@@ -134,10 +148,16 @@ require __DIR__ . '/partials/head.php';
             <?php if ($statusFilter !== 'all'): ?>
             <input type="hidden" name="status" value="<?= Helpers::e($statusFilter) ?>">
             <?php endif; ?>
+            <select name="type" class="type-filter" aria-label="Filter by type" data-autosubmit>
+                <option value="">All types</option>
+                <?php foreach (Post::EDITOR_TYPES as $value => $label): ?>
+                <option value="<?= $value ?>"<?= $typeFilter === $value ? ' selected' : '' ?>><?= $label ?></option>
+                <?php endforeach; ?>
+            </select>
             <input type="search" name="q" value="<?= Helpers::e($search) ?>"
                    placeholder="Search posts…" class="search-input" aria-label="Search posts">
             <?php if ($search !== ''): ?>
-            <a href="/admin/posts.php?status=<?= Helpers::e($statusFilter) ?>" class="search-clear" aria-label="Clear search">✕</a>
+            <a href="<?= Helpers::e('/admin/posts.php?' . http_build_query(array_filter(['status' => $statusFilter, 'type' => $typeFilter], fn($v) => $v !== ''))) ?>" class="search-clear" aria-label="Clear search">✕</a>
             <?php endif; ?>
         </form>
     </div>
@@ -162,10 +182,9 @@ require __DIR__ . '/partials/head.php';
             <tr>
                 <td>
                     <a href="/admin/post-edit.php?id=<?= $post->id ?>">
-                        <?php if ($post->isAside()): ?>
-                            <span class="badge badge--kind-aside">Aside</span>
-                        <?php elseif ($post->isPhoto()): ?>
-                            <span class="badge badge--kind-photo">Photo</span>
+                        <?php $listType = $post->editorType(); ?>
+                        <?php if ($listType !== 'article'): ?>
+                            <span class="badge badge--kind-<?= $listType === 'note' ? 'aside' : $listType ?>"><?= Helpers::e(Post::EDITOR_TYPES[$listType]) ?></span>
                         <?php endif; ?>
                         <?php if (trim($post->title) !== ''): ?>
                             <?= Helpers::e($post->title) ?>

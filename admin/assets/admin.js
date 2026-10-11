@@ -12,10 +12,37 @@ function slugify(text) {
         .replace(/^-+|-+$/g, '') || 'untitled';
 }
 
+// ── Post type → kind ─────────────────────────────────────────────────────────
+// The editor picks a type; what renders is the kind it is stored as. Mirrors
+// Post::postKindForType(): a response is a note unless it has a title. Every
+// script that cares about the kind asks here, and hears 'postkindchange' when
+// the type or the title moves it.
+
+const INTERACTION_TYPES = ['reply', 'like', 'repost', 'bookmark', 'rsvp'];
+
+function editorPostKind() {
+    const typeSelect = document.getElementById('post_type');
+    const titleInput = document.getElementById('title');
+    const type = typeSelect ? typeSelect.value : 'article';
+    if (type === 'note')  return 'aside';
+    if (type === 'photo') return 'photo';
+    if (INTERACTION_TYPES.includes(type) && titleInput && titleInput.value.trim() === '') return 'aside';
+    return 'standard';
+}
+
+(function initPostKindEvents() {
+    const typeSelect = document.getElementById('post_type');
+    const titleInput = document.getElementById('title');
+    if (!typeSelect) return;
+    const fire = () => document.dispatchEvent(new CustomEvent('postkindchange'));
+    typeSelect.addEventListener('change', fire);
+    if (titleInput) titleInput.addEventListener('input', fire);
+})();
+
 (function initSlugField() {
     const titleInput = document.querySelector('[data-slug-source]');
     const slugInput  = document.getElementById('slug');
-    const kindSelect = document.getElementById('post_kind');
+    const typeSelect = document.getElementById('post_type');
     if (!titleInput || !slugInput) return;
 
     // Only auto-update if the slug hasn't been manually edited yet.
@@ -27,36 +54,53 @@ function slugify(text) {
         // Notes slug from their body, not the title. The body is an EasyMDE
         // instance whose input events don't reach the raw textarea, so leave the
         // field blank and let the server derive it on save.
-        if (kindSelect && kindSelect.value !== 'standard') return;
+        if (typeSelect && editorPostKind() !== 'standard') return;
         if (!userEditedSlug) {
             slugInput.value = slugify(titleInput.value);
         }
     });
 })();
 
-// ── Post kind toggle (Standard / Aside / Photo) ──────────────────────────────
-// data-kind-only holds a space-separated list of the kinds an element applies
-// to, so a hint shared by asides and photo posts is written once.
+// ── Post type toggle ─────────────────────────────────────────────────────────
+// Two attributes, two axes. data-type-only names the editor types an element
+// belongs to (the target field, the RSVP answer, the body a like has none of).
+// data-kind-only names the stored kinds — standard, aside, photo — for the
+// hints that follow how a post renders rather than what it is. Both hold
+// space-separated lists, so a hint shared by several is written once.
+//
+// The Pixelfed, featured-image and newsletter panels follow too. All of it is
+// presentation: the server applies the same rules whatever the form shows.
 
-(function initPostKindToggle() {
-    const kindSelect = document.getElementById('post_kind');
+(function initPostTypeToggle() {
+    const typeSelect = document.getElementById('post_type');
     const titleInput = document.getElementById('title');
-    if (!kindSelect) return;
+    if (!typeSelect) return;
+
+    const pixelfed   = document.getElementById('pixelfed-block');
+    const featured   = document.getElementById('featured-block');
+    const newsletter = document.getElementById('newsletter-block');
 
     function apply() {
-        const kind = kindSelect.value;
+        const type = typeSelect.value;
+        const kind = editorPostKind();
 
+        document.querySelectorAll('[data-type-only]').forEach(el => {
+            el.hidden = !el.dataset.typeOnly.split(/\s+/).includes(type);
+        });
         document.querySelectorAll('[data-kind-only]').forEach(el => {
             el.hidden = !el.dataset.kindOnly.split(/\s+/).includes(kind);
         });
 
-        // Only standard posts require a title; asides and photo posts are notes.
-        if (titleInput) {
-            titleInput.required = kind === 'standard';
-        }
+        // Only an article requires a title; everything else may go without.
+        if (titleInput) titleInput.required = type === 'article';
+
+        if (pixelfed)   pixelfed.hidden   = kind !== 'photo';
+        if (featured)   featured.hidden   = kind !== 'standard';
+        // Newsletter sends articles only; a titled bookmark is never emailed.
+        if (newsletter) newsletter.hidden = type !== 'article';
     }
 
-    kindSelect.addEventListener('change', apply);
+    document.addEventListener('postkindchange', apply);
     apply();
 })();
 
@@ -226,10 +270,10 @@ function setAction(action) {
 
 (function initNoteLengthHint() {
     const status       = document.getElementById('note-length-status');
-    const kindSelect   = document.getElementById('post_kind');
+    const typeSelect   = document.getElementById('post_type');
     const textarea     = document.getElementById('content');
     const excerptField = document.getElementById('excerpt');
-    if (!status || !kindSelect || !textarea) return;
+    if (!status || !typeSelect || !textarea) return;
 
     const MASTODON_LIMIT = 500;
     const BLUESKY_LIMIT  = 300;
@@ -331,14 +375,14 @@ function setAction(action) {
     // sends its excerpt, since its content is only the picture and images strip
     // to nothing — counting the body there would always read zero.
     function getSyndicatedText() {
-        if (kindSelect.value === 'photo') {
+        if (editorPostKind() === 'photo') {
             return excerptField ? excerptField.value : '';
         }
         return getContent();
     }
 
     function update() {
-        if (kindSelect.value === 'standard') return;
+        if (editorPostKind() === 'standard') return;
         // Mirrors SyndicationText::compose() for a note: the flattened body,
         // then a blank line, then the links it would otherwise have lost. A URL
         // the body already writes out in full is not repeated.
@@ -365,7 +409,7 @@ function setAction(action) {
         status.textContent = msg;
     }
 
-    kindSelect.addEventListener('change', update);
+    document.addEventListener('postkindchange', update);
     if (window._editor && window._editor.codemirror) {
         window._editor.codemirror.on('change', update);
     } else {
@@ -1092,3 +1136,10 @@ function setAction(action) {
         });
     }
 })();
+
+// ── Auto-submitting filters ──────────────────────────────────────────────────
+// A filter <select> applies on change, carrying the rest of its form with it.
+
+document.querySelectorAll('select[data-autosubmit]').forEach(select => {
+    select.addEventListener('change', () => select.form && select.form.submit());
+});

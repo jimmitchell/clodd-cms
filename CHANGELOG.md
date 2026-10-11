@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.54.0] — 2026-10-11
+
+No schema change.
+
+### Added
+
+- **The post editor offers OutPost's eight types.** The "Post kind" select (Standard / Aside / Photo) is now **Type**: Article, Note, Photo, Reply, Like, Repost, Bookmark, RSVP. Before this, the editor could not create a reply, like, repost, bookmark or RSVP, and could not show which one a post was. Those five take a target URL, whose label follows the type ("In reply to", "Event URL" and so on), and an RSVP also takes its answer. Nothing new is stored: a type is saved as the `post_kind`, `post_contexts` row and `posts.rsvp` that Micropub already writes. A response with a title is stored as `standard`, and one without as a note, which is the rule `micropub.php` applies. Likes and reposts hide the body, as OutPost does. Hiding a field doesn't clear it, so an existing body is kept.
+- **A published response keeps its type and target.** Its copies and the webmention to its target are already out, and both say what it answers. The editor shows them read-only and the server ignores any change. A published Article, Note or Photo can still switch between those three, but it cannot become a response. Unpublishing lifts the lock.
+- **Type badges and a type filter on the posts list.** Every type except Article gets a badge. "Aside" is now called "Note", which is OutPost's word for it. Paging, the status tabs and clearing the search all keep the filter.
+- **`Post::postKindForType()` and `Post::editorType()`**, the two halves of the mapping. `editorType()` is deliberately not `micropubType()`. Post Type Discovery calls any titled post without photos an article, so a titled note would reopen as an Article and be saved as `standard`. `PostEditorTypeTest` round-trips all eight types, with and without a title, through both. It also checks that `micropubType()` and its SQL predicate agree everywhere PTD can tell.
+
+### Security
+
+- **`league/commonmark` 2.10.0 → 2.10.3**, for GHSA-3q6v-r5mr-hxv8 (high: a GFM table can take quadratic time to parse) and GHSA-97jj-33gv-5xf9 (medium: a disallowed raw-HTML tag can slip past the filter). Neither was reachable by the public here. Only the author and trusted Micropub tokens supply Markdown, and `html_input` is `allow` on purpose. A full build before and after the upgrade produced byte-identical output across all 1,381 generated files.
+
 ## [1.53.0] — 2026-10-04
 
 **Schema v33.** Adds `posts.rsvp`, nullable, limited by a CHECK to `yes`, `no`, `maybe` and `interested`. Every existing post reads NULL, which is "not an RSVP".
