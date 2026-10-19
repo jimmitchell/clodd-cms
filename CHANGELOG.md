@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.54.1] — 2026-10-19
+
+No schema change.
+
+### Changed
+
+- **Note cards take the surface fill.** A note card used to stay at page tone (`--color-card-tint`) while articles lifted off it on white. Notes now use `--color-surface`, the same as every other card, so the two are told apart by their gutters alone. `--color-card-tint` is still used behind gallery images while they load.
+- **The home intro's social marks sit closer together**, with a 1.5rem gap instead of 2rem.
+
+---
+
 ## [1.54.0] — 2026-10-11
 
 No schema change.

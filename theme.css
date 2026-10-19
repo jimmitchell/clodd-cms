@@ -66,8 +66,8 @@
     --color-link:       #0B5FA8;
     --color-header-bg:  var(--color-bg);
     --color-chrome-border: var(--color-border);
-    /* A note recesses by staying at page tone while articles lift off it, so
-       the kinds are told apart by elevation rather than by a second fill. */
+    /* Page tone, behind a gallery image while it loads. Note cards used it too
+       until 1.54.1, when they moved to the surface fill. */
     --color-card-tint:  var(--color-bg);
     /* Hairline above an article's footer meta; lighter than a card border so it
        reads as a division inside the card rather than another edge. */
@@ -888,7 +888,7 @@ audio { width: 100%; }
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 2rem;
+    gap: 1.5rem;
 }
 
 .home-intro__social .social-link { padding: .3rem 0; }
@@ -961,15 +961,15 @@ audio { width: 100%; }
 }
 
 /* Notes are the everyday voice of the site and by far the most common card, so
-   they sit back: staying flat at page tone while articles lift, plus tighter
-   gutters, keeps a long run of them from shouting and makes a titled post read
-   as an event by contrast. */
+   they sit back: tighter gutters keep a long run of them from shouting and let
+   a titled post read as an event by contrast. Since 1.54.1 they share the
+   articles' surface fill rather than staying at page tone. */
 .post-card--note .post-card__inner {
     padding: 1.15rem 1.25rem;
 }
 
 .post-card--note {
-    background: var(--color-card-tint);
+    background: var(--color-surface);
 }
 
 .post-card__title {
@@ -2131,11 +2131,10 @@ audio { width: 100%; }
 /* Sits below the critical marker: this block is at the foot of a post and is
    never part of the first paint.
 
-   These items stay at page tone rather than becoming white cards. The theme's
-   rule is that an article lifts off the paper and a note recesses into it
-   (see --color-card-tint), so giving these the surface fill would claim they
-   are three more articles sitting right here, competing with the one just
-   read. They are pointers, so they recess. */
+   These items stay at page tone rather than becoming white cards. A post lifts
+   off the paper on the surface fill, so giving these that fill would claim they
+   are three more posts sitting right here, competing with the one just read.
+   They are pointers, so they recess. */
 .related-posts {
     margin-top: 3rem;
 }
