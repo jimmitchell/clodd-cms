@@ -160,7 +160,7 @@ server {
     }
 
     # ── Web fonts ─────────────────────────────────────────────────────────────
-    # The two DM Sans .woff2 files theme.css asks for. `fonts/og` stays in the
+    # The two Inter .woff2 files theme.css asks for. `fonts/og` stays in the
     # denied regex above — the card's static cut is drawn server-side and has no
     # business being downloadable — and a regex location wins over this prefix
     # one, so that deny still applies inside this directory.
