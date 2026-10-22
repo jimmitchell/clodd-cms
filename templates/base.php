@@ -129,7 +129,7 @@ $tinylyticsQuery = $tinylyticsParams === [] ? '' : '?' . implode('&', $tinylytic
          and a stylesheet cannot write $assetVersion into a url(). Nginx caches
          /fonts/ immutable for a year, so a *replacement* face ships under a new
          filename rather than by busting this one. -->
-    <link rel="preload" href="/fonts/InterVariable.woff2"
+    <link rel="preload" href="/fonts/DMSans-Variable.woff2"
           as="font" type="font/woff2" crossorigin>
     <!-- Feeds -->
     <link rel="alternate" type="application/atom+xml"
