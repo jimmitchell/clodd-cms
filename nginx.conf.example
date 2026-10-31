@@ -125,12 +125,33 @@ server {
         add_header Cache-Control          "no-store" always;
     }
 
-    # ── Micropub + IndieAuth endpoints ─────────────────────────────────────────
+    # ── Micropub endpoints ────────────────────────────────────────────────────
     # micropub.php  — Micropub endpoint (iA Writer, Quill, obsidian-micropub…)
     # media.php     — Micropub media endpoint (file uploads)
-    # indieauth.php / token.php / indieauth-metadata.php — IndieAuth server
-    location ~ ^/(micropub|media|token|indieauth|indieauth-metadata)\.php$ {
+    # Both take photo uploads, so they keep the server-wide body limit.
+    location ~ ^/(micropub|media)\.php$ {
         limit_except GET POST { deny all; }
+
+        include        fastcgi_params;
+        fastcgi_pass   unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param  SCRIPT_FILENAME    $document_root$fastcgi_script_name;
+        fastcgi_param  HTTP_AUTHORIZATION $http_authorization;
+        fastcgi_param  HTTPS              on;
+
+        add_header X-Content-Type-Options "nosniff"  always;
+        add_header Cache-Control          "no-store" always;
+    }
+
+    # ── IndieAuth server ──────────────────────────────────────────────────────
+    # indieauth.php / token.php / indieauth-metadata.php
+    # Nothing here posts more than a handful of short fields — codes, tokens,
+    # client and redirect URLs — so the 55M server default is all attack
+    # surface. PHP parses a body before any script runs (CVE-2026-109618 was
+    # an unauthenticated RCE in exactly that step), so nothing in these
+    # scripts can refuse an oversized one — the proxy has to.
+    location ~ ^/(token|indieauth|indieauth-metadata)\.php$ {
+        limit_except GET POST { deny all; }
+        client_max_body_size 16k;
 
         include        fastcgi_params;
         fastcgi_pass   unix:/run/php/php8.3-fpm.sock;
