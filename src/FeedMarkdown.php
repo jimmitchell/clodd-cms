@@ -52,7 +52,10 @@ final class FeedMarkdown
         $pixelUrl = 'https://tinylytics.app/pixel/' . rawurlencode($code)
             . '.gif?path=' . rawurlencode($path);
 
+        // Sized by attribute, as Tinylytics documents it: feed readers sanitise
+        // entry HTML and `style` is among the first things they strip, while
+        // width/height survive. The style stays as a second line of defence.
         return '<img src="' . htmlspecialchars($pixelUrl, ENT_QUOTES | ENT_XML1, 'UTF-8') . '"'
-            . ' alt="" style="width:1px;height:1px;border:0;" />';
+            . ' alt="" width="1" height="1" style="width:1px;height:1px;border:0;" />';
     }
 }

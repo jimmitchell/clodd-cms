@@ -228,6 +228,7 @@ final class BuildFanoutTest extends TempSiteTestCase
         $this->assertStringContainsString('https://tinylytics.app/pixel/abc123.gif', $html);
         $this->assertStringContainsString(rawurlencode('/posts/2026/01/02/x/'), $html);
         $this->assertStringContainsString('alt=""', $html, 'A counting pixel is decorative and must not be announced.');
+        $this->assertStringContainsString('width="1" height="1"', $html, 'Feed readers strip style, so the size must be in attributes.');
     }
 
     /**

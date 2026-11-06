@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.57.1] — 2026-11-06
+
+No schema change.
+
+### Fixed
+
+- **The feed tracking pixel is sized by attribute as well as by style**: `width="1" height="1"`, as Tinylytics' pixel docs give it. Feed readers sanitise entry HTML and usually strip `style`, which left the size to the image alone. The URL is unchanged (`/pixel/<id>.gif?path=<entry path>`) and still goes into every Atom, RSS and JSON feed, per-category and per-tag included. The newsletter gets no pixel: its email is built from an EmailOctopus template, and EmailOctopus already counts opens.
+
+---
+
 ## [1.57.0] — 2026-11-06
 
 No schema change.
