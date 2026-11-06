@@ -48,22 +48,11 @@ if (!function_exists('_e')) {
 <head>
 <?php $tinylyticsCode = $settings['tinylytics_code'] ?? ''; ?>
 <?php if ($tinylyticsCode !== ''): ?>
-<?php $tinylyticsKudosEmoji = $settings['tinylytics_kudos_emoji'] ?? ''; ?>
-<?php
-/* `events` makes the script send a click on anything carrying
-   data-tinylytics-event; `auto` adds outbound links and file downloads without
-   tagging each one. Both are bare flags, so they join the kudos pair as-is. */
-$tinylyticsParams = [];
-if ($tinylyticsKudosEmoji !== '') {
-    $tinylyticsParams[] = 'kudos=' . rawurlencode($tinylyticsKudosEmoji);
-}
-if (($settings['tinylytics_events'] ?? '0') === '1') {
-    $tinylyticsParams[] = 'events';
-    $tinylyticsParams[] = 'auto';
-}
-$tinylyticsQuery = $tinylyticsParams === [] ? '' : '?' . implode('&', $tinylyticsParams);
-?>
-<script src="https://tinylytics.app/embed/<?= _e($tinylyticsCode) ?>.js<?= _e($tinylyticsQuery) ?>" defer></script>
+<?php /* One script for every site; only data-site varies. Kudos, its symbol,
+         events and automatic outbound/download counting are all chosen in the
+         Tinylytics dashboard (Settings → Tracking), not on this tag — the old
+         /embed/<id>.js?kudos=…&events&auto query is what that replaced. */ ?>
+<script defer src="https://tinylytics.app/js/script.js" data-site="<?= _e($tinylyticsCode) ?>"></script>
 <?php endif; ?>
 <?php $gaMeasurementId = $settings['ga_measurement_id'] ?? ''; ?>
 <?php if ($gaMeasurementId !== ''): ?>

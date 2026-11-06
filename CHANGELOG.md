@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.57.0] — 2026-11-06
+
+No schema change.
+
+### Changed
+
+- **Tinylytics loads from its current embed**: `<script defer src="https://tinylytics.app/js/script.js" data-site="…">`, one shared script keyed by the site ID, in place of the legacy `/embed/<id>.js?kudos=…&events&auto` tag. The old form still works but now shows a migration notice on the Tinylytics Overview. The existing CSP already allows `https://tinylytics.app` in `script-src` and `connect-src`, so no nginx change is needed. The feed pixel (`/pixel/<id>.gif`) is unchanged.
+- **Kudos and event tracking are set in the Tinylytics dashboard now**, under Settings → Tracking, because the new tag takes no parameters. *Tinylytics Kudos emoji* stays in Settings → General, but it now only decides whether the Kudos button appears under a post. Tinylytics draws the symbol itself. The tagged pills and the Subscribe button keep their `data-tinylytics-event` attributes and report as soon as events are on in the dashboard.
+
+### Removed
+
+- **The *Track Tinylytics events* checkbox** (1.48.0). With no query string left for it to write to, it would have been a control that did nothing. The stored `tinylytics_events` row is left in place and no longer read, and it is gone from the API's public settings.
+
+---
+
 ## [1.56.0] — 2026-10-21
 
 No schema change.

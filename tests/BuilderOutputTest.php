@@ -369,45 +369,47 @@ PHP);
         );
     }
 
-    // ── Tinylytics events ─────────────────────────────────────────────────────
+    // ── Tinylytics ────────────────────────────────────────────────────────────
 
     /**
-     * The events flags ride on the same script URL as kudos, and Tinylytics
-     * only reads them from there — a tagged element does nothing unless the
-     * script was asked for `events`.
+     * The current embed is one shared script keyed by data-site. Kudos and
+     * events are dashboard settings now, so nothing local may reach the tag —
+     * and the legacy /embed/ tag must be gone, because running both would
+     * count every page view twice.
      */
-    public function testTinylyticsEventsAddFlagsBesideKudos(): void
+    public function testTinylyticsUsesTheSharedScriptKeyedBySite(): void
     {
         $this->db->upsertSetting('tinylytics_code', 'abc123');
         $this->db->upsertSetting('tinylytics_kudos_emoji', '👏');
-        $this->db->upsertSetting('tinylytics_events', '1');
         $this->config['paths']['templates'] = dirname(__DIR__) . '/templates';
         $builder = new Builder($this->config, $this->db);
 
-        $post = $this->makePublishedPost('events-on');
+        $post = $this->makePublishedPost('tinylytics-embed');
         $post->mastodon_url = 'https://mastodon.example/@me/1';
         $post->save();
         $builder->buildPost($post);
 
         $html = file_get_contents($builder->postOutputDir($post->published_at, $post->slug) . '/index.html');
         $this->assertStringContainsString(
-            'https://tinylytics.app/embed/abc123.js?kudos=' . rawurlencode('👏') . '&amp;events&amp;auto"',
+            '<script defer src="https://tinylytics.app/js/script.js" data-site="abc123"></script>',
             $html
         );
+        $this->assertStringNotContainsString('tinylytics.app/embed/', $html);
+        $this->assertStringContainsString('class="tinylytics_kudos"', $html);
         $this->assertStringContainsString('data-tinylytics-event="syndication.open" data-tinylytics-event-value="mastodon"', $html);
     }
 
-    public function testTinylyticsEventsAreOffUnlessEnabled(): void
+    public function testTinylyticsIsAbsentWithoutASiteId(): void
     {
-        $this->db->upsertSetting('tinylytics_code', 'abc123');
         $this->config['paths']['templates'] = dirname(__DIR__) . '/templates';
         $builder = new Builder($this->config, $this->db);
 
-        $post = $this->makePublishedPost('events-off');
+        $post = $this->makePublishedPost('tinylytics-off');
         $builder->buildPost($post);
 
         $html = file_get_contents($builder->postOutputDir($post->published_at, $post->slug) . '/index.html');
-        $this->assertStringContainsString('https://tinylytics.app/embed/abc123.js" defer', $html);
+        $this->assertStringNotContainsString('tinylytics.app/js/script.js', $html);
+        $this->assertStringNotContainsString('class="tinylytics_kudos"', $html);
     }
 
     // ── Featured image → og:image ─────────────────────────────────────────────
