@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.58.2] — 2026-11-20
+
+No schema change.
+
+### Changed
+
+- **The header's dropdown menu is set at .85rem**, down from .9rem. The size is on `.site-nav__sub a`, because `.site-nav a` sets its own and would override one on the list. The mobile menu keeps its .925rem.
+
+---
+
 ## [1.58.1] — 2026-11-20
 
 No schema change. No change to output: a full build before and after produced byte-identical feeds, sitemap, search index, HTML and OG cards.

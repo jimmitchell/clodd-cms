@@ -315,7 +315,10 @@ audio { width: 100%; }
     display: block;
     padding: .4rem 1rem;
     color: var(--color-muted);
-    font-size: .9rem;
+    /* On the link, not the list: .site-nav a sets its own size, so one on
+       .site-nav__sub would never reach the text. The mobile menu restates its
+       own size in the 640px block below and is unaffected. */
+    font-size: .85rem;
     white-space: nowrap;
 }
 
