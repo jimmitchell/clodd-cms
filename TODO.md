@@ -56,6 +56,12 @@
 
   If this is revisited, note there is no good third option: Micropub defines no `not_found` code, so keeping 404 means keeping a mismatched pair, and the choice is genuinely between a self-consistent response and an informative one. Change all four sites together or the endpoint contradicts itself differently depending on the verb. A test asserting the specific expectation would be the thing that settles it — not another reading of the spec, which has already been done twice.
 
+- [ ] **The build refuses every write when the output root sits under a symlink.** `Builder::isInsideOutputDir()` (`src/Builder.php`) resolves the root with `realpath()` but normalises the candidate path lexically, with `normalizePath()`. If any component of the deploy path is a symlink, the two never share a prefix, so `writeFile()`/`removeFile()` refuse everything and the build halts silently with `[Builder] Refusing to write…` in the log. It fails closed, so it is not a security hole, but it looks like the builder is broken rather than the guard.
+
+  Found during the July 2026 review (1.13.0) and deliberately left alone. Prod does not hit it because `/var/www/cms` is a real directory. It surfaced on macOS, where `sys_get_temp_dir()` is `/var/folders` → `/private/var/folders`; that broke the first run of `tests/BuilderOutputTest.php`.
+
+  If this is fixed, resolve the candidate's parent directory with `realpath()` too. The file itself may not exist yet, so resolve the deepest existing ancestor and re-append the rest. Keep the lexical `..` collapse for the part that does not exist yet. This guard is the backstop behind `Helpers::slugify()` (see CLAUDE.md's security invariants), so loosening it is worse than leaving it. Add a test that builds into a symlinked output root, and check by mutation that the test fails against the current code.
+
 ## Security
 
 - [x] **Atomic config.php writes** — `admin/account.php` writes password changes with a temp file + rename pattern; wrap with `flock()` to prevent race conditions during concurrent reads
