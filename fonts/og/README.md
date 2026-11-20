@@ -1,12 +1,16 @@
 # OG card fonts
 
-The social card in `src/OgImage.php` is set in **DM Sans** — the same family
+The social card in `src/OgImage.php` is set in **Inter** — the same family
 `theme.css` loads for the site, so a shared link and the page it opens are the
-one typeface. Upstream is [googlefonts/dm-fonts](https://github.com/googlefonts/dm-fonts),
+one typeface. Upstream is [rsms/inter](https://github.com/rsms/inter) (4.1),
 under the SIL Open Font License (`../OFL.txt`).
 
-    og-regular.ttf   DMSans-Regular.ttf
-    og-bold.ttf      DMSans-Bold.ttf
+    og-regular.ttf   extras/ttf/Inter-Regular.ttf
+    og-bold.ttf      extras/ttf/Inter-Bold.ttf
+
+Both are the text cut (not Inter Display), matching the optical size the pages
+pin, subset to the same Latin-1 + Latin Extended-A range as the `.woff2` files
+with hinting stripped.
 
 **Why a second copy of a font the site already ships.** The pages download a
 variable `.woff2`; GD cannot read either of those things. It needs a static
@@ -27,7 +31,7 @@ already on disk keeps its old face on a build that reports success. Nothing in
 `OgImage` is tuned to a named face (`lineHeight()` measures the resolved font),
 so no other change is needed. Both files must be present; a lone regular falls
 through to `OgImage::SYSTEM_FONTS`, whose stack is grotesques — none of them
-DM Sans, so a fallback card is a visibly different card rather than a near miss.
+Inter, and close enough to it that a fallback card is easy to miss by eye.
 
 Nginx serves `/fonts/` but denies `/fonts/og/`, so the site's two `.woff2` files
 are downloadable and nothing in here is.

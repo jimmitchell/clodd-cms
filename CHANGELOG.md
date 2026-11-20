@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.58.0] — 2026-11-20
+
+No schema change.
+
+### Changed
+
+- **The site is set in Inter again**, reversing 1.56.0. The two variable `.woff2` files and the card's static cut in `fonts/og/` come back byte-for-byte as 1.55.x shipped them, under the same `InterVariable` names, and the DM Sans files are gone. `--font-sans`, both `@font-face` rules, the `templates/base.php` preload, `fonts/OFL.txt` and the docs all name Inter.
+- **The OG card is set in Inter too.** `OgImage::DESIGN_VERSION` is **21** — moved forward rather than back to 19 — so the next full build redraws every card.
+- **The measure is 780px**, up from 740px (`--max-content`), which now equals `--max-wide`.
+- **The header lines up with the measure.** `.site-header__inner` was a fixed 900px; it now takes `var(--max-content)`, so it follows any future change to the measure.
+
+---
+
 ## [1.57.1] — 2026-11-06
 
 No schema change.
