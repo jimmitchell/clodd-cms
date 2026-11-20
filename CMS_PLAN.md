@@ -323,8 +323,9 @@ The rebuild engine. Core methods:
 - `buildPost(post)` — render one post to `posts/YYYY/MM/DD/{slug}/index.html`
 - `buildPage(page)` — render one static page to `pages/{slug}/index.html`
 - `buildIndex()` — render all paginated index pages + search.json
-- `buildFeed()` — render Atom feed
-- `buildOgImage(post)` — generate OG PNG via GD+FreeType
+- `buildFeed()` / `buildJsonFeed()` / `buildRssFeed()` — write the site feeds, rendered by `FeedGenerator`
+- `buildSitemap()` — write sitemap.xml, rendered by `SitemapGenerator`
+- OG cards — `OgImageGenerator::forPost(post)` decides whether to redraw and draws via `OgImage` (GD+FreeType)
 - `buildCss()` — write theme.min.css from theme.css
 - `buildAll()` — full site rebuild
 - `migrateOldPostPaths()` / `migrateOldPagePaths()` — clean up legacy output paths

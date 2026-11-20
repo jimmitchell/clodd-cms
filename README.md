@@ -720,6 +720,7 @@ clodd-cms/
 │   ├── Byline.php          # Byline 1.0 element builder shared by Atom and RSS feeds
 │   ├── Database.php        # PDO/SQLite wrapper + schema migrations
 │   ├── Feed.php            # Atom 1.0 feed generator
+│   ├── FeedGenerator.php   # All three feed formats, site + per-term, for Builder to write
 │   ├── Helpers.php
 │   ├── HighlightFencedCodeRenderer.php  # Syntax highlighting for fenced code blocks
 │   ├── ImageRenderer.php   # Lazy loading, WebP <picture>, CLS-safe dimensions
@@ -727,9 +728,11 @@ clodd-cms/
 │   ├── Mastodon.php        # Mastodon API client
 │   ├── Media.php
 │   ├── OgImage.php         # GD + FreeType OG image generator (skipped for asides)
+│   ├── OgImageGenerator.php # Decides when a card is redrawn and what og:image advertises
 │   ├── Page.php
 │   ├── Post.php            # Post model (incl. post_kind: standard | aside)
 │   ├── RssFeed.php         # RSS 2.0 feed generator (root + per-term archives)
+│   ├── SitemapGenerator.php # sitemap.xml, for Builder to write
 │   ├── Syndication.php     # Creates, updates and removes the Mastodon/Bluesky copies
 │   ├── Webmention.php      # Outgoing webmention discovery and sending
 │   └── XmlRpc.php

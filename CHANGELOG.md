@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.58.1] — 2026-11-20
+
+No schema change. No change to output: a full build before and after produced byte-identical feeds, sitemap, search index, HTML and OG cards.
+
+### Changed
+
+- **`Builder` hands three jobs to their own classes.** `FeedGenerator` renders the Atom, JSON and RSS feeds for the site and for every term. `SitemapGenerator` renders `sitemap.xml`. `OgImageGenerator` decides whether a post's title card needs redrawing and which image its `og:image` advertises; `OgImage` still does the drawing. The feed and sitemap generators return strings, and Builder writes them, so `writeFile()` is still the one place that writes output. Builder's public methods (`buildFeed()`, `buildSitemap()` and the rest) are unchanged.
+- **Per-term feeds no longer construct three feed classes per term.** One `FeedGenerator` serves the whole build, and is rebuilt whenever Builder reloads settings.
+- **A deleted term's feeds are cleaned up from `FeedGenerator::FILES`** rather than from filenames listed by hand twice, so a new feed format cannot be written without also being removed.
+- `BuilderOutputTest::testTheOgHashCoversTheCardDesign()` now reads `src/OgImageGenerator.php`, where the redraw hash lives.
+
+---
+
 ## [1.58.0] — 2026-11-20
 
 No schema change.

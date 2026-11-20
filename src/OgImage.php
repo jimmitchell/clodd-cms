@@ -33,14 +33,14 @@ use RuntimeException;
  * line height is measured from the resolved bold rather than written down, so
  * changing the pin stays a one-directory operation.
  *
- * A host with no usable font throws, and `Builder::buildOgImage()` catches it:
+ * A host with no usable font throws, and `OgImageGenerator::forPost()` catches it:
  * the post keeps whatever card it already had and the build still reports
  * success. That is the intended degradation — see the note on the avatar
  * below — but it is silent, so `bin/build.php` stderr is the only place a
  * fontless server announces itself.
  *
  * Change any of that and bump DESIGN_VERSION, or every post already on disk
- * keeps its old card: `Builder::buildOgImage()` only redraws when the hash it
+ * keeps its old card: `OgImageGenerator::forPost()` only redraws when the hash it
  * stamps changes, and until 1.23.0 that hash knew about the text and the font
  * file but nothing about the design.
  */
@@ -232,7 +232,7 @@ class OgImage
     /**
      * The bold face this instance draws with, as `path@mtime`.
      *
-     * `Builder::buildOgImage()` stamps it into the OG hash. Both halves matter:
+     * `OgImageGenerator::forPost()` stamps it into the OG hash. Both halves matter:
      * the path because moving to a host with a different sans has to redraw
      * every card, and the mtime because a font package updated in place keeps
      * its path while the outlines change underneath it.

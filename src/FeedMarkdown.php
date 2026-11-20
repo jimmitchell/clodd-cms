@@ -9,10 +9,12 @@ use League\CommonMark\GithubFlavoredMarkdownConverter;
 /**
  * The Markdown converter shared by the Atom, JSON and RSS feed builders.
  *
- * Each of the three used to construct its own in its constructor, and
- * Builder::buildTaxonomyFeed() constructs all three per term per rebuild — so a
- * site with 18 taxonomy terms built 54 identical converters, each of which
- * assembles the full CommonMark environment and extension set.
+ * Each of the three used to construct its own in its constructor, and the
+ * build then constructed all three per term per rebuild — so a site with 18
+ * taxonomy terms built 54 identical converters, each of which assembles the
+ * full CommonMark environment and extension set. FeedGenerator now builds the
+ * three once per settings load, but the shared converter is what stops a
+ * future second instance from costing a second environment.
  *
  * The converter is stateless, so one instance serves every caller.
  *

@@ -323,7 +323,7 @@ final class Syndication
 
             // Bluesky renders no preview card unless the record carries one,
             // thumbnail included, so the card image has to be uploaded as
-            // bytes. Builder::buildOgImage() writes it here on every build of a
+            // bytes. OgImageGenerator::forPost() writes it here on every build of a
             // titled post; a note has none, and neither does any post built
             // without GD. Left null when it is missing — the card still shows,
             // without a picture.

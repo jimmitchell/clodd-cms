@@ -30,6 +30,13 @@ class Builder
     private string             $criticalCss = '';
     private ?string            $assetVersion = null;
 
+    /* The three generators below render what Builder then writes. All three
+       read settings, so refreshContext() constructs them afresh each time it
+       reloads those. */
+    private FeedGenerator      $feedGenerator;
+    private SitemapGenerator   $sitemapGenerator;
+    private OgImageGenerator   $ogImageGenerator;
+
     /** Display size of the header avatar in CSS pixels; see .site-header__avatar. */
     private const AVATAR_CSS_PX = 32;
 
@@ -123,7 +130,7 @@ class Builder
         Post::ensureHydrated($this->db, $post);
 
         // Generate OG image first so the URL is available to the HTML template.
-        $ogImageUrl = $this->buildOgImage($post);
+        $ogImageUrl = $this->ogImageGenerator->forPost($post);
 
         // renderableContent(), not ->content: when the stored featured image is
         // the same picture the body opens with, the body's copy comes out — the
@@ -165,7 +172,7 @@ class Builder
         // two part company whenever a file goes away without the hash going with
         // it — unpublishing removes the output but leaves the hash, so a post
         // re-published unchanged renders identically and would never be written
-        // back. Check the file too, the same way buildOgImage() does.
+        // back. Check the file too, the same way OgImageGenerator::forPost() does.
         if ($hash !== $post->content_hash || !file_exists($path)) {
             if ($this->writeFile($path, $rendered)) {
                 $post->markBuilt($hash);
@@ -234,7 +241,7 @@ class Builder
      * Remove every generated file in a post's output directory, then prune the
      * directory itself.
      *
-     * Both leftovers have to go in one pass: buildOgImage() writes og.png
+     * Both leftovers have to go in one pass: OgImageGenerator::forPost() writes og.png
      * alongside index.html, and removeFile()'s rmdir only fires on an empty
      * directory — so unlinking index.html on its own orphans the og.png *and*
      * strands the directory holding it.
@@ -378,9 +385,7 @@ class Builder
      */
     public function buildFeed(): void
     {
-        $feed = new Feed($this->db, $this->settings);
-        $xml  = $feed->render();
-        $this->writeFile($this->outputDir . '/feed.xml', $xml);
+        $this->writeFile($this->outputDir . '/' . FeedGenerator::FILES['atom'], $this->feedGenerator->atom());
     }
 
     /**
@@ -388,8 +393,7 @@ class Builder
      */
     public function buildJsonFeed(): void
     {
-        $feed = new JsonFeed($this->db, $this->settings);
-        $this->writeFile($this->outputDir . '/feed.json', $feed->render());
+        $this->writeFile($this->outputDir . '/' . FeedGenerator::FILES['json'], $this->feedGenerator->json());
     }
 
     /**
@@ -397,8 +401,7 @@ class Builder
      */
     public function buildRssFeed(): void
     {
-        $feed = new RssFeed($this->db, $this->settings);
-        $this->writeFile($this->outputDir . '/feed.rss', $feed->render());
+        $this->writeFile($this->outputDir . '/' . FeedGenerator::FILES['rss'], $this->feedGenerator->rss());
     }
 
     /**
@@ -407,52 +410,10 @@ class Builder
      */
     public function buildSitemap(): void
     {
-        $siteUrl = rtrim($this->settings['site_url'] ?? '', '/');
-        if ($siteUrl === '') {
-            return;
+        $xml = $this->sitemapGenerator->render();
+        if ($xml !== null) {
+            $this->writeFile($this->outputDir . '/sitemap.xml', $xml);
         }
-
-        $posts = Post::findAll($this->db, 'published');
-        $pages = Page::findAll($this->db, 'published');
-
-        $x = fn(string $v) => htmlspecialchars($v, ENT_XML1, 'UTF-8');
-
-        $lines = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-        ];
-
-        // Homepage
-        $lines[] = '  <url>';
-        $lines[] = '    <loc>' . $x($siteUrl . '/') . '</loc>';
-        $lines[] = '  </url>';
-
-        // Published posts
-        foreach ($posts as $post) {
-            if ($post->published_at === null) {
-                continue;
-            }
-            $url     = $siteUrl . '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/';
-            $lastmod = substr($post->updated_at ?: $post->published_at, 0, 10);
-            $lines[] = '  <url>';
-            $lines[] = '    <loc>' . $x($url) . '</loc>';
-            $lines[] = '    <lastmod>' . $x($lastmod) . '</lastmod>';
-            $lines[] = '  </url>';
-        }
-
-        // Published pages
-        foreach ($pages as $page) {
-            $url     = $siteUrl . '/' . $page->slug . '/';
-            $lastmod = substr($page->updated_at, 0, 10);
-            $lines[] = '  <url>';
-            $lines[] = '    <loc>' . $x($url) . '</loc>';
-            $lines[] = '    <lastmod>' . $x($lastmod) . '</lastmod>';
-            $lines[] = '  </url>';
-        }
-
-        $lines[] = '</urlset>';
-
-        $this->writeFile($this->outputDir . '/sitemap.xml', implode("\n", $lines) . "\n");
     }
 
     /**
@@ -837,7 +798,7 @@ class Builder
     }
 
     /**
-     * Write feed.xml and feed.json for a taxonomy term.
+     * Write the Atom, JSON and RSS feeds for a taxonomy term.
      *
      * @param Post[] $posts
      */
@@ -845,14 +806,9 @@ class Builder
     {
         $baseDir = $this->outputDir . '/' . $type . '/' . $term['slug'];
 
-        $atomFeed = new Feed($this->db, $this->settings);
-        $this->writeFile($baseDir . '/feed.xml', $atomFeed->renderForTerm($type, $term, $posts));
-
-        $jsonFeed = new JsonFeed($this->db, $this->settings);
-        $this->writeFile($baseDir . '/feed.json', $jsonFeed->renderForTerm($type, $term, $posts));
-
-        $rssFeed = new RssFeed($this->db, $this->settings);
-        $this->writeFile($baseDir . '/feed.rss', $rssFeed->renderForTerm($type, $term, $posts));
+        foreach ($this->feedGenerator->forTerm($type, $term, $posts) as $file => $content) {
+            $this->writeFile($baseDir . '/' . $file, $content);
+        }
     }
 
     /**
@@ -934,9 +890,9 @@ class Builder
                 if (!in_array($entry, $validCatSlugs, true)) {
                     $dir = $catDir . '/' . $entry;
                     $this->removeFile($dir . '/index.html');
-                    $this->removeFile($dir . '/feed.xml');
-                    $this->removeFile($dir . '/feed.json');
-                    $this->removeFile($dir . '/feed.rss');
+                    foreach (FeedGenerator::FILES as $file) {
+                        $this->removeFile($dir . '/' . $file);
+                    }
                     $entries = is_dir($dir) ? scandir($dir) : false;
                     if ($entries !== false && count($entries) === 2) {
                         @rmdir($dir);
@@ -956,9 +912,9 @@ class Builder
                 if (!in_array($entry, $validTagSlugs, true)) {
                     $dir = $tagDir . '/' . $entry;
                     $this->removeFile($dir . '/index.html');
-                    $this->removeFile($dir . '/feed.xml');
-                    $this->removeFile($dir . '/feed.json');
-                    $this->removeFile($dir . '/feed.rss');
+                    foreach (FeedGenerator::FILES as $file) {
+                        $this->removeFile($dir . '/' . $file);
+                    }
                     $entries = is_dir($dir) ? scandir($dir) : false;
                     if ($entries !== false && count($entries) === 2) {
                         @rmdir($dir);
@@ -1030,112 +986,6 @@ class Builder
         $html = $this->shortcodes->render($html);
 
         return ResponsiveImages::upgrade($html, $this->mediaDir);
-    }
-
-    /**
-     * Generate an OG image for a published post if the title (or site title)
-     * has changed since the image was last generated.
-     * Silently skips if the GD extension is unavailable.
-     *
-     * Returns the absolute public URL of the OG image, or '' on failure/skip.
-     */
-    private function buildOgImage(Post $post): string
-    {
-        // Notes have no title; OG cards rendered from a missing title look broken.
-        // Skip image generation for them — social previews fall back to the site OG
-        // (or, for a photo post, to the photo itself via the og:image meta).
-        if ($post->isNote()) {
-            return '';
-        }
-
-        $datePath = Post::datePath($post->published_at ?? date('Y-m-d H:i:s'), $post->slug, $this->settings['timezone'] ?? '');
-        $ogPath   = $this->outputDir . '/posts/' . $datePath . '/og.png';
-        $siteUrl  = rtrim($this->settings['site_url'] ?? '', '/');
-
-        // A real picture beats a text card in every preview that shows one, so
-        // a featured image is what Mastodon and every other OG consumer gets.
-        // The title card is still generated below as the fallback — removing
-        // the featured image has to leave something behind.
-        $featuredUrl = $this->featuredOgUrl($post, $siteUrl);
-
-        if (!extension_loaded('gd')) {
-            // Return existing URL if the image was previously generated.
-            return $featuredUrl
-                ?? (file_exists($ogPath) ? $siteUrl . '/' . $datePath . '/og.png' : '');
-        }
-
-        $siteTitle = $this->settings['site_title'] ?? '';
-
-        // Only a local upload is drawn, for the reason headerAvatar() gives: a
-        // remote one would mean fetching an arbitrary URL on the build path.
-        $avatarPath  = $this->localMediaPath((string) ($this->settings['author_avatar_url'] ?? ''));
-        $avatarStamp = $avatarPath === null
-            ? ''
-            : $avatarPath . '@' . (@filemtime($avatarPath) ?: 0);
-
-        try {
-            // Built before the hash rather than inside the redraw below: the
-            // card is set in whichever sans the host provides, so the font
-            // stamp that decides whether a redraw is needed can only be asked
-            // of the instance that resolved it.
-            $og        = new OgImage($this->fontDir);
-            $fontStamp = $og->fontStamp();
-
-            // The design version is in the hash because nothing else in it moves
-            // when only the card's palette or type changes — a retheme would
-            // otherwise leave every post already on disk showing the old card
-            // forever. The avatar is stamped by path *and* mtime for the same
-            // reason: replacing the picture behind an unchanged setting has to
-            // redraw the set too, and so does moving to a host whose default
-            // sans is a different file.
-            $ogHash = hash(
-                'sha256',
-                OgImage::DESIGN_VERSION . '|' . $fontStamp . '|' . $avatarStamp . '|' . $siteTitle . '|' . $post->title
-            );
-
-            if ($ogHash !== $post->og_image_hash || !file_exists($ogPath)) {
-                $og->generate($siteTitle, $post->title, $ogPath, $avatarPath ?? '');
-                $post->markOgBuilt($ogHash);
-            }
-        } catch (\RuntimeException $e) {
-            // Non-fatal: log to stderr and continue. A host with no usable font
-            // lands here on every post, and the build still succeeds.
-            error_log('[OgImage] ' . $e->getMessage());
-        }
-
-        return $featuredUrl
-            ?? (file_exists($ogPath) ? $siteUrl . '/' . $datePath . '/og.png' : '');
-    }
-
-    /**
-     * The post's featured image as an absolute URL, or null when it has none.
-     *
-     * effectiveFeaturedImage(), so a post that was written with its picture at
-     * the top of the body — every WordPress import, and anything MarsEdit sent
-     * before the thumbnail field existed — advertises that picture too.
-     *
-     * An og:image has to be a URL a crawler can actually fetch, so one of our
-     * own paths is checked against the media directory first — a stored path
-     * whose file has gone missing would advertise a 404 in place of a title card
-     * that still works. A remote URL (Micropub may send one) is taken on trust:
-     * its scheme was allowlisted on the way in, and there is nothing to check
-     * here that would not mean an outbound request on the build path.
-     */
-    private function featuredOgUrl(Post $post, string $siteUrl): ?string
-    {
-        $featured = $post->effectiveFeaturedImage();
-        if ($featured === null) {
-            return null;
-        }
-
-        $url = $featured['url'];
-        if (!str_starts_with($url, '/')) {
-            return $url;
-        }
-
-        return SyndicationMedia::localPath($url, $this->mediaDir, $siteUrl) !== null
-            ? $siteUrl . $url
-            : null;
     }
 
     /**
@@ -1553,5 +1403,15 @@ class Builder
         $this->navPages = $top;
 
         $this->criticalCss = @file_get_contents($this->outputDir . '/theme.critical.css') ?: '';
+
+        $this->feedGenerator    = new FeedGenerator($this->db, $this->settings);
+        $this->sitemapGenerator = new SitemapGenerator($this->db, $this->settings);
+        $this->ogImageGenerator = new OgImageGenerator(
+            $this->outputDir,
+            $this->mediaDir,
+            $this->fontDir,
+            $this->settings,
+            $this->localMediaPath((string) ($this->settings['author_avatar_url'] ?? ''))
+        );
     }
 }

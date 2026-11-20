@@ -13,7 +13,7 @@ use CMS\Post;
  * Teardown of a post's generated output.
  *
  * A published post writes two files into its own directory — index.html and
- * the og.png from buildOgImage(). Unpublishing used to remove only the first,
+ * the og.png from OgImageGenerator::forPost(). Unpublishing used to remove only the first,
  * so the image was orphaned and its directory survived forever (removeFile()
  * prunes an empty directory, and og.png kept it non-empty). These tests pin
  * the invariant that matters: nothing generated for a post outlives it.
@@ -743,7 +743,7 @@ PHP);
     /**
      * And a retheme has to reach the cards already on disk.
      *
-     * Builder::buildOgImage() redraws only when the hash it stamped last time
+     * OgImageGenerator::forPost() redraws only when the hash it stamped last time
      * changes, and that hash is over the text and the font file — neither of
      * which moves when only the palette or the type scale does. So the design
      * version is in the hash, and bumping it is what republishes the set.
@@ -754,7 +754,7 @@ PHP);
      */
     public function testTheOgHashCoversTheCardDesign(): void
     {
-        $src = file_get_contents(dirname(__DIR__) . '/src/Builder.php');
+        $src = file_get_contents(dirname(__DIR__) . '/src/OgImageGenerator.php');
         $this->assertNotFalse($src);
 
         $src = preg_replace('!/\*.*?\*/!s', '', $src) ?? $src;
@@ -763,7 +763,7 @@ PHP);
         $this->assertSame(
             1,
             preg_match('/\$ogHash\s*=\s*hash\(([^;]*)\);/s', $src, $m),
-            'precondition: buildOgImage() still computes $ogHash with hash()'
+            'precondition: OgImageGenerator::forPost() still computes $ogHash with hash()'
         );
 
         $this->assertStringContainsString(
