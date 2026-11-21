@@ -298,6 +298,32 @@ final class PostMicropubQueryTest extends TempSiteTestCase
         );
     }
 
+    /**
+     * PHP turns a response carrying a Location header into a 302 unless its
+     * status is already 201 or a 3xx, so a 202 has to be passed to header()
+     * along with the Location, not set beforehand.
+     */
+    public function testAScheduledCreateAnswers202NotARedirect(): void
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents(__DIR__ . '/../micropub.php')) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $this->assertStringContainsString(
+            "header('Location: ' . \$location, true, \$status === 'scheduled' ? 202 : 201);",
+            $code
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/http_response_code\([^)]*202/',
+            $code,
+            'a 202 set before the Location header goes out as a 302'
+        );
+    }
+
     public function testNoStatusFilterReturnsEverythingAlive(): void
     {
         $this->makePost('live',      'Live',      'published');

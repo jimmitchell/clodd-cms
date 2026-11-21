@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.58.4] — 2026-11-21
+
+No schema change.
+
+### Fixed
+
+- **A scheduled create over Micropub answers `202 Accepted`, not a redirect.** `micropub.php` set 202 and then sent the `Location` header, and PHP turns any response with a `Location` into a `302` unless its status is already 201 or a 3xx. Clients followed the redirect to the scheduled post's page, which 404s until the post goes live, and reported the create as failed although the post had been saved. OutPost kept its local draft, and a second try made a second post. The status now goes in the same `header()` call as the `Location`.
+
+---
+
 ## [1.58.3] — 2026-11-21
 
 No schema change.

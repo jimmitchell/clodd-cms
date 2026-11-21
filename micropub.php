@@ -1247,6 +1247,11 @@ $cfgTz   = $db->getSetting('timezone', '');
 $location = ($siteUrl !== '' ? $siteUrl : '') . '/' . $post->addressablePath($cfgTz) . '/';
 
 // Spec: 202 Accepted when the post will be processed later (scheduled).
-http_response_code($status === 'scheduled' ? 202 : 201);
-header('Location: ' . $location);
+//
+// The status goes in header() itself. A Location header makes PHP answer 302
+// unless the status already set is 201 or a 3xx, so setting 202 first and the
+// header after sent a redirect. Clients followed it to the scheduled post's
+// page, which 404s until the post goes live, and reported the create as
+// failed although the post had been saved.
+header('Location: ' . $location, true, $status === 'scheduled' ? 202 : 201);
 exit;
