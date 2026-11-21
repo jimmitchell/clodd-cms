@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.58.3] — 2026-11-21
+
+No schema change.
+
+### Fixed
+
+- **A scheduled post reports `post-status: published` over Micropub**, not `draft`. It is going to be published and needs nothing more done to it, but OutPost, which lists a site's drafts apart from its posts, filed it with the drafts. `post-status=draft` in a post list now returns only drafts, and `published` returns scheduled posts too, so each filter still agrees with what its items report. The rule is `Post::micropubStatus()`.
+- **An update setting `post-status: published` on a post dated in the future schedules it**, as a create with a future date already did. Before, it went live at once with its date still to come. That matters now that scheduled posts report as `published`: obsidian-micropub sends back the status it was given on every update. Before this release, the same round trip turned a scheduled post into a draft. The rule is `Post::markPublished()`.
+
+---
+
 ## [1.58.2] — 2026-11-20
 
 No schema change.

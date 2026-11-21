@@ -180,27 +180,122 @@ final class PostMicropubQueryTest extends TempSiteTestCase
 
     // ── findForMicropub(): status ─────────────────────────────────────────────
 
-    public function testDraftStatusIncludesScheduled(): void
+    public function testDraftStatusIsOnlyDrafts(): void
     {
         $this->makePost('live',      'Live',      'published');
         $this->makePost('draft',     'Draft',     'draft',     null);
         $this->makePost('scheduled', 'Scheduled', 'scheduled', '2099-01-01 00:00:00');
 
         $drafts = array_map(fn(Post $p) => $p->slug, Post::findForMicropub($this->db, null, 'draft', 100, 0));
-        sort($drafts);
 
-        $this->assertSame(['draft', 'scheduled'], $drafts);
+        $this->assertSame(['draft'], $drafts);
     }
 
-    public function testPublishedStatusExcludesDraftsAndScheduled(): void
+    /** Scheduled posts report as published, so they filter as published too. */
+    public function testPublishedStatusIncludesScheduled(): void
     {
         $this->makePost('live',      'Live',      'published');
         $this->makePost('draft',     'Draft',     'draft',     null);
         $this->makePost('scheduled', 'Scheduled', 'scheduled', '2099-01-01 00:00:00');
 
         $published = array_map(fn(Post $p) => $p->slug, Post::findForMicropub($this->db, null, 'published', 100, 0));
+        sort($published);
 
-        $this->assertSame(['live'], $published);
+        $this->assertSame(['live', 'scheduled'], $published);
+    }
+
+    /** Each item's reported status puts it in the list that filter returns. */
+    public function testEachStatusFilterAgreesWithWhatItsItemsReport(): void
+    {
+        $this->makePost('live',      'Live',      'published');
+        $this->makePost('draft',     'Draft',     'draft',     null);
+        $this->makePost('scheduled', 'Scheduled', 'scheduled', '2099-01-01 00:00:00');
+
+        foreach (Post::MICROPUB_STATUSES as $status) {
+            foreach (Post::findForMicropub($this->db, null, $status, 100, 0) as $post) {
+                $this->assertSame($status, $post->micropubStatus(), "{$post->slug} is listed under {$status}");
+            }
+        }
+    }
+
+    // ── micropubStatus() and markPublished() ──────────────────────────────────
+
+    public function testOnlyADraftReportsAsADraft(): void
+    {
+        foreach (['draft' => 'draft', 'scheduled' => 'published', 'published' => 'published'] as $column => $reported) {
+            $post = new Post($this->db);
+            $post->status = $column;
+            $this->assertSame($reported, $post->micropubStatus(), "a {$column} post");
+        }
+    }
+
+    /**
+     * The round trip obsidian-micropub makes: a scheduled post, reported as
+     * published, sent back as published. It must stay scheduled.
+     */
+    public function testMarkingAFutureDatedPostPublishedSchedulesIt(): void
+    {
+        $now  = strtotime('2026-11-21 12:00:00');
+        $post = new Post($this->db);
+        $post->status       = 'scheduled';
+        $post->published_at = '2026-12-01 09:00:00';
+
+        $post->markPublished($now);
+
+        $this->assertSame('scheduled', $post->status);
+        $this->assertSame('2026-12-01 09:00:00', $post->published_at);
+    }
+
+    public function testMarkingAPastDatedDraftPublishedPublishesIt(): void
+    {
+        $now  = strtotime('2026-11-21 12:00:00');
+        $post = new Post($this->db);
+        $post->status       = 'draft';
+        $post->published_at = '2026-11-01 09:00:00';
+
+        $post->markPublished($now);
+
+        $this->assertSame('published', $post->status);
+        $this->assertSame('2026-11-01 09:00:00', $post->published_at);
+    }
+
+    public function testMarkingAnUndatedDraftPublishedDatesItNow(): void
+    {
+        $now  = strtotime('2026-11-21 12:00:00');
+        $post = new Post($this->db);
+        $post->status = 'draft';
+
+        $post->markPublished($now);
+
+        $this->assertSame('published', $post->status);
+        $this->assertSame(date('Y-m-d H:i:s', $now), $post->published_at);
+    }
+
+    /**
+     * micropub.php reports and updates the status through those two methods,
+     * rather than a rule of its own that could drift from them. Source-level
+     * for the reason given at testATitlelessPostReportsNoNameProperty().
+     */
+    public function testMicropubReportsAndUpdatesTheStatusThroughPost(): void
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents(__DIR__ . '/../micropub.php')) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $source = substr($code, (int) strpos($code, 'function mp_post_source_properties'));
+        $source = substr($source, 0, (int) strpos($source, "\nfunction "));
+        $this->assertStringContainsString("'post-status' => [\$post->micropubStatus()]", $source);
+
+        $this->assertStringContainsString('$post->markPublished(time())', $code);
+        $this->assertStringNotContainsString(
+            "\$post->status = 'published';",
+            $code,
+            'an update setting the status by hand would skip the scheduling rule'
+        );
     }
 
     public function testNoStatusFilterReturnsEverythingAlive(): void

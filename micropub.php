@@ -323,7 +323,7 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
     $props = [
         'content'     => [$post->content],
         'mp-slug'     => [$post->slug],
-        'post-status' => [$post->status === 'published' ? 'published' : 'draft'],
+        'post-status' => [$post->micropubStatus()],
     ];
 
     if ($post->title !== '') {
@@ -877,11 +877,9 @@ if ($action === 'update') {
                 if ($newStatus === 'draft') {
                     $post->status = 'draft';
                 } elseif ($newStatus === 'published') {
-                    $post->status = 'published';
-                    if ($post->published_at === null) {
-                        // Going draft → published for the first time: stamp now.
-                        $post->published_at = date('Y-m-d H:i:s');
-                    }
+                    // Dated now if it never was; scheduled if its date is
+                    // still to come — see Post::markPublished().
+                    $post->markPublished(time());
                 } else {
                     mp_error('invalid_request', 'post-status must be draft or published');
                 }

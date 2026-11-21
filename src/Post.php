@@ -126,6 +126,39 @@ class Post
     public const MICROPUB_STATUSES = ['published', 'draft'];
 
     /**
+     * The post-status Micropub reports for this post.
+     *
+     * A scheduled post is `published`, because that is what it is going to be:
+     * its date is set and nothing more needs doing to it. Reporting it as
+     * `draft` filed it with the drafts in clients that list them apart, and a
+     * client that sends the status it was given back on every update — as
+     * obsidian-micropub does — turned it into one. `findForMicropub()` filters
+     * by the same rule, so a client's lists agree with what each item says.
+     */
+    public function micropubStatus(): string
+    {
+        return $this->status === 'draft' ? 'draft' : 'published';
+    }
+
+    /**
+     * Marks the post published, as an update's `post-status: published` asks —
+     * which for a post dated in the future means scheduled, as it does on
+     * create.
+     *
+     * Without that, a scheduled post reported as `published` and sent straight
+     * back went live at once with a date still to come. An undated post is
+     * dated now, which is the first time it goes out.
+     */
+    public function markPublished(int $now): void
+    {
+        if ($this->published_at === null) {
+            $this->published_at = date('Y-m-d H:i:s', $now);
+        }
+        $ts = strtotime($this->published_at);
+        $this->status = ($ts !== false && $ts > $now) ? 'scheduled' : 'published';
+    }
+
+    /**
      * The Post Type Discovery name for this post.
      *
      * PTD precedence: an interaction wins over article/note, so a titled reply
@@ -225,11 +258,10 @@ class Post
      * Posts for the Micropub "Query for Post List" extension — newest first,
      * optionally filtered by Post Type Discovery type and by post-status.
      *
-     * `$postStatus` is the Micropub value, not the column: 'draft' covers both
-     * our 'draft' and 'scheduled' rows, because that is what the source
-     * representation reports for a post that has not gone live yet. Filtering
-     * and reporting have to agree or a client's draft list loses its scheduled
-     * posts.
+     * `$postStatus` is the Micropub value, not the column: 'published' covers
+     * both our 'published' and 'scheduled' rows, and 'draft' only drafts,
+     * because that is what `micropubStatus()` reports for each. Filtering and
+     * reporting have to agree or a client's lists disagree with their items.
      *
      * @return self[]
      */
@@ -244,9 +276,9 @@ class Post
         $params = [];
 
         if ($postStatus === 'published') {
-            $where[] = "p.status = 'published'";
+            $where[] = "p.status IN ('published', 'scheduled')";
         } elseif ($postStatus === 'draft') {
-            $where[] = "p.status IN ('draft', 'scheduled')";
+            $where[] = "p.status = 'draft'";
         }
 
         if ($postType !== null && in_array($postType, self::MICROPUB_TYPES, true)) {
