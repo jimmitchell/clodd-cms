@@ -42,7 +42,7 @@ class Database
     // maintain on every analytics beacon write. No index removes the need to
     // aggregate a third of the table; only pre-aggregation would, and that is
     // not worth building for a dashboard nobody loads in a loop.
-    private const SCHEMA_VERSION = 33;
+    private const SCHEMA_VERSION = 34;
 
     public function __construct(private string $dbPath)
     {
@@ -896,6 +896,29 @@ class Database
             "ALTER TABLE posts ADD COLUMN rsvp TEXT"
             . " CHECK (rsvp IS NULL OR rsvp IN ('yes', 'no', 'maybe', 'interested'))"
         );
+    }
+
+    private function applySchemaV34(): void
+    {
+        // post_media: the Micropub `video` and `audio` properties (u-video,
+        // u-audio), one row per file. A table of its own rather than a kind
+        // column on post_photos, because everything that reads post_photos —
+        // the templates, three feeds, syndication, the gallery — would
+        // otherwise draw a movie as an <img> the day one of them forgot to
+        // filter. No alt: neither property carries one in practice.
+        // media_id links uploads to the media table; NULL for external URLs.
+        $this->run(<<<SQL
+            CREATE TABLE IF NOT EXISTS post_media (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+                kind       TEXT    NOT NULL CHECK (kind IN ('video', 'audio')),
+                url        TEXT    NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                media_id   INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        SQL);
+        $this->run("CREATE INDEX IF NOT EXISTS idx_post_media_post_id ON post_media(post_id)");
     }
 
     /** Insert or update a single settings row. */

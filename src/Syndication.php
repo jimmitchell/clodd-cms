@@ -287,9 +287,12 @@ final class Syndication
      */
     private function payload(Post $post): ?array
     {
+        // Like the contexts below, not every path arrives with these loaded.
+        $post->loadMedia();
+
         // A bare like, repost or bookmark has no words and no picture — there
         // is no post to make out of it.
-        if (trim($post->content) === '' && $post->photos === []) {
+        if (trim($post->content) === '' && $post->photos === [] && $post->media === []) {
             return null;
         }
 
@@ -317,6 +320,12 @@ final class Syndication
                 $post->noteLinks(),
                 static fn(string $link): bool => !str_contains($excerpt, $link)
             ));
+
+            // Video and audio don't travel — no network gets them from us — so
+            // a note carrying either links home to where it plays.
+            if ($post->media !== []) {
+                $links[] = $siteUrl . '/' . Post::datePath((string) $post->published_at, $post->slug, $this->db->getSetting('timezone', '')) . '/';
+            }
         } else {
             $datePath = Post::datePath((string) $post->published_at, $post->slug, $this->db->getSetting('timezone', ''));
             $url      = $siteUrl . '/' . $datePath . '/';
@@ -363,7 +372,7 @@ final class Syndication
         // contexts and the photos are all there is. Nothing to say — no
         // excerpt, no context and no photo — means there is no post to make;
         // don't publish a blank status.
-        if ($post->isNote() && $excerpt === '' && $context === '' && $images === []) {
+        if ($post->isNote() && $excerpt === '' && $context === '' && $images === [] && $links === []) {
             error_log('[syndication] Skipping post ' . $post->id . ': note has no text or photo');
             return null;
         }

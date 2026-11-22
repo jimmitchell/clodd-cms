@@ -156,10 +156,10 @@ function mp_syndication_targets(\CMS\Database $db): array
  * Types are Post Type Discovery names, listed most-used first (clients render
  * them in order). Only the ones this server stores end-to-end appear: `article`
  * and `note` are the name/no-name split, `photo` is the photo property, the
- * four interaction types are the CONTEXT_KINDS, and `rsvp` is an in-reply-to
- * plus posts.rsvp. Deliberately absent are video, audio and checkin — their
- * properties are currently dropped on create, so advertising them would invite
- * posts that lose their point.
+ * four interaction types are the CONTEXT_KINDS, `rsvp` is an in-reply-to
+ * plus posts.rsvp, and `video` and `audio` are post_media rows. Deliberately
+ * absent is checkin — its property is dropped on create, so advertising it
+ * would invite posts that lose their point.
  *
  * @return array<array<string,string>>
  */
@@ -174,6 +174,8 @@ function mp_post_types(): array
         ['type' => 'repost',   'name' => 'Repost'],
         ['type' => 'like',     'name' => 'Like'],
         ['type' => 'bookmark', 'name' => 'Bookmark'],
+        ['type' => 'video',    'name' => 'Video'],
+        ['type' => 'audio',    'name' => 'Audio'],
     ];
 }
 
@@ -213,6 +215,22 @@ function mp_parse_photo_values(array $vals, string $siteUrl): array
         $rows[] = ['url' => $url, 'alt' => $alt, 'media_id' => null];
     }
     return $rows;
+}
+
+/**
+ * Parse Micropub `video` or `audio` values — URL strings or mf2 {value}
+ * objects, as for photos — into rows for Post::saveMedia(). An alt on a value
+ * is dropped: neither property carries one in post_media. URLs are normalised
+ * and allowlisted exactly as photo URLs are.
+ *
+ * @return array<array{kind: string, url: string, media_id: null}>
+ */
+function mp_parse_media_values(string $kind, array $vals, string $siteUrl): array
+{
+    return array_map(
+        fn(array $row) => ['kind' => $kind, 'url' => $row['url'], 'media_id' => null],
+        mp_parse_photo_values($vals, $siteUrl)
+    );
 }
 
 /**
@@ -358,6 +376,18 @@ function mp_post_source_properties(\CMS\Post $post, string $cfgTz, string $siteU
             }
             return ((string) $p['alt'] === '') ? $url : ['value' => $url, 'alt' => (string) $p['alt']];
         }, $sourcePhotos);
+    }
+
+    // Reported back so a client that loads the post and saves it doesn't strip
+    // what it couldn't see. No alt, so always bare URLs.
+    foreach (\CMS\Post::MEDIA_KINDS as $mediaKind) {
+        $mediaUrls = array_map(
+            fn(string $u) => ($siteUrl !== '' && str_starts_with($u, '/')) ? $siteUrl . $u : $u,
+            $post->mediaUrls($mediaKind)
+        );
+        if ($mediaUrls !== []) {
+            $props[$mediaKind] = $mediaUrls;
+        }
     }
 
     // effectiveFeaturedImage(), for the same reason: a post written before the
@@ -738,7 +768,7 @@ if ($action === 'update') {
     // ── Apply replace ops ────────────────────────────────────────────────────
     //
     // Supported properties: name, content, mp-slug, category, post-status,
-    // published, photo, and the context properties. `published` may only be
+    // published, photo, video, audio, and the context properties. `published` may only be
     // replaced — add/delete would orphan the date-based URL.
 
     $rejectFrozen = function (array $ops, string $opName): void {
@@ -759,6 +789,9 @@ if ($action === 'update') {
 
     $touchedContexts = false;
     $newContexts     = $post->contexts;
+
+    $touchedMedia = false;
+    $newMedia     = $post->media;
 
     // Normalize photo urls from update ops the same way stored rows are kept
     // (site-relative for own-origin urls) so delete-by-value matches.
@@ -835,6 +868,16 @@ if ($action === 'update') {
                 $touchedPhotos = true;
                 break;
 
+            // Replaces only this kind; the other keeps its rows and order.
+            case 'video':
+            case 'audio':
+                $newMedia = array_values(array_merge(
+                    array_filter($newMedia, fn($m) => $m['kind'] !== $prop),
+                    mp_parse_media_values($prop, $vals, $updSiteUrl)
+                ));
+                $touchedMedia = true;
+                break;
+
             // No touched flag: this lives on the post row, which
             // $post->save() writes. An empty value list clears it.
             case 'featured':
@@ -907,6 +950,9 @@ if ($action === 'update') {
         } elseif ($prop === 'photo') {
             $newPhotos     = array_merge($newPhotos, mp_parse_photo_values($vals, $updSiteUrl));
             $touchedPhotos = true;
+        } elseif (in_array($prop, \CMS\Post::MEDIA_KINDS, true)) {
+            $newMedia     = array_merge($newMedia, mp_parse_media_values($prop, $vals, $updSiteUrl));
+            $touchedMedia = true;
         } elseif ($prop === 'featured') {
             // A post has one featured image, so there is nothing to append to.
             // Adding one where none is set is the useful reading; adding one
@@ -939,6 +985,15 @@ if ($action === 'update') {
                 ));
             }
             $touchedPhotos = true;
+        } elseif (in_array($prop, \CMS\Post::MEDIA_KINDS, true)) {
+            // delete: [video] (empty $vals) → clear that kind
+            // delete: {audio: [urls]}       → remove matching urls of that kind
+            $remove   = empty($vals) ? null : $normalizePhotoUrls($vals);
+            $newMedia = array_values(array_filter(
+                $newMedia,
+                fn($m) => $m['kind'] !== $prop || ($remove !== null && !in_array($m['url'], $remove, true))
+            ));
+            $touchedMedia = true;
         } elseif ($prop === 'category') {
             // delete: [category] (empty $vals) → clear all
             // delete: {category: [a, b]}      → remove specific values
@@ -995,6 +1050,9 @@ if ($action === 'update') {
     }
     if ($touchedContexts) {
         $post->saveContexts($newContexts);
+    }
+    if ($touchedMedia) {
+        $post->saveMedia($newMedia);
     }
 
     // Everything the update invalidated: the post, both neighbour positions,
@@ -1102,8 +1160,19 @@ $rsvp = isset($properties['rsvp']) && is_array($properties['rsvp'])
     : null;
 mp_require_rsvp_target($rsvp, $contextRows);
 
-if ($content === '' && $photoRows === [] && $contextRows === []) {
-    mp_error('invalid_request', 'content, photo, or a context property (in-reply-to, like-of, repost-of, bookmark-of) is required');
+// ── Video and audio: post_media rows ────────────────────────────────────────
+
+// URLs only, normally from this site's media endpoint. Uploaded as files with
+// the post itself they are not read: only `photo` files are.
+$mediaRows = [];
+foreach (\CMS\Post::MEDIA_KINDS as $mediaKind) {
+    if (isset($properties[$mediaKind]) && is_array($properties[$mediaKind])) {
+        $mediaRows = array_merge($mediaRows, mp_parse_media_values($mediaKind, $properties[$mediaKind], $mpSiteUrl));
+    }
+}
+
+if ($content === '' && $photoRows === [] && $mediaRows === [] && $contextRows === []) {
+    mp_error('invalid_request', 'content, photo, video, audio, or a context property (in-reply-to, like-of, repost-of, bookmark-of) is required');
 }
 
 // An absent name property is the note/article distinction in Micropub, so every
@@ -1204,6 +1273,9 @@ if ($post->slug === '' && $post->id !== null) {
 $post->saveTerms($categoryIds, $tagIds);
 if ($photoRows !== []) {
     $post->savePhotos($photoRows);
+}
+if ($mediaRows !== []) {
+    $post->saveMedia($mediaRows);
 }
 if ($contextRows !== []) {
     $post->saveContexts($contextRows);

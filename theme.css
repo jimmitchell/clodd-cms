@@ -553,6 +553,18 @@ audio { width: 100%; }
 
 .post__photo { margin: 0; }
 
+/* Micropub video and audio (u-video, u-audio) — after the photos, above the
+   body. A player is as wide as the column, whatever size the file is. */
+.post__media-list,
+.post-card__media {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.post-card__media { margin-bottom: 1rem; }
+.post__media { margin: 0; }
+.post__media video { width: 100%; }
+
 /* The picture is the point of a photo post, so it opens. The link carries the
    full-size original and theme.js lifts it into the lightbox — same zoom-in
    cursor and hover fade as the tiled gallery, so both answer the pointer alike. */

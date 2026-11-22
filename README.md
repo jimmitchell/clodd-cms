@@ -520,6 +520,8 @@ A client-supplied `summary` is stored as the post's excerpt and used verbatim by
 
 The mf2 `featured` property sets a titled post's [featured image](#featured-images). Values take the same shapes as `photo` — a bare URL or `{"value": "…", "alt": "…"}` — and only the first is used, since a post has one lead picture. It is supported in `replace`, `add` and `delete` updates, and reported by `q=source`.
 
+The mf2 `video` and `audio` properties take URLs — normally ones this site's media endpoint just returned — as bare strings or `{"value": "…"}` objects; an `alt` is ignored. Each is stored as a `post_media` row and drawn as a player (`u-video`, `u-audio`) after any photos and before the body, on the post's page, on a note's card and in all three feeds. Both are supported in `replace`, `add` and `delete` updates, and reported by `q=source`. Files sent with the post itself are not read for them — only `photo` files are — so upload to the media endpoint first. Syndicated copies carry the words and, for a note, a link home to the player: no network gets the file from us. The admin editor can't attach or remove them.
+
 ### Queries
 
 | Query | Returns |
@@ -537,7 +539,7 @@ Omitting `url` from `q=source` returns a list of posts — the [Query for Post L
 |-----------|--------|
 | `limit` | Page size. Defaults to `20`, capped at `100`. A missing or unparseable value falls back to the default. |
 | `offset` | Rows to skip. Usable on its own, since a default `limit` always applies. |
-| `post-type` | Post Type Discovery filter: `note`, `article`, `photo`, `reply`, `rsvp`, `repost`, `like`, `bookmark` — the same list `q=config` advertises under `post-types`. An interaction wins over `article`/`note`, so a titled reply filters as `reply`; an `rsvp` (an `in-reply-to` carrying an `rsvp` value) outranks `reply`. |
+| `post-type` | Post Type Discovery filter: `note`, `article`, `photo`, `reply`, `rsvp`, `repost`, `like`, `bookmark`, `video`, `audio` — the same list `q=config` advertises under `post-types`. An interaction wins over `article`/`note`, so a titled reply filters as `reply`; an `rsvp` (an `in-reply-to` carrying an `rsvp` value) outranks `reply`. Below the interactions, `video` outranks `photo` and `photo` outranks `audio`, title or not. |
 | `post-status` | `published` (which also covers scheduled posts, matching the `post-status` each item reports), or `draft`. |
 | `properties[]` | Applied per item. Unlike the single-post response, list items keep their `type` wrapper — a list of bare property bags is not parseable mf2. |
 
@@ -575,7 +577,7 @@ Pre-create your categories in **Admin → Categories** to have matching client-s
 | Status | Meaning |
 |--------|---------|
 | `201 Created` + `Location: <post URL>` | Post saved (drafts return the admin edit URL) |
-| `400 Bad Request` | Malformed payload, missing `content`/`photo`, or unsupported `h` type |
+| `400 Bad Request` | Malformed payload, missing `content`/`photo`/`video`/`audio`, or unsupported `h` type |
 | `401 Unauthorized` | Missing or invalid bearer token (also `WWW-Authenticate: Bearer realm="Micropub"`) |
 | `429 Too Many Requests` | Per-IP lockout from too many failed auth attempts (shares `login_attempts` with the admin login) |
 

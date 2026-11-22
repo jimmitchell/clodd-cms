@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.59.0] — 2026-11-21
+
+**Schema v34**, applied automatically on the next page load: a new `post_media` table. Nothing existing is changed or migrated.
+
+### Added
+
+- **Micropub `video` and `audio`.** A post can carry either, by URL — normally one this site's media endpoint just returned. Each is a `post_media` row, a table of its own beside `post_photos` so nothing that reads photos can start drawing a movie as a picture. They're drawn as players (`u-video`, `u-audio`) after any photos and before the body: on the post's page, on a note's card, and in the Atom, RSS and JSON feeds. `replace`, `add` and `delete` updates work on both, `q=source` reports them back so a client's round trip keeps them, and `q=config` now advertises the Video and Audio post types. The rules are `Post::saveMedia()` and `Post::mediaHtml()`; URLs are normalised and allowlisted exactly as photo URLs are.
+- **Post Type Discovery knows them.** `Post::micropubType()` and the `post-type` filter's SQL agree, as before: below the interactions, a video makes a `video`, above `photo`, and audio makes an `audio`, below it, title or not.
+- **The media endpoint and library take `.mov` and `.m4a`** — `video/quicktime`, `audio/x-m4a` and `audio/mp4`, as fileinfo reads them. They are what an iPhone's Photos and Voice Memos hand over, so without them a video from the phone was refused on upload. A QuickTime movie in HEVC plays in Safari but not every browser; that is the file, not the site.
+- **Syndication links a note home** when it carries video or audio, since no network gets the file from us. A note with only a video is no longer skipped as empty.
+
+### Not included
+
+- Alt text for either, feed enclosures, and `video`/`audio` files sent as multipart with the post itself — upload them to the media endpoint first.
+- The admin editor can't attach or remove them. A post that has them edits as the note or article it otherwise is, and keeps them.
+
+---
+
 ## [1.58.4] — 2026-11-21
 
 No schema change.

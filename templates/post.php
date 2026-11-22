@@ -165,6 +165,11 @@ ob_start();
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
+    <?php if (!empty($post->media)): ?>
+    <?php /* Micropub video and audio (u-video, u-audio), after any photos and
+             before the words, as the photos are. */ ?>
+    <div class="post__media-list"><?= CMS\Post::mediaHtml($post->media) ?></div>
+    <?php endif; ?>
     <div class="post__content prose e-content">
         <?= $html ?>
         <?php /* On a photo post the content is only the picture and the words

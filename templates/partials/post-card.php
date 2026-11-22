@@ -96,6 +96,12 @@ $cardClass = 'post-card h-entry post-card--'
         </div>
         <?php endif; ?>
 
+        <?php if ($post->isAside() && !empty($post->media)): ?>
+        <?php /* So is its video or audio. A titled post's card shows its excerpt
+                 and leaves the players to the post itself. */ ?>
+        <div class="post-card__media"><?= Post::mediaHtml($post->media) ?></div>
+        <?php endif; ?>
+
         <?php /* The featured image first, the attached photo rows as the fallback
                  for posts written before the field existed. Safe to derive from
                  the body here — a titled post's card shows its excerpt, never

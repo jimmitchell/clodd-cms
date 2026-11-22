@@ -599,6 +599,45 @@ final class SyndicationTest extends TempSiteTestCase
     }
 
     /**
+     * No network gets a video or audio file from us, so a note carrying one
+     * links home to where it plays — and a note with nothing but the file is
+     * a post, not an empty one to skip.
+     */
+    public function testANoteWithVideoLinksHomeToThePlayer(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $post = $this->savedPost();
+        $post->post_kind    = 'aside';
+        $post->content      = 'Look at this.';
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+        $post->saveMedia([['kind' => 'video', 'url' => '/media/clip.mp4']]);
+
+        $payload = $this->payloadFor($post);
+
+        $this->assertSame('Look at this.', $payload['excerpt']);
+        $this->assertSame(['https://example.com/2026/08/01/' . $post->slug . '/'], $payload['links']);
+    }
+
+    public function testANoteWithOnlyAudioIsStillSyndicated(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $post = $this->savedPost();
+        $post->post_kind    = 'aside';
+        $post->content      = '';
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+        $post->saveMedia([['kind' => 'audio', 'url' => '/media/song.mp3']]);
+
+        $payload = $this->payloadFor($post);
+
+        $this->assertNotNull($payload);
+        $this->assertSame(['https://example.com/2026/08/01/' . $post->slug . '/'], $payload['links']);
+    }
+
+    /**
      * A note that points somewhere has to carry the address, or the copy is a
      * sentence about a page the reader cannot reach.
      */

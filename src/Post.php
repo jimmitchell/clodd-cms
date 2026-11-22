@@ -59,6 +59,9 @@ class Post
 
     /** @var array<array<string,mixed>>  [['id'=>int,'url'=>string,'alt'=>string,'sort_order'=>int,'media_id'=>?int], ...] */
     public array $photos = [];
+
+    /** @var array<array<string,mixed>>  [['id'=>int,'kind'=>'video'|'audio','url'=>string,'sort_order'=>int,'media_id'=>?int], ...] */
+    public array $media = [];
     public array $contexts = [];
 
     /**
@@ -120,7 +123,10 @@ class Post
      * The Post Type Discovery names this server can list and filter by, in the
      * order q=config advertises them.
      */
-    public const MICROPUB_TYPES = ['note', 'article', 'photo', 'reply', 'rsvp', 'repost', 'like', 'bookmark'];
+    public const MICROPUB_TYPES = ['note', 'article', 'photo', 'reply', 'rsvp', 'repost', 'like', 'bookmark', 'video', 'audio'];
+
+    /** The kinds a post_media row may be: the Micropub property each stands for. */
+    public const MEDIA_KINDS = ['video', 'audio'];
 
     /** Micropub post-status values a client may send or receive. */
     public const MICROPUB_STATUSES = ['published', 'draft'];
@@ -169,7 +175,9 @@ class Post
      * One deviation from strict PTD: a *titled* post carrying photos is
      * `article` here rather than `photo`, because `post_kind` is what the site
      * actually renders from and Micropub only assigns 'photo' to titleless
-     * posts.
+     * posts. Video and audio have no post_kind, so they follow PTD strictly: a
+     * video anywhere makes a `video`, above `photo`, and audio makes an
+     * `audio`, below it, title or not. Reads the hydrated media rows.
      *
      * findForMicropub() filters with SQL that mirrors this ladder exactly —
      * change one and you must change the other, or the list will hide posts a
@@ -189,8 +197,16 @@ class Post
             }
         }
 
+        if ($this->hasMedia('video')) {
+            return 'video';
+        }
+
         if ($this->post_kind === 'photo') {
             return 'photo';
+        }
+
+        if ($this->hasMedia('audio')) {
+            return 'audio';
         }
 
         return $this->title !== '' ? 'article' : 'note';
@@ -236,6 +252,11 @@ class Post
     {
         $has    = fn(string $kind) => "EXISTS (SELECT 1 FROM post_contexts pc WHERE pc.post_id = p.id AND pc.kind = '{$kind}')";
         $anyCtx = "EXISTS (SELECT 1 FROM post_contexts pc WHERE pc.post_id = p.id)";
+        $media  = fn(string $kind) => "EXISTS (SELECT 1 FROM post_media pm WHERE pm.post_id = p.id AND pm.kind = '{$kind}')";
+        // Below the interactions, PTD's media rungs: video, then photo, then
+        // audio. Everything under a rung excludes it.
+        $plain  = 'NOT ' . $anyCtx . ' AND NOT ' . $media('video')
+                . " AND p.post_kind <> 'photo' AND NOT " . $media('audio');
 
         // Each interaction excludes the ones above it, matching the ladder's
         // first-match-wins order. Only `reply` needs to exclude `rsvp`: an RSVP
@@ -247,9 +268,12 @@ class Post
             'like'     => 'NOT ' . $has('in-reply-to') . ' AND NOT ' . $has('repost-of') . ' AND ' . $has('like-of'),
             'bookmark' => 'NOT ' . $has('in-reply-to') . ' AND NOT ' . $has('repost-of')
                           . ' AND NOT ' . $has('like-of') . ' AND ' . $has('bookmark-of'),
-            'photo'    => 'NOT ' . $anyCtx . " AND p.post_kind = 'photo'",
-            'article'  => 'NOT ' . $anyCtx . " AND p.post_kind <> 'photo' AND p.title <> ''",
-            'note'     => 'NOT ' . $anyCtx . " AND p.post_kind <> 'photo' AND p.title = ''",
+            'video'    => 'NOT ' . $anyCtx . ' AND ' . $media('video'),
+            'photo'    => 'NOT ' . $anyCtx . ' AND NOT ' . $media('video') . " AND p.post_kind = 'photo'",
+            'audio'    => 'NOT ' . $anyCtx . ' AND NOT ' . $media('video')
+                          . " AND p.post_kind <> 'photo' AND " . $media('audio'),
+            'article'  => $plain . " AND p.title <> ''",
+            'note'     => $plain . " AND p.title = ''",
             default    => '1 = 1',
         };
     }
@@ -685,6 +709,158 @@ class Post
             ];
         }
         return $map;
+    }
+
+    // ── Video and audio (Micropub u-video, u-audio) ───────────────────────────
+
+    /**
+     * Replace all video and audio rows for this post.
+     * Each entry: ['kind' => 'video'|'audio', 'url' => string, 'media_id' => ?int].
+     * Order in the array becomes sort_order; a row of any other kind is skipped.
+     *
+     * @param array<array<string,mixed>> $media
+     */
+    public function saveMedia(array $media): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+
+        $this->db->delete('post_media', 'post_id = :post_id', ['post_id' => $this->id]);
+        foreach (array_values($media) as $i => $row) {
+            $kind = (string) ($row['kind'] ?? '');
+            $url  = trim((string) ($row['url'] ?? ''));
+            if ($url === '' || !in_array($kind, self::MEDIA_KINDS, true)) {
+                continue;
+            }
+            $this->db->insert('post_media', [
+                'post_id'    => $this->id,
+                'kind'       => $kind,
+                'url'        => $url,
+                'sort_order' => $i,
+                'media_id'   => $row['media_id'] ?? null,
+            ]);
+        }
+
+        $this->media = $this->db->select(
+            "SELECT id, kind, url, sort_order, media_id
+               FROM post_media
+              WHERE post_id = :post_id
+              ORDER BY sort_order, id",
+            ['post_id' => $this->id]
+        );
+    }
+
+    /**
+     * Re-read this post's video and audio rows, for the code that decides what
+     * to syndicate — see loadContexts() for why it doesn't trust the object.
+     */
+    public function loadMedia(): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+
+        $this->media = $this->db->select(
+            "SELECT id, kind, url, sort_order, media_id
+               FROM post_media
+              WHERE post_id = :post_id
+              ORDER BY sort_order, id",
+            ['post_id' => $this->id]
+        );
+    }
+
+    /** True when the post carries at least one row of this kind. */
+    public function hasMedia(string $kind): bool
+    {
+        foreach ($this->media as $row) {
+            if (($row['kind'] ?? '') === $kind) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The URLs of this post's rows of one kind, in order.
+     *
+     * @return string[]
+     */
+    public function mediaUrls(string $kind): array
+    {
+        $urls = [];
+        foreach ($this->media as $row) {
+            if (($row['kind'] ?? '') === $kind) {
+                $urls[] = (string) $row['url'];
+            }
+        }
+        return $urls;
+    }
+
+    /**
+     * Video and audio for a set of post ids, keyed by post id — for the feed
+     * generators, which select raw rows instead of Post objects.
+     *
+     * @param int[] $ids
+     * @return array<int, array<array{kind:string,url:string}>>
+     */
+    public static function mediaForPostIds(Database $db, array $ids): array
+    {
+        if (empty($ids)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $map = [];
+        $rows = $db->select(
+            "SELECT post_id, kind, url
+               FROM post_media
+              WHERE post_id IN ($placeholders)
+              ORDER BY post_id, sort_order, id",
+            $ids
+        );
+        foreach ($rows as $row) {
+            $map[(int) $row['post_id']][] = [
+                'kind' => (string) $row['kind'],
+                'url'  => (string) $row['url'],
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Render video and audio rows as players (u-video, u-audio), for the
+     * templates and the feeds alike.
+     *
+     * The URL goes through Helpers::safeUrl() as well as being escaped: a src
+     * on a media element is inert today, but the rows come from a client, and
+     * one allowlist here means no later consumer has to remember. A row whose
+     * URL fails it is dropped rather than drawn as a broken player.
+     *
+     * @param array<array<string,mixed>> $media
+     */
+    public static function mediaHtml(array $media, string $siteUrl = ''): string
+    {
+        $html = '';
+        foreach ($media as $row) {
+            $kind = (string) ($row['kind'] ?? '');
+            if (!in_array($kind, self::MEDIA_KINDS, true)) {
+                continue;
+            }
+            $url = (string) ($row['url'] ?? '');
+            if ($siteUrl !== '' && str_starts_with($url, '/')) {
+                $url = rtrim($siteUrl, '/') . $url;
+            }
+            $url = Helpers::safeUrl($url);
+            if ($url === '') {
+                continue;
+            }
+            $src   = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+            $html .= '<figure class="post__media post__media--' . $kind . '">'
+                   . '<' . $kind . ' class="u-' . $kind . '" controls preload="metadata" src="' . $src . '">'
+                   . '<a href="' . $src . '">' . ($kind === 'video' ? 'Watch the video' : 'Listen to the audio') . '</a>'
+                   . '</' . $kind . '></figure>' . "\n";
+        }
+        return $html;
     }
 
     // ── Effective photos (attached rows, or the body's images) ────────────────
@@ -2269,6 +2445,30 @@ class Post
                     'id'         => (int) $row['id'],
                     'url'        => (string) $row['url'],
                     'alt'        => (string) ($row['alt'] ?? ''),
+                    'sort_order' => (int) $row['sort_order'],
+                    'media_id'   => $row['media_id'] !== null ? (int) $row['media_id'] : null,
+                ];
+            }
+        }
+
+        // Video and audio ride along as well, for the same reason.
+        foreach ($posts as $post) {
+            $post->media = [];
+        }
+        $mediaRows = $db->select(
+            "SELECT post_id, id, kind, url, sort_order, media_id
+               FROM post_media
+              WHERE post_id IN ($placeholders)
+              ORDER BY post_id, sort_order, id",
+            $ids
+        );
+        foreach ($mediaRows as $row) {
+            $pid = (int) $row['post_id'];
+            if (isset($byId[$pid])) {
+                $byId[$pid]->media[] = [
+                    'id'         => (int) $row['id'],
+                    'kind'       => (string) $row['kind'],
+                    'url'        => (string) $row['url'],
                     'sort_order' => (int) $row['sort_order'],
                     'media_id'   => $row['media_id'] !== null ? (int) $row['media_id'] : null,
                 ];

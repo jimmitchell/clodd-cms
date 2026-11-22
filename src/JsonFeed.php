@@ -43,6 +43,7 @@ class JsonFeed
 
         $postIds      = array_map(fn($p) => (int) $p['id'], $posts);
         $photosById   = Post::photosForPostIds($this->db, $postIds);
+        $mediaById    = Post::mediaForPostIds($this->db, $postIds);
         $contextsById = Post::contextsForPostIds($this->db, $postIds);
 
         $feed = [
@@ -63,6 +64,7 @@ class JsonFeed
             $html    = Post::contextsHtml($contextsById[(int) $post['id']] ?? [], $post['rsvp'] ?? null)
                      . Post::storedFeaturedHtml($post['featured_image_url'] ?? null, (string) ($post['featured_image_alt'] ?? ''), $siteUrl)
                      . Post::photosHtml($photos, $siteUrl)
+                     . Post::mediaHtml($mediaById[(int) $post['id']] ?? [], $siteUrl)
                      . $this->converter->convert(Post::contentForRender((string) $post['content'], $post['featured_image_url'] ?? null))->getContent()
                      . Post::photoCaptionHtml($post['post_kind'] ?? null, $post['excerpt'] ?? null)
                      . FeedMarkdown::trackingPixel($this->settings, '/' . Post::datePath($post['published_at'], $post['slug'], $this->settings['timezone'] ?? '') . '/');
@@ -147,6 +149,7 @@ class JsonFeed
             $html    = Post::contextsHtml($post->contexts, $post->rsvp)
                      . Post::storedFeaturedHtml($post->featured_image_url, $post->featured_image_alt, $siteUrl)
                      . Post::photosHtml($post->photos, $siteUrl)
+                     . Post::mediaHtml($post->media, $siteUrl)
                      . $this->converter->convert($post->renderableContent())->getContent()
                      . Post::photoCaptionHtml($post->post_kind, $post->excerpt)
                      . FeedMarkdown::trackingPixel($this->settings, '/' . Post::datePath($post->published_at, $post->slug, $this->settings['timezone'] ?? '') . '/');

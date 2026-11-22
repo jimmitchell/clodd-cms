@@ -95,6 +95,19 @@ final class PostEditorTypeTest extends TempSiteTestCase
 
     public function testEveryEditorTypeIsAMicropubType(): void
     {
-        $this->assertEqualsCanonicalizing(Post::MICROPUB_TYPES, array_keys(Post::EDITOR_TYPES));
+        $this->assertSame([], array_values(array_diff(array_keys(Post::EDITOR_TYPES), Post::MICROPUB_TYPES)));
+    }
+
+    /**
+     * Video and audio arrive over Micropub only. The admin editor has no way
+     * to attach either, and a post carrying one edits as the note or article
+     * it otherwise is, leaving its post_media rows alone.
+     */
+    public function testOnlyVideoAndAudioAreMicropubOnly(): void
+    {
+        $this->assertEqualsCanonicalizing(
+            ['video', 'audio'],
+            array_values(array_diff(Post::MICROPUB_TYPES, array_keys(Post::EDITOR_TYPES)))
+        );
     }
 }

@@ -24,8 +24,13 @@ class Media
         'image/webp'      => 'webp',
         'video/mp4'       => 'mp4',
         'video/webm'      => 'webm',
+        // What an iPhone's Photos and Voice Memos hand over, as fileinfo reads
+        // them: a QuickTime movie and an AAC sound in an MPEG-4 box.
+        'video/quicktime' => 'mov',
         'audio/mpeg'      => 'mp3',
         'audio/ogg'       => 'ogg',
+        'audio/x-m4a'     => 'm4a',
+        'audio/mp4'       => 'm4a',
     ];
 
     /** Default max upload size in bytes (50 MB). */

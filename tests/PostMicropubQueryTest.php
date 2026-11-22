@@ -19,6 +19,7 @@ final class PostMicropubQueryTest extends TempSiteTestCase
 {
     /**
      * @param array<array{kind: string, url: string}> $contexts
+     * @param array<array{kind: string, url: string}> $media
      */
     private function makePost(
         string $slug,
@@ -28,7 +29,8 @@ final class PostMicropubQueryTest extends TempSiteTestCase
         string $postKind = 'standard',
         array $contexts = [],
         ?string $createdAt = null,
-        ?string $rsvp = null
+        ?string $rsvp = null,
+        array $media = []
     ): Post {
         $post               = new Post($this->db);
         $post->title        = $title;
@@ -42,6 +44,9 @@ final class PostMicropubQueryTest extends TempSiteTestCase
 
         if ($contexts !== []) {
             $post->saveContexts($contexts);
+        }
+        if ($media !== []) {
+            $post->saveMedia($media);
         }
         if ($createdAt !== null) {
             $this->db->update('posts', ['created_at' => $createdAt], 'id = :id', ['id' => $post->id]);
@@ -71,6 +76,12 @@ final class PostMicropubQueryTest extends TempSiteTestCase
             ]),
             'bookmark' => $this->makePost('a-bookmark', '', 'published', '2026-08-01 01:00:00', 'aside', [
                 ['kind' => 'bookmark-of', 'url' => 'https://example.com/read-later'],
+            ]),
+            'video'    => $this->makePost('a-video', '', 'published', '2026-08-01 00:40:00', 'aside', [], null, null, [
+                ['kind' => 'video', 'url' => '/media/2026/08/clip.mp4'],
+            ]),
+            'audio'    => $this->makePost('an-audio', '', 'published', '2026-08-01 00:20:00', 'aside', [], null, null, [
+                ['kind' => 'audio', 'url' => '/media/2026/08/song.mp3'],
             ]),
         ];
     }
@@ -158,9 +169,26 @@ final class PostMicropubQueryTest extends TempSiteTestCase
             ['kind' => 'like-of',     'url' => 'https://example.com/nice'],
             ['kind' => 'in-reply-to', 'url' => 'https://example.com/party'],
         ], null, 'no');
+        $this->makePost('titled-video', 'A Titled Video', 'published', '2026-08-01 08:00:00', 'standard', [], null, null, [
+            ['kind' => 'video', 'url' => '/media/a.mp4'],
+        ]);
+        $this->makePost('photo-and-video', '', 'published', '2026-08-01 07:30:00', 'photo', [], null, null, [
+            ['kind' => 'video', 'url' => '/media/b.mp4'],
+        ]);
+        $this->makePost('photo-and-audio', '', 'published', '2026-08-01 07:20:00', 'photo', [], null, null, [
+            ['kind' => 'audio', 'url' => '/media/b.mp3'],
+        ]);
+        $this->makePost('titled-audio', 'A Titled Audio', 'published', '2026-08-01 07:10:00', 'standard', [], null, null, [
+            ['kind' => 'audio', 'url' => '/media/c.mp3'],
+        ]);
+        $this->makePost('reply-with-video', '', 'published', '2026-08-01 06:30:00', 'aside', [
+            ['kind' => 'in-reply-to', 'url' => 'https://example.com/thought'],
+        ], null, null, [
+            ['kind' => 'video', 'url' => '/media/d.mp4'],
+        ]);
 
         $all = Post::findForMicropub($this->db, null, null, 100, 0);
-        $this->assertCount(12, $all);
+        $this->assertCount(19, $all);
 
         foreach (Post::MICROPUB_TYPES as $type) {
             $expected = array_map(
@@ -175,6 +203,117 @@ final class PostMicropubQueryTest extends TempSiteTestCase
             sort($expected);
             sort($actual);
             $this->assertSame($expected, $actual, "post-type={$type} disagrees with micropubType()");
+        }
+    }
+
+    // ── Video and audio ───────────────────────────────────────────────────────
+
+    /** PTD has video above photo and audio below it, and neither cares about a title. */
+    public function testVideoAndAudioTakeTheirPlaceOnTheLadder(): void
+    {
+        $video = ['kind' => 'video', 'url' => '/media/v.mp4'];
+        $audio = ['kind' => 'audio', 'url' => '/media/a.mp3'];
+
+        $this->assertSame('video', $this->makePost('pv', '', 'published', '2026-08-01 12:00:00', 'photo', [], null, null, [$video])->micropubType());
+        $this->assertSame('photo', $this->makePost('pa', '', 'published', '2026-08-01 12:00:00', 'photo', [], null, null, [$audio])->micropubType());
+        $this->assertSame('video', $this->makePost('tv', 'Titled', 'published', '2026-08-01 12:00:00', 'standard', [], null, null, [$video])->micropubType());
+        $this->assertSame('audio', $this->makePost('ta', 'Titled', 'published', '2026-08-01 12:00:00', 'standard', [], null, null, [$audio])->micropubType());
+        $this->assertSame('video', $this->makePost('va', '', 'published', '2026-08-01 12:00:00', 'aside', [], null, null, [$audio, $video])->micropubType());
+        $this->assertSame('like', $this->makePost('lv', '', 'published', '2026-08-01 12:00:00', 'aside', [
+            ['kind' => 'like-of', 'url' => 'https://example.com/nice'],
+        ], null, null, [$video])->micropubType(), 'an interaction still outranks the media rungs');
+    }
+
+    public function testSaveMediaKeepsOrderAndSkipsWhatItCannotStore(): void
+    {
+        $post = $this->makePost('media-order', '', 'published', '2026-08-01 12:00:00', 'aside', [], null, null, [
+            ['kind' => 'audio', 'url' => '/media/1.mp3'],
+            ['kind' => 'photo', 'url' => '/media/not-here.jpg'],
+            ['kind' => 'video', 'url' => '  '],
+            ['kind' => 'video', 'url' => '/media/2.mp4'],
+        ]);
+
+        $this->assertSame(
+            [['audio', '/media/1.mp3'], ['video', '/media/2.mp4']],
+            array_map(fn($m) => [$m['kind'], $m['url']], $post->media),
+            'hydrated by the finder, in order, with nothing it cannot store'
+        );
+        $this->assertSame(['/media/2.mp4'], $post->mediaUrls('video'));
+        $this->assertSame([], $post->photos, 'a video never lands in post_photos');
+
+        $post->saveMedia([]);
+        $this->assertSame([], Post::findById($this->db, (int) $post->id)->media);
+    }
+
+    public function testThePostMediaTableRefusesOtherKinds(): void
+    {
+        $post = $this->makePost('bad-kind');
+        $this->expectException(\Throwable::class);
+        $this->db->insert('post_media', ['post_id' => $post->id, 'kind' => 'photo', 'url' => '/media/x.jpg']);
+    }
+
+    public function testMediaGoesWithItsPost(): void
+    {
+        $post = $this->makePost('cascade', '', 'published', '2026-08-01 12:00:00', 'aside', [], null, null, [
+            ['kind' => 'video', 'url' => '/media/gone.mp4'],
+        ]);
+        $this->db->delete('posts', 'id = :id', ['id' => $post->id]);
+
+        $this->assertSame([], $this->db->select('SELECT id FROM post_media'));
+    }
+
+    public function testMediaHtmlDrawsPlayersAndRefusesUnsafeUrls(): void
+    {
+        $html = Post::mediaHtml([
+            ['kind' => 'video', 'url' => '/media/clip.mp4'],
+            ['kind' => 'audio', 'url' => 'https://cdn.example.com/a "b".mp3'],
+            ['kind' => 'video', 'url' => 'javascript:alert(1)'],
+            ['kind' => 'photo', 'url' => '/media/p.jpg'],
+        ], 'https://example.org');
+
+        $this->assertStringContainsString('<video class="u-video" controls preload="metadata" src="https://example.org/media/clip.mp4">', $html);
+        $this->assertStringContainsString('<audio class="u-audio" controls preload="metadata" src="https://cdn.example.com/a &quot;b&quot;.mp3">', $html);
+        $this->assertStringNotContainsString('javascript:', $html);
+        $this->assertStringNotContainsString('p.jpg', $html);
+        $this->assertSame(2, substr_count($html, '<figure'));
+    }
+
+    public function testAMediaPostIsAdvertisedReadAndReportedBack(): void
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents(__DIR__ . '/../micropub.php')) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        $types = substr($code, (int) strpos($code, 'function mp_post_types'));
+        $types = substr($types, 0, (int) strpos($types, "\nfunction "));
+        $this->assertStringContainsString("'type' => 'video'", $types);
+        $this->assertStringContainsString("'type' => 'audio'", $types);
+
+        $source = substr($code, (int) strpos($code, 'function mp_post_source_properties'));
+        $source = substr($source, 0, (int) strpos($source, "\nfunction "));
+        $this->assertStringContainsString('$post->mediaUrls($mediaKind)', $source, 'q=source must report video and audio, or a round-trip strips them');
+
+        $this->assertStringContainsString('$post->saveMedia($mediaRows)', $code, 'create stores them');
+        $this->assertStringContainsString('$post->saveMedia($newMedia)', $code, 'update stores them');
+        $this->assertSame(
+            2,
+            substr_count($code, 'mp_parse_media_values($prop, $vals, $updSiteUrl)'),
+            'an update reads them on replace and on add'
+        );
+    }
+
+    public function testMediaReachesThePageTheCardsAndEveryFeed(): void
+    {
+        $root = __DIR__ . '/..';
+        $this->assertStringContainsString('Post::mediaHtml($post->media)', (string) file_get_contents($root . '/templates/post.php'));
+        $this->assertStringContainsString('Post::mediaHtml($post->media)', (string) file_get_contents($root . '/templates/partials/post-card.php'));
+        foreach (['Feed', 'RssFeed', 'JsonFeed'] as $feed) {
+            $src = (string) file_get_contents($root . "/src/{$feed}.php");
+            $this->assertSame(2, substr_count($src, 'Post::mediaHtml('), "{$feed}: the raw-row path and the hydrated one");
         }
     }
 
