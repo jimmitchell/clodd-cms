@@ -5,7 +5,7 @@
 use CMS\Media;
 
 $mediaStorage = CMS_ROOT . '/content/media';
-$mediaMaxBytes = (int) ($config['media']['max_bytes'] ?? 52_428_800);
+$mediaMaxBytes = (int) ($config['media']['max_bytes'] ?? \CMS\Media::DEFAULT_MAX_BYTES);
 $media = new Media($db, $mediaStorage, $mediaMaxBytes);
 
 $siteUrl = (string) $db->getSetting('site_url', '');

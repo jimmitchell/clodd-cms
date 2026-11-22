@@ -120,8 +120,8 @@ chmod g+w /var/www/cms/index.html /var/www/cms/feed.xml 2>/dev/null || true
 Edit `/etc/php/8.3/fpm/php.ini`:
 
 ```ini
-upload_max_filesize = 50M
-post_max_size       = 55M
+upload_max_filesize = 200M
+post_max_size       = 205M
 max_execution_time  = 60
 memory_limit        = 128M
 display_errors      = Off

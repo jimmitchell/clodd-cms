@@ -50,7 +50,7 @@ if ($f['error'] !== UPLOAD_ERR_OK) {
 }
 
 try {
-    $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media', (int) ($config['media']['max_bytes'] ?? 52_428_800));
+    $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media', (int) ($config['media']['max_bytes'] ?? \CMS\Media::DEFAULT_MAX_BYTES));
     $result       = $mediaService->upload($f);
 } catch (\RuntimeException $e) {
     MicropubAuth::error('invalid_request', $e->getMessage(), 422);

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.59.2] — 2026-11-22
+
+No schema change. **Server settings to change with it** — see below.
+
+### Changed
+
+- **Uploads may be up to 200 MB**, up from 50 MB: `Media::DEFAULT_MAX_BYTES`, which every upload path now falls back to instead of a number of its own, unless `config.php` sets `media.max_bytes`. Enough for a minute or two of 1080p video; an 11-second iPhone clip in 4K was already over the old limit.
+- **XML-RPC stays at 50 MB** (`XmlRpcServer::XMLRPC_MAX_BYTES`). Its file arrives as base64 inside the XML, so the body, the decoded file and the parse are all in memory at once under PHP's 128 MB `memory_limit`.
+- `nginx.conf.example`, `docker/nginx.conf`, `docker/php.ini` and INSTALL.md now say `client_max_body_size 205M`, `upload_max_filesize = 200M` and `post_max_size = 205M`. A new `UploadLimitsTest` keeps the four in step.
+
+### Upgrading
+
+The limit is the smallest of four, so raise the server's two along with this:
+
+- nginx: `client_max_body_size 205M;` in the site's server block, then `sudo nginx -t && sudo systemctl reload nginx`.
+- PHP-FPM: `upload_max_filesize = 200M` and `post_max_size = 205M` in `/etc/php/8.3/fpm/php.ini`, then `sudo systemctl reload php8.3-fpm`.
+- If `config.php` sets `media.max_bytes`, raise or remove it.
+
+---
+
 ## [1.59.1] — 2026-11-22
 
 No schema change.

@@ -11,7 +11,7 @@ use CMS\Helpers;
 $media = new Media(
     $db,
     CMS_ROOT . '/content/media',
-    (int) ($config['media']['max_bytes'] ?? 52_428_800)
+    (int) ($config['media']['max_bytes'] ?? \CMS\Media::DEFAULT_MAX_BYTES)
 );
 
 $jsonResponse = fn(array $payload, int $status = 200) => (function () use ($payload, $status) {
@@ -139,7 +139,7 @@ require __DIR__ . '/partials/head.php';
                 <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
             <p>Drag files here, or <label for="file-input" class="upload-zone__browse">browse</label></p>
-            <p class="form-hint">Images, video, audio — max <?= round(($config['media']['max_bytes'] ?? 52_428_800) / 1_048_576) ?> MB each</p>
+            <p class="form-hint">Images, video, audio — max <?= round(($config['media']['max_bytes'] ?? \CMS\Media::DEFAULT_MAX_BYTES) / 1_048_576) ?> MB each</p>
         </div>
 
         <form id="upload-form" method="post" action="/admin/media.php" enctype="multipart/form-data">

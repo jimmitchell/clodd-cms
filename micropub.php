@@ -646,7 +646,7 @@ if ($contentType === 'application/json') {
         }
         \CMS\MicropubAuth::requireScope($mpAuthz, 'media', 'create');
         try {
-            $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media', (int) ($config['media']['max_bytes'] ?? 52_428_800));
+            $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media', (int) ($config['media']['max_bytes'] ?? \CMS\Media::DEFAULT_MAX_BYTES));
             $result       = $mediaService->upload($f);
         } catch (\RuntimeException $e) {
             mp_error('invalid_request', $e->getMessage(), 422);
@@ -1128,7 +1128,7 @@ $photoRows = isset($properties['photo']) && is_array($properties['photo'])
     : [];
 
 if (!empty($photoFiles)) {
-    $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media', (int) ($config['media']['max_bytes'] ?? 52_428_800));
+    $mediaService = new \CMS\Media($db, $config['paths']['content'] . '/media', (int) ($config['media']['max_bytes'] ?? \CMS\Media::DEFAULT_MAX_BYTES));
     $photoAlts    = isset($properties['mp-photo-alt']) && is_array($properties['mp-photo-alt'])
         ? array_map('strval', $properties['mp-photo-alt'])
         : [];

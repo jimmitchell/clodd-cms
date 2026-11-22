@@ -18,7 +18,7 @@ A lightweight flat-file CMS with a PHP/SQLite admin panel and a fully static HTM
 - **Categories & tags** — full taxonomy system; posts can belong to multiple categories and tags; archive pages generated at `/category/{slug}/` and `/tag/{slug}/`; tag input is a pill-style picker with autocomplete against existing tags
 - **Related posts** — optional block at the foot of titled posts linking up to three others by shared categories and tags, scored so the closest match wins over the most recent; off by default, switched on in Settings → Content
 - **Featured images** — a titled post's lead picture, set from the editor, MarsEdit (`wp_post_thumbnail`) or Micropub (`featured`); renders above the body as `u-featured` and becomes the post's `og:image`, card thumbnail, feed image, and social preview card. A post that simply begins with an image gets the same treatment automatically, so nothing had to be migrated
-- **Media library** — drag-and-drop uploads with MIME validation; images, video, and audio supported (50 MB limit)
+- **Media library** — drag-and-drop uploads with MIME validation; images, video, and audio supported (200 MB limit)
 - **Image galleries** — select multiple images in the post editor and insert a `[gallery]` shortcode; renders as a Mondrian-style tiled CSS Grid (curated layouts per image count 1–7; larger sets chunk into stacked sibling blocks that visually merge into one continuous tile field) with a looping lightbox
 - **Atom feed** — generated automatically at `/feed.xml`; embeds [Byline](https://bylinespec.org/1.0) elements so feed readers can show your name, bio, avatar, and verified social links
 - **RSS feed** — `/feed.rss` (RSS 2.0) with the same Byline embedding; mirrored to per-term taxonomy archives
@@ -263,7 +263,7 @@ Turning the setting on or off rebuilds the whole site, and publishing a post aft
 
 ### Media
 
-Files are uploaded to `content/media/` and served through a Nginx alias at `/media/`. Filenames are sanitized to `{stem}_{8hex}.{canonical_ext}`. Accepted MIME types: JPEG, PNG, GIF, WebP, SVG, MP4, WebM, MP3, OGG. Maximum size: 50 MB.
+Files are uploaded to `content/media/` and served through a Nginx alias at `/media/`. Filenames are sanitized to `{stem}_{8hex}.{canonical_ext}`. Accepted MIME types: JPEG, PNG, GIF, WebP, SVG, MP4, WebM, QuickTime (.mov), MP3, OGG, M4A. Maximum size: 200 MB (50 MB over XML-RPC).
 
 ### Shortcode Embeds
 

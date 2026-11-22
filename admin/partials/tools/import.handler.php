@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         @set_time_limit(0);
     }
     $mediaInstance = $downloadImages
-        ? new Media($db, CMS_ROOT . '/content/media', (int) ($config['media']['max_bytes'] ?? 52_428_800))
+        ? new Media($db, CMS_ROOT . '/content/media', (int) ($config['media']['max_bytes'] ?? \CMS\Media::DEFAULT_MAX_BYTES))
         : null;
     $siteUrlForImages = (string) $db->getSetting('site_url', '');
     /** @var array<string, array{url:string,reused:bool}|false> $imageCache */

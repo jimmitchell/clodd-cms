@@ -23,7 +23,7 @@ server {
     index index.html;
 
     # Match PHP ini upload_max_filesize + post_max_size headroom
-    client_max_body_size 55M;
+    client_max_body_size 205M;
 
     # TLS — managed by Certbot
     ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
@@ -145,7 +145,7 @@ server {
     # ── IndieAuth server ──────────────────────────────────────────────────────
     # indieauth.php / token.php / indieauth-metadata.php
     # Nothing here posts more than a handful of short fields — codes, tokens,
-    # client and redirect URLs — so the 55M server default is all attack
+    # client and redirect URLs — so the 205M server default is all attack
     # surface. PHP parses a body before any script runs (CVE-2026-109618 was
     # an unauthenticated RCE in exactly that step), so nothing in these
     # scripts can refuse an oversized one — the proxy has to.

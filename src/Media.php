@@ -33,8 +33,13 @@ class Media
         'audio/mp4'       => 'm4a',
     ];
 
-    /** Default max upload size in bytes (50 MB). */
-    public const DEFAULT_MAX_BYTES = 52_428_800;
+    /**
+     * Default max upload size in bytes (200 MB), unless config.php sets
+     * media.max_bytes. Big enough for a minute or two of 1080p video. nginx's
+     * client_max_body_size and PHP's upload_max_filesize/post_max_size have
+     * to allow it too — see INSTALL.md.
+     */
+    public const DEFAULT_MAX_BYTES = 209_715_200;
 
     private Database $db;
     private string   $storageDir;

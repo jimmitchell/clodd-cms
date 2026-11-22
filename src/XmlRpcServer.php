@@ -17,6 +17,9 @@ namespace CMS;
  */
 class XmlRpcServer
 {
+    /** The most an XML-RPC upload may be (50 MB); see xmlrpc_save_media(). */
+    private const XMLRPC_MAX_BYTES = 52_428_800;
+
     // ── ID space ─────────────────────────────────────────────────────────────
     // Posts and pages have separate auto-increment sequences, so IDs can
     // collide. The unified wp.*Post methods use large offsets for page and
@@ -1213,7 +1216,15 @@ class XmlRpcServer
         // posted length, Media::ingestFromUrl() against what it downloaded.
         // This one checked nothing, so the only ceiling was nginx's
         // client_max_body_size and a base64 body could fill the disk.
-        $maxBytes = (int) ($this->config['media']['max_bytes'] ?? Media::DEFAULT_MAX_BYTES);
+        //
+        // Held to 50 MB whatever media.max_bytes says. The file arrives as
+        // base64 inside the XML, so the request body, the decoded bytes and
+        // the parse are all in memory at once, under PHP's 128 MB
+        // memory_limit; the multipart paths stream to disk and can go higher.
+        $maxBytes = min(
+            (int) ($this->config['media']['max_bytes'] ?? Media::DEFAULT_MAX_BYTES),
+            self::XMLRPC_MAX_BYTES
+        );
         if (strlen($bits) > $maxBytes) {
             $this->fault(400, 'File exceeds the maximum upload size of '
                 . round($maxBytes / 1_048_576) . ' MB.');
