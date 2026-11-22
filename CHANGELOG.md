@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.59.1] — 2026-11-22
+
+No schema change.
+
+### Changed
+
+- **Syndication links a note home for a video or sound in its body**, as it already did for one carried as a property. Micropub clients such as OutPost now write a movie or a sound dropped into the writing as a `<video>` or `<audio>` element in the Markdown, where the site already plays it (raw HTML is allowed, and `.prose video`/`.prose audio` are styled). The element says nothing as text, so without the link a syndicated copy lost it silently. `Post::bodyHasMedia()` reads the source for either tag.
+
+---
+
 ## [1.59.0] — 2026-11-21
 
 **Schema v34**, applied automatically on the next page load: a new `post_media` table. Nothing existing is changed or migrated.

@@ -322,8 +322,9 @@ final class Syndication
             ));
 
             // Video and audio don't travel — no network gets them from us — so
-            // a note carrying either links home to where it plays.
-            if ($post->media !== []) {
+            // a note carrying either links home to where it plays: as a
+            // property, or written into the body as an element.
+            if ($post->media !== [] || $post->bodyHasMedia()) {
                 $links[] = $siteUrl . '/' . Post::datePath((string) $post->published_at, $post->slug, $this->db->getSetting('timezone', '')) . '/';
             }
         } else {

@@ -2322,6 +2322,17 @@ class Post
     }
 
     /**
+     * Whether the body has a `<video>` or `<audio>` element written into it,
+     * as a Micropub client puts one where it was dropped in the writing. Read
+     * off the source, so one shown in a code block counts too, which costs
+     * no more than a link home.
+     */
+    public function bodyHasMedia(): bool
+    {
+        return preg_match('/<(?:video|audio)\b/i', $this->content) === 1;
+    }
+
+    /**
      * The URLs the links in a note point at — see Post::linkUrls().
      *
      * Read from whichever of the caption and the body noteText() read, so the

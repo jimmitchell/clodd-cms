@@ -638,6 +638,45 @@ final class SyndicationTest extends TempSiteTestCase
     }
 
     /**
+     * The same for one written into the body, where a Micropub client puts a
+     * movie dropped into the writing. The element itself says nothing as text.
+     */
+    public function testANoteWithVideoInItsBodyLinksHome(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $post = $this->savedPost();
+        $post->post_kind    = 'aside';
+        $post->content      = "Look at this.\n\n<video controls preload=\"metadata\" src=\"https://example.com/media/clip.mov\">\n</video>\n\nNice.";
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+
+        $payload = $this->payloadFor($post);
+
+        $this->assertNotNull($payload);
+        $this->assertStringNotContainsString('video', $payload['excerpt']);
+        $this->assertStringContainsString('Look at this.', $payload['excerpt']);
+        $this->assertSame(['https://example.com/2026/08/01/' . $post->slug . '/'], $payload['links']);
+    }
+
+    public function testANoteWithOnlyAudioInItsBodyIsStillSyndicated(): void
+    {
+        $this->db->upsertSetting('site_url', 'https://example.com');
+
+        $post = $this->savedPost();
+        $post->post_kind    = 'aside';
+        $post->content      = "<audio controls preload=\"metadata\" src=\"https://example.com/media/memo.m4a\">\n</audio>";
+        $post->status       = 'published';
+        $post->published_at = '2026-08-01 09:00:00';
+
+        $payload = $this->payloadFor($post);
+
+        $this->assertNotNull($payload);
+        $this->assertSame('', $payload['excerpt']);
+        $this->assertSame(['https://example.com/2026/08/01/' . $post->slug . '/'], $payload['links']);
+    }
+
+    /**
      * A note that points somewhere has to carry the address, or the copy is a
      * sentence about a page the reader cannot reach.
      */
